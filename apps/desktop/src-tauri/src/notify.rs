@@ -58,13 +58,14 @@ pub fn show(app: &AppHandle, machine_id: &str, server: Server, alert: Alert) {
         state.active = true;
         state.shown
     };
+    // Alerts arrive on a Tokio thread; AppKit builds the panel on the main one.
     // The page renders the card, then calls `fit_window`, which shows it.
-    match window(app) {
+    popover::on_main(app, move |app| match window(app) {
         Ok(window) => {
             let _ = window.emit_to(LABEL, "notification", notice);
         }
         Err(error) => eprintln!("notification: {error}"),
-    }
+    });
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(SHOW_FOR).await;
@@ -100,9 +101,11 @@ fn present_now(app: &AppHandle) {
 
 fn hide(app: &AppHandle) {
     state(app).active = false;
-    if let Some(window) = app.get_webview_window(LABEL) {
-        let _ = window.hide();
-    }
+    popover::on_main(app, |app| {
+        if let Some(window) = app.get_webview_window(LABEL) {
+            let _ = window.hide();
+        }
+    });
 }
 
 fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {

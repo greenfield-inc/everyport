@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use ppm_client::protocol::{Call, Event, HostInfo, Server, ServerStatus, Snapshot};
+use ppm_client::protocol::{AgentSession, Call, Event, HostInfo, Server, ServerStatus, Snapshot};
 use ppm_client::{Client, Connection, Update};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
@@ -54,7 +54,7 @@ fn machines(app: &AppHandle) -> std::sync::MutexGuard<'_, Machines> {
 pub fn start(app: &AppHandle) {
     let path = std::env::current_exe()
         .expect("the app knows its own path")
-        .with_file_name(format!("ppm{}", std::env::consts::EXE_SUFFIX));
+        .with_file_name(format!("ppm-sidecar{}", std::env::consts::EXE_SUFFIX));
     // ppm_client::connect spawns onto the current Tokio runtime.
     let (client, mut updates) =
         tauri::async_runtime::block_on(async { ppm_client::connect(Connection::Sidecar { path }) });
@@ -167,6 +167,26 @@ pub fn find_server(app: &AppHandle, machine_id: &str, port: u16) -> Option<Serve
     let all = machines(app);
     let machine = all.list.iter().find(|m| m.id == machine_id)?;
     server(machine, port).cloned()
+}
+
+/// The agent session with this id, from the server it started, and that
+/// server's folder.
+pub fn find_session(
+    app: &AppHandle,
+    machine_id: &str,
+    id: &str,
+) -> Option<(AgentSession, Option<String>)> {
+    let all = machines(app);
+    let machine = all.list.iter().find(|m| m.id == machine_id)?;
+    machine
+        .snapshot
+        .as_ref()?
+        .servers
+        .iter()
+        .find_map(|server| {
+            let session = server.agent.as_ref().filter(|s| s.id == id)?;
+            Some((session.clone(), server.cwd.clone()))
+        })
 }
 
 pub fn snooze(app: &AppHandle, machine_id: &str, port: u16) {

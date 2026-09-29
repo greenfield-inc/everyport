@@ -1,5 +1,7 @@
 // Builds `ppm` and puts it where Tauri's externalBin expects it:
-// src-tauri/binaries/ppm-<target triple>[.exe]. Tauri sets
+// src-tauri/binaries/ppm-sidecar-<target triple>[.exe]. The bundles install
+// it as `ppm-sidecar`, so the Linux packages don't put a second `ppm` in
+// /usr/bin next to the CLI's. Tauri sets
 // TAURI_ENV_TARGET_TRIPLE for cross builds; otherwise it's the host's.
 // PPM_SIDECAR names a prebuilt binary to use instead, such as one CI
 // cross-built for that triple.
@@ -13,7 +15,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 const host = execFileSync("rustc", ["-vV"], { encoding: "utf8" }).match(/^host: (.+)$/m)[1];
 const target = process.env.TAURI_ENV_TARGET_TRIPLE || host;
 const exe = target.includes("windows") ? ".exe" : "";
-const dest = join(root, "apps/desktop/src-tauri/binaries", `ppm-${target}${exe}`);
+const dest = join(root, "apps/desktop/src-tauri/binaries", `ppm-sidecar-${target}${exe}`);
 
 mkdirSync(dirname(dest), { recursive: true });
 const prebuilt = process.env.PPM_SIDECAR;

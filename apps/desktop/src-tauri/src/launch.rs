@@ -3,7 +3,7 @@
 
 use std::process::Command;
 
-use ppm_client::protocol::AgentSession;
+use ppm_client::protocol::{AgentKind, AgentSession};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
@@ -40,7 +40,8 @@ pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
 /// Opens the server's workspace in its app through `workspace.open_url`, such
 /// as `pane://open?pane=…&panel=…` for the Pane terminal that started it. That
 /// link opens the local app for remote machines too, as Pane remote profiles
-/// expect. Without a link, reveals the workspace folder.
+/// expect. Without a link, reveals the workspace folder. Only `pane://` links
+/// open, since a remote machine's snapshot could carry any URL.
 #[tauri::command]
 pub fn open_workspace(app: AppHandle, machine_id: String, port: u16) -> Result<(), String> {
     let server = machines::find_server(&app, &machine_id, port)
@@ -50,6 +51,9 @@ pub fn open_workspace(app: AppHandle, machine_id: String, port: u16) -> Result<(
         .as_ref()
         .and_then(|w| w.open_url.as_deref())
     {
+        if !url.starts_with("pane://") {
+            return Err(format!("not a workspace link: {url}"));
+        }
         return open_url(&app, url);
     }
     local_only(&machine_id)?;
@@ -76,15 +80,40 @@ pub fn open_in_editor(app: AppHandle, machine_id: String, path: String) -> Resul
     }
 }
 
+/// Resumes the session with this id from the latest snapshot. The command is
+/// built here from the session's kind and id, never taken from the page or
+/// the snapshot, so neither can run anything else in a terminal.
 #[tauri::command]
-pub fn resume_session(machine_id: String, session: AgentSession) -> Result<(), String> {
+pub fn resume_session(
+    app: AppHandle,
+    machine_id: String,
+    session: AgentSession,
+) -> Result<(), String> {
     local_only(&machine_id)?;
+    let (session, cwd) = machines::find_session(&app, &machine_id, &session.id)
+        .ok_or("that session is no longer running a server")?;
+    let command = resume_command(session.kind, &session.id)
+        .ok_or_else(|| format!("unexpected session id: {}", session.id))?;
     let directory = session
         .directory
-        .clone()
+        .or(cwd)
         .or_else(|| std::env::var("HOME").ok())
         .unwrap_or_else(|| ".".into());
-    terminal(&session.id, &directory, &session.resume_command).map_err(|e| e.to_string())
+    terminal(&session.id, &directory, &command).map_err(|e| e.to_string())
+}
+
+/// The command that resumes a session, for ids made of letters, digits, `-`
+/// and `_` (Claude Code and Codex use UUIDs).
+fn resume_command(kind: AgentKind, id: &str) -> Option<String> {
+    let valid = !id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    let resume = match kind {
+        AgentKind::ClaudeCode => "claude --resume",
+        AgentKind::Codex => "codex resume",
+    };
+    valid.then(|| format!("{resume} {id}"))
 }
 
 /// Folders and terminals on other machines need the remote connection, which
@@ -217,11 +246,12 @@ fn terminal(_name: &str, directory: &str, command: &str) -> std::io::Result<()> 
     ]);
     let mut last = std::io::Error::other("no terminal found");
     for candidate in candidates {
-        // gnome-terminal takes the command after `--`; the rest take `-e`.
-        let flag = if candidate == "gnome-terminal" {
-            "--"
-        } else {
-            "-e"
+        // gnome-terminal takes the command after `--`, xfce4-terminal after
+        // `-x`, and the rest after `-e`.
+        let flag = match candidate {
+            "gnome-terminal" => "--",
+            "xfce4-terminal" => "-x",
+            _ => "-e",
         };
         match Command::new(candidate)
             .args([flag, "sh", "-c", &script])
@@ -234,12 +264,33 @@ fn terminal(_name: &str, directory: &str, command: &str) -> std::io::Result<()> 
     Err(last)
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
-    use super::sh_quote;
+    use super::*;
 
+    #[cfg(unix)]
     #[test]
     fn quotes_single_quotes_for_the_shell() {
         assert_eq!(sh_quote("/tmp/it's here"), r"'/tmp/it'\''s here'");
+    }
+
+    #[test]
+    fn resumes_claude_code_and_codex_sessions_by_id() {
+        let id = "0b5c7f36-2d8e-4f1a-9c3b-6e2f1a8d4c90";
+        assert_eq!(
+            resume_command(AgentKind::ClaudeCode, id).as_deref(),
+            Some("claude --resume 0b5c7f36-2d8e-4f1a-9c3b-6e2f1a8d4c90")
+        );
+        assert_eq!(
+            resume_command(AgentKind::Codex, id).as_deref(),
+            Some("codex resume 0b5c7f36-2d8e-4f1a-9c3b-6e2f1a8d4c90")
+        );
+    }
+
+    #[test]
+    fn refuses_ids_that_carry_shell_syntax() {
+        for id in ["", "abc; rm -rf ~", "$(whoami)", "a b", "id\nnext"] {
+            assert_eq!(resume_command(AgentKind::ClaudeCode, id), None, "{id}");
+        }
     }
 }
