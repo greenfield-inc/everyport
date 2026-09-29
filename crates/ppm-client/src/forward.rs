@@ -20,7 +20,7 @@ pub struct Forward {
 #[derive(Debug)]
 enum Tunnel {
     /// `ssh -L` or `kubectl port-forward`.
-    Process { _child: tokio::process::Child },
+    Process { _child: Box<tokio::process::Child> },
     /// A local listener that runs `ppm connect <port>` on the machine for
     /// each connection.
     Relay { accept: tokio::task::JoinHandle<()> },
@@ -119,7 +119,9 @@ async fn spawn_tunnel(argv: &[String], local_port: u16, port: u16) -> anyhow::Re
         if TcpStream::connect((Ipv4Addr::LOCALHOST, local_port)).is_ok() {
             return Ok(Forward::tunneled(
                 local_port,
-                Tunnel::Process { _child: child },
+                Tunnel::Process {
+                    _child: Box::new(child),
+                },
             ));
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
