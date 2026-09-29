@@ -66,6 +66,7 @@ pub struct App {
     info_expanded: bool,
     processes_expanded: bool,
     list_offset: usize,
+    list_scrolling: bool,
     detail_offset: usize,
     help_offset: usize,
     quit: bool,
@@ -112,6 +113,7 @@ pub fn run(machine: Machine) -> io::Result<()> {
         info_expanded: false,
         processes_expanded: false,
         list_offset: 0,
+        list_scrolling: false,
         detail_offset: 0,
         help_offset: 0,
         quit: false,
@@ -291,6 +293,7 @@ impl App {
         self.selected = self.servers().first().map(|s| s.port);
         self.selected_index = 0;
         self.list_offset = 0;
+        self.list_scrolling = false;
         self.confirming_stop = None;
         self.toast = None;
     }
@@ -327,12 +330,25 @@ impl App {
 
     fn handle_servers(&mut self, code: KeyCode) {
         match code {
+            KeyCode::PageUp => {
+                self.list_scrolling = true;
+                self.selected = None;
+                self.list_offset = self.list_offset.saturating_sub(10);
+            }
+            KeyCode::PageDown => {
+                self.list_scrolling = true;
+                self.selected = None;
+                self.list_offset = self.list_offset.saturating_add(10);
+            }
             KeyCode::Up | KeyCode::Char('k') => self.move_selection(-1),
             KeyCode::Down | KeyCode::Char('j') => self.move_selection(1),
             KeyCode::Home | KeyCode::Char('g') => {
+                self.list_scrolling = false;
+                self.list_offset = 0;
                 self.selected = self.visible().first().map(|s| s.port)
             }
             KeyCode::End | KeyCode::Char('G') => {
+                self.list_scrolling = false;
                 self.selected = self.visible().last().map(|s| s.port)
             }
             KeyCode::Char('?') => self.show_help(),
@@ -461,15 +477,17 @@ impl App {
     }
 
     fn move_selection(&mut self, delta: isize) {
+        self.list_scrolling = false;
         let ports: Vec<u16> = self.visible().iter().map(|s| s.port).collect();
         if ports.is_empty() {
             return;
         }
-        let index = ports
+        let next = ports
             .iter()
             .position(|&p| Some(p) == self.selected)
-            .unwrap_or(0);
-        let next = (index as isize + delta).clamp(0, ports.len() as isize - 1) as usize;
+            .map_or(0, |index| {
+                (index as isize + delta).clamp(0, ports.len() as isize - 1) as usize
+            });
         self.selected = Some(ports[next]);
     }
 
@@ -487,6 +505,8 @@ impl App {
 
     fn set_cleaning(&mut self, cleaning: bool) {
         self.cleaning = cleaning;
+        self.list_scrolling = false;
+        self.list_offset = 0;
         self.selection = if cleaning {
             self.servers()
                 .iter()
