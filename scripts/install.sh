@@ -30,6 +30,13 @@ download() {
   fi
 }
 
+# Downloads SHA256SUMS, the first file every install needs, so a missing release fails here.
+download_sums() {
+  error="$(download "$base/SHA256SUMS" "$tmp/SHA256SUMS" 2>&1)" ||
+    fail "no release found at $base. If Everyport hasn't had its first release yet, check $repo/releases.
+${error:-the download failed}"
+}
+
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | cut -d ' ' -f 1
@@ -81,9 +88,9 @@ main() {
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
+  download_sums
   echo "Downloading $asset from $base"
   download "$base/$asset" "$tmp/everyport" || fail "could not download $base/$asset"
-  download "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $base/SHA256SUMS"
 
   expected="$(awk -v name="$asset" '$2 == name || $2 == "*" name { print $1 }' "$tmp/SHA256SUMS")"
   [ -n "$expected" ] || fail "SHA256SUMS has no entry for $asset"

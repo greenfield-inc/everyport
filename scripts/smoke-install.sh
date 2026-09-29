@@ -4,11 +4,14 @@
 #   scripts/smoke-install.sh [dist dir]   (default: dist, as scripts/dist.sh writes it)
 #
 # Serves dist/release over HTTP, then runs install.sh (or install.ps1 on
-# Windows), the npm package and the PyPI package through uvx. Each must install
-# an everyport that prints the release version. When the release has this OS's desktop
-# app, install-app.sh (or install-app.ps1) must install it and everyport too. Then it
-# serves a copy whose binaries and bundles are altered, and each one must refuse
-# to install. Needs node, npm and uv.
+# Windows, under both pwsh and Windows PowerShell 5.1), the npm package and the
+# PyPI package through uvx. Each must install an everyport that prints the release
+# version. When the release has this OS's desktop app, install-app.sh (or
+# install-app.ps1) must install it and everyport too. Then it serves a copy whose
+# binaries and bundles are altered, and each one must refuse to install. Last,
+# against real GitHub, both install scripts must explain a release that doesn't
+# exist, and on Windows install-app.ps1 must download a real release file through
+# GitHub's redirect. Needs node, npm, uv and network access.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -59,13 +62,17 @@ install_with() {
 }
 
 if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
-  script=(pwsh -NoProfile -File "$(native "$dist/release/install.ps1")")
+  runners=("pwsh -NoProfile -File" "powershell -NoProfile -ExecutionPolicy Bypass -File")
+  ext="ps1"
+  no_open=-NoOpen
   npm_bin="$work/npm"
   cmd=.cmd
   installed=everyport.exe
   app_bundle=(-setup.exe everyport-desktop.exe)
 else
-  script=(sh "$dist/release/install.sh")
+  runners=(sh)
+  ext="sh"
+  no_open=--no-open
   npm_bin="$work/npm/bin"
   cmd=
   installed=everyport
@@ -98,14 +105,19 @@ expect_mismatch() {
   fi
 }
 
-install_with script "$good" "${script[@]}" > "$work/script.log" 2>&1 || { cat "$work/script.log"; exit 1; }
-expect_version "install script" "$work/home-script-18765/bin/$installed" --version
+cli_script="$(native "$dist/release/install.$ext")"
+app_script="$(native "$dist/release/install-app.$ext")"
+for i in "${!runners[@]}"; do
+  read -ra runner <<< "${runners[$i]}"
+  install_with "script$i" "$good" "${runner[@]}" "$cli_script" > "$work/script$i.log" 2>&1 || { cat "$work/script$i.log"; exit 1; }
+  expect_version "install script (${runner[0]})" "$work/home-script$i-18765/bin/$installed" --version
+  expect_mismatch "install script (${runner[0]})" install_with "script$i" "$bad" "${runner[@]}" "$cli_script"
+done
 expect_version "npm everyport" install_with npm "$good" "$npm_bin/everyport$cmd" --version
 expect_version "npm everyport" install_with npm2 "$good" "$npm_bin/everyport$cmd" --version
 expect_version "uvx everyport" install_with uvx "$good" uvx --from "$wheel" everyport --version
 expect_version "uvx everyport" install_with uvx2 "$good" uvx --from "$wheel" everyport --version
 
-expect_mismatch "install script" install_with script "$bad" "${script[@]}"
 expect_mismatch "npm" install_with npm "$bad" "$npm_bin/everyport$cmd" --version
 expect_mismatch "uvx" install_with uvx "$bad" uvx --from "$wheel" everyport --version
 
@@ -117,15 +129,9 @@ check() {
 }
 no_quarantine() { ! xattr -r "$1" | grep -q quarantine; }
 if compgen -G "$dist/release/everyport-*${app_bundle[0]}" > /dev/null; then
-  if [ "$cmd" = .cmd ]; then
-    app_scripts=("pwsh -NoProfile -File" "powershell -NoProfile -ExecutionPolicy Bypass -File")
-    app_args=("$(native "$dist/release/install-app.ps1")" -NoOpen)
-  else
-    app_scripts=(sh)
-    app_args=("$dist/release/install-app.sh" --no-open)
-  fi
-  for i in "${!app_scripts[@]}"; do
-    read -ra runner <<< "${app_scripts[$i]}"
+  app_args=("$app_script" "$no_open")
+  for i in "${!runners[@]}"; do
+    read -ra runner <<< "${runners[$i]}"
     label="app installer (${runner[0]})"
     home="$work/home-app$i-18765"
     install_with "app$i" "$good" "${runner[@]}" "${app_args[@]}" > "$work/app$i.log" 2>&1 || cat "$work/app$i.log"
@@ -144,6 +150,32 @@ if compgen -G "$dist/release/everyport-*${app_bundle[0]}" > /dev/null; then
 else
   echo "skip  app installer: this release has no desktop app for this OS"
 fi
+
+# Real GitHub. v0.0.0 is never released, so it answers 404 the way a repo with no release does.
+# Usage: expect_failure <name> <pattern the output must match, across lines> <command...>
+expect_failure() {
+  local name="$1" pattern="$2" output
+  shift 2
+  if output="$("$@" 2>&1)"; then
+    echo "FAIL  $name succeeded:"; printf '%s\n' "$output"; failures=$((failures + 1))
+  elif tr '\n' ' ' <<< "$output" | grep -qE "$pattern"; then
+    echo "ok    $name: $(head -n 2 <<< "$output" | tr '\n' ' ')"
+  else
+    echo "FAIL  $name printed:"; printf '%s\n' "$output"; failures=$((failures + 1))
+  fi
+}
+for i in "${!runners[@]}"; do
+  read -ra runner <<< "${runners[$i]}"
+  expect_failure "install script (${runner[0]}) with no release" 'no release found at https://github\.com/.*404' \
+    env EVERYPORT_VERSION=0.0.0 "${runner[@]}" "$cli_script"
+  expect_failure "app installer (${runner[0]}) with no release" 'no release found at https://github\.com/.*404' \
+    env EVERYPORT_VERSION=0.0.0 "${runner[@]}" "$app_script" "$no_open"
+  # Any public release with a SHA256SUMS works: it downloads through the redirect, then has no Everyport app.
+  if [ "$ext" = ps1 ]; then
+    expect_failure "app installer (${runner[0]}) downloads through GitHub's redirect" 'no Windows app installer' \
+      env EVERYPORT_DOWNLOAD_URL=https://github.com/restic/restic/releases/download/v0.17.3 "${runner[@]}" "$app_script" -NoOpen
+  fi
+done
 
 [ "$failures" = 0 ] || { echo "$failures check(s) failed"; exit 1; }
 echo "all install checks passed"

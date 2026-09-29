@@ -38,10 +38,18 @@ param([switch]$Cli, [switch]$NoOpen)
   $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("everyport-" + [guid]::NewGuid())
   New-Item -ItemType Directory -Path $tmp | Out-Null
   try {
+    # Accept matches curl. Without it, GitHub answers a missing file with a large HTML page, which
+    # Windows PowerShell 5.1 reports as "The connection was closed unexpectedly" instead of a 404.
+    function Save-ReleaseFile($name) {
+      $path = Join-Path $tmp $name
+      Invoke-WebRequest -UseBasicParsing -Headers @{ Accept = '*/*' } -Uri "$base/$name" -OutFile $path
+      $path
+    }
+
+    try { $sumsPath = Save-ReleaseFile 'SHA256SUMS' }
+    catch { throw "Everyport install: no release found at $base. If Everyport hasn't had its first release yet, check $repo/releases.`n$($_.Exception.Message)" }
     $sums = @{}
-    $text = (Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS").Content
-    if ($text -is [byte[]]) { $text = [System.Text.Encoding]::UTF8.GetString($text) }
-    foreach ($line in $text -split "`r?`n") {
+    foreach ($line in Get-Content $sumsPath) {
       $fields = $line.Trim() -split '\s+'
       if ($fields.Count -eq 2) { $sums[$fields[1].TrimStart('*')] = $fields[0].ToLower() }
     }
@@ -49,8 +57,7 @@ param([switch]$Cli, [switch]$NoOpen)
     # Downloads a release file and checks it against SHA256SUMS.
     function Get-ReleaseFile($name) {
       Write-Host "Downloading $name"
-      $path = Join-Path $tmp $name
-      Invoke-WebRequest -UseBasicParsing -Uri "$base/$name" -OutFile $path
+      $path = Save-ReleaseFile $name
       if (-not $sums[$name]) { throw "Everyport install: SHA256SUMS has no entry for $name" }
       $actual = (Get-FileHash -Algorithm SHA256 $path).Hash.ToLower()
       if ($actual -ne $sums[$name]) { throw "Everyport install: checksum mismatch for ${name}: expected $($sums[$name]), got $actual" }

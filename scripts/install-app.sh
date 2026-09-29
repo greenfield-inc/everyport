@@ -44,6 +44,13 @@ download() {
   fi
 }
 
+# Downloads SHA256SUMS, the first file every install needs, so a missing release fails here.
+download_sums() {
+  error="$(download "$base/SHA256SUMS" "$tmp/SHA256SUMS" 2>&1)" ||
+    fail "no release found at $base. If Everyport hasn't had its first release yet, check $repo/releases.
+${error:-the download failed}"
+}
+
 sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | cut -d ' ' -f 1
@@ -207,7 +214,7 @@ main() {
   tmp="$(mktemp -d)"
   trap cleanup EXIT
 
-  download "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $base/SHA256SUMS"
+  download_sums
 
   bundle=
   if ! $cli_only; then
