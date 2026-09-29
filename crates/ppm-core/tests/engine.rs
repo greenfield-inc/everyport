@@ -395,6 +395,24 @@ fn servers_started_from_the_filesystem_root_show_unless_the_os_ships_them() {
 }
 
 #[test]
+fn docker_proxy_shows_from_either_install_path() {
+    let fake = Fake::new();
+    for (pid, port, exe) in [
+        (10, 39080, "/usr/bin/docker-proxy"),
+        (11, 39081, "/usr/libexec/docker/docker-proxy"),
+    ] {
+        let args = [exe, "-proto", "tcp", "-host-port", &port.to_string()];
+        fake.run(pid, 1, "docker-proxy", &args, "/", HOUR);
+        fake.listen(port, pid, "0.0.0.0");
+    }
+
+    let (snapshot, _) = fake.engine().scan();
+
+    let ports: Vec<u16> = snapshot.servers.iter().map(|s| s.port).collect();
+    assert_eq!(ports, [39080, 39081]);
+}
+
+#[test]
 fn cpu_is_cpu_time_over_wall_time_between_scans() {
     let fake = Fake::new();
     next_dev(&fake);

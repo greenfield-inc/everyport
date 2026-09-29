@@ -387,8 +387,13 @@ fn is_app_helper(exe: &str) -> bool {
 }
 
 /// Installed with the OS. A container's servers run from `/` too, but from
-/// `/usr/bin` or the image's own folders.
+/// `/usr/bin` or the image's own folders. `docker-proxy` publishes container
+/// ports from `/usr/bin` or `/usr/libexec/docker`, depending on the Docker
+/// version, and always shows.
 fn is_os_program(exe: &str) -> bool {
+    if exe.ends_with("/docker-proxy") {
+        return false;
+    }
     const OS_DIRS: [&str; 7] = [
         "/System/",
         "/Library/Apple/",
