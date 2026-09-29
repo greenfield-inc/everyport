@@ -162,8 +162,10 @@ export function Grow({ leaving = false, children }: { leaving?: boolean; childre
  */
 export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; server: Server; action: Action }) {
   const label = actionLabel[action];
-  const act = (event: MouseEvent, run: () => void) => {
+  const act = (event: MouseEvent<HTMLElement>, run: () => void) => {
     event.stopPropagation();
+    // The confirm unmounts; keep the keyboard on the list or panel.
+    event.currentTarget.closest<HTMLElement>("[role=listbox], .ppm-panel")?.focus();
     run();
   };
   return (

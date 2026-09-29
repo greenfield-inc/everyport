@@ -143,32 +143,54 @@ describe("protected servers", () => {
     expect(params("stop")).toMatchObject({ port: 3000, force: false, confirm_protected: true });
   });
 
-  it("cancels the confirm with Escape and stops on a second ⌘⌫", () => {
+  it("confirms only through the confirm's own button, never a repeated ⌘⌫", () => {
     press("Backspace", { ctrlKey: true });
     expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
-    expect(press("Escape")).toBe(true);
-    expect(alert()).toBeUndefined();
-    press("Backspace", { ctrlKey: true });
-    press("Backspace", { ctrlKey: true });
-    expect(params("stop")).toMatchObject({ port: 3000, confirm_protected: true });
-  });
-
-  it("ignores a held ⌘⌫, and Escape cancels a confirm on any row", () => {
     press("Backspace", { ctrlKey: true });
     press("Backspace", { ctrlKey: true, repeat: true });
     expect(client.call).not.toHaveBeenCalled();
+    const stop = button("Stop") as HTMLButtonElement;
+    stop.focus();
+    // The panel leaves Enter on a focused button to the browser, which clicks it.
+    expect(press("Enter")).toBe(false);
+    act(() => stop.click());
+    expect(params("stop")).toMatchObject({ port: 3000, confirm_protected: true });
+    expect(client.call).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a held ⌘R and a held ⌘⌫", () => {
+    press("r", { ctrlKey: true, repeat: true });
+    press("Backspace", { ctrlKey: true, repeat: true });
+    expect(alert()).toBeUndefined();
+    expect(client.call).not.toHaveBeenCalled();
+  });
+
+  it("cancels the confirm with Escape, on any row", () => {
+    press("Backspace", { ctrlKey: true });
     press("ArrowDown");
     expect(press("Escape")).toBe(true);
     expect(alert()).toBeUndefined();
+    expect(client.call).not.toHaveBeenCalled();
+  });
+
+  it("never confirms on a double-click of the detail's Stop", () => {
+    press("Enter");
+    const stop = button("Stop, protected") as HTMLButtonElement;
+    act(() => stop.click());
+    act(() => stop.click());
+    act(() => stop.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
+    expect(title()).toBe("port-process-manager");
+    expect(client.call).not.toHaveBeenCalled();
   });
 
   it("drops a confirm when another process takes the port", () => {
     press("Backspace", { ctrlKey: true });
+    const stop = button("Stop") as HTMLButtonElement;
     act(() => publish(machinesWith(99999)));
     expect(alert()).toBeUndefined();
-    press("Backspace", { ctrlKey: true });
+    expect(stop.isConnected).toBe(false);
     expect(client.call).not.toHaveBeenCalled();
-    expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
   });
 
   it("keeps the detail open while a restart waits for its confirm", () => {

@@ -22,8 +22,9 @@ export type ViewContext = {
   pending: ReadonlyMap<number, Pending>;
   open: (server: Server) => void;
   /**
-   * Stop and restart ask first for a protected server; asking again, or
-   * `confirm`, goes ahead. They return false while waiting for that answer.
+   * Stop and restart ask first for a protected server, and only `confirm`
+   * goes ahead: repeating the action just asks again. They return false
+   * while waiting for that answer.
    */
   stop: (server: Server, force?: boolean) => boolean;
   restart: (server: Server) => boolean;
@@ -106,7 +107,7 @@ export function useViewContext(client: PpmClient, machine: Machine & { snapshot:
     };
     /** Holds a protected server's action until confirmed; true when it may go ahead. */
     const allowed = (server: Server, action: Action, confirmed: boolean) => {
-      if (!server.protected || confirmed || confirming(server) === action) return true;
+      if (!server.protected || confirmed) return true;
       settle(server.port, { confirm: action, root: server.root });
       return false;
     };
