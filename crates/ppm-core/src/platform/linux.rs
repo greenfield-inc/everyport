@@ -60,17 +60,11 @@ impl Platform for Linux {
     /// socket's inode among the links in `/proc/<pid>/fd`. The search stops
     /// once every socket has an owner.
     fn listeners(&self) -> io::Result<Vec<Listener>> {
-        let mut unowned: HashMap<u64, (u16, IpAddr)> = HashMap::new();
-        for table in ["/proc/net/tcp", "/proc/net/tcp6"] {
-            let Ok(table) = fs::read_to_string(table) else {
-                continue;
-            };
-            for row in table.lines().skip(1).filter_map(ListenRow::parse) {
-                if self.uid == 0 || row.uid == self.uid {
-                    unowned.insert(row.inode, (row.port, row.address));
-                }
-            }
-        }
+        let mut unowned: HashMap<u64, (u16, IpAddr)> = tcp_rows()
+            .into_iter()
+            .filter(|row| row.state == TCP_LISTEN && (self.uid == 0 || row.uid == self.uid))
+            .map(|row| (row.inode, (row.port, row.address)))
+            .collect();
         let mut owners = self.socket_owners.lock().unwrap();
         let mut found = Vec::new();
         for pid in owners.iter().copied().chain(pids()?) {
@@ -97,6 +91,23 @@ impl Platform for Linux {
         *owners = found.iter().map(|l| l.pid).collect();
         owners.dedup();
         Ok(found)
+    }
+
+    /// Every user's connections are counted: the table needs no pid.
+    fn connections(&self) -> Option<HashMap<u16, u32>> {
+        let mut counts = HashMap::new();
+        for row in tcp_rows()
+            .into_iter()
+            .filter(|row| row.state == TCP_ESTABLISHED)
+        {
+            *counts.entry(row.port).or_default() += 1;
+        }
+        Some(counts)
+    }
+
+    fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
+        let environ = fs::read(format!("/proc/{pid}/environ")).ok()?;
+        Some(unix::env_pairs(nul_separated(&environ)).collect())
     }
 
     fn processes(&self) -> io::Result<Vec<ProcInfo>> {
@@ -190,23 +201,39 @@ fn socket_inode(link: &std::path::Path) -> Option<u64> {
         .ok()
 }
 
-/// A row of `/proc/net/tcp` or `tcp6` in LISTEN state.
-struct ListenRow {
+/// `st` values in `/proc/net/tcp`, from the kernel's TCP state enum.
+const TCP_ESTABLISHED: u8 = 0x01;
+const TCP_LISTEN: u8 = 0x0A;
+
+/// Every row of `/proc/net/tcp` and `tcp6`.
+fn tcp_rows() -> Vec<TcpRow> {
+    ["/proc/net/tcp", "/proc/net/tcp6"]
+        .into_iter()
+        .filter_map(|table| fs::read_to_string(table).ok())
+        .flat_map(|table| {
+            table
+                .lines()
+                .skip(1)
+                .filter_map(TcpRow::parse)
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+struct TcpRow {
+    state: u8,
     address: IpAddr,
     port: u16,
     uid: u32,
     inode: u64,
 }
 
-impl ListenRow {
+impl TcpRow {
     /// `sl local_address rem_address st ... uid timeout inode`, where the
     /// local address is `ADDR:PORT` in hex. The address is printed as 32-bit
     /// words in host byte order, so each word goes back through native bytes.
     fn parse(row: &str) -> Option<Self> {
         let fields: Vec<&str> = row.split_whitespace().collect();
-        if fields.get(3) != Some(&"0A") {
-            return None;
-        }
         let (address, port) = fields.get(1)?.split_once(':')?;
         let mut bytes = Vec::with_capacity(16);
         for word in address.as_bytes().chunks(8) {
@@ -219,6 +246,7 @@ impl ListenRow {
             _ => return None,
         };
         Some(Self {
+            state: u8::from_str_radix(fields.get(3)?, 16).ok()?,
             address,
             port: u16::from_str_radix(port, 16).ok()?,
             uid: fields.get(7)?.parse().ok()?,

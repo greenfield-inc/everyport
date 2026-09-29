@@ -4,15 +4,24 @@
 
 use super::{unix, Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
 use crate::protocol::ProcRef;
+use std::collections::{HashMap, HashSet};
 use std::ffi::{c_char, c_void, CStr};
 use std::io;
 use std::mem;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+
+/// A scan asks for connections and listeners back to back, so one socket
+/// walk younger than this serves both.
+const SOCKETS_MAX_AGE: Duration = Duration::from_millis(500);
 
 pub struct Macos {
     host: libc::mach_port_t,
     /// Mach time units to nanoseconds, as numerator and denominator.
     timebase: (u64, u64),
     cpu: unix::CpuSampler,
+    sockets: Mutex<Option<(Instant, Sockets)>>,
 }
 
 impl Macos {
@@ -24,26 +33,36 @@ impl Macos {
             host: unsafe { libc::mach_host_self() },
             timebase: (u64::from(timebase.numer), u64::from(timebase.denom.max(1))),
             cpu: unix::CpuSampler::default(),
+            sockets: Mutex::new(None),
         }
     }
 }
 
+impl Macos {
+    fn sockets(&self) -> io::Result<Sockets> {
+        let mut cached = self.sockets.lock().unwrap();
+        if let Some((at, sockets)) = cached.as_ref() {
+            if at.elapsed() < SOCKETS_MAX_AGE {
+                return Ok(sockets.clone());
+            }
+        }
+        let sockets = Sockets::walk()?;
+        *cached = Some((Instant::now(), sockets.clone()));
+        Ok(sockets)
+    }
+}
+
 impl Platform for Macos {
-    /// From `listeners`, which asks libproc for every socket of every process
-    /// we may inspect, as `lsof` does.
     fn listeners(&self) -> io::Result<Vec<Listener>> {
-        let all = listeners::get_all().map_err(|e| io::Error::other(e.to_string()))?;
-        Ok(all
-            .into_iter()
-            .filter(|l| {
-                l.protocol == listeners::Protocol::TCP && l.state == listeners::SocketState::Listen
-            })
-            .map(|l| Listener {
-                port: l.socket.port(),
-                pid: l.process.pid,
-                address: l.socket.ip().to_string(),
-            })
-            .collect())
+        Ok(self.sockets()?.listeners)
+    }
+
+    fn connections(&self) -> Option<HashMap<u16, u32>> {
+        self.sockets().ok().map(|s| s.connections)
+    }
+
+    fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
+        Some(unix::env_pairs(procargs(pid)?.1).collect())
     }
 
     fn processes(&self) -> io::Result<Vec<ProcInfo>> {
@@ -55,7 +74,7 @@ impl Platform for Macos {
         Some(ProcDetails {
             cwd: cwd(pid),
             args,
-            env: unix::pick_env(env.into_iter(), env_keys),
+            env: unix::pick_env(env, env_keys),
         })
     }
 
@@ -123,6 +142,147 @@ impl Platform for Macos {
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()> {
         unix::signal(target, force, |pid| {
             proc_info(pid).map(|p| p.proc.started_at)
+        })
+    }
+}
+
+/// TCP sockets of every process we may inspect, read through libproc as
+/// `lsof` does.
+#[derive(Clone)]
+struct Sockets {
+    listeners: Vec<Listener>,
+    /// Established connections by local port, each socket counted once.
+    connections: HashMap<u16, u32>,
+}
+
+impl Sockets {
+    fn walk() -> io::Result<Self> {
+        let mut sockets = Self {
+            listeners: Vec::new(),
+            connections: HashMap::new(),
+        };
+        let mut counted = HashSet::new();
+        for pid in all_pids()? {
+            for fd in socket_fds(pid) {
+                let Some(tcp) = TcpSocket::read(pid, fd) else {
+                    continue;
+                };
+                match tcp.state {
+                    TSI_S_LISTEN => sockets.listeners.push(Listener {
+                        port: tcp.port,
+                        pid,
+                        address: tcp.address.to_string(),
+                    }),
+                    // A socket shared by forked processes is counted once.
+                    TSI_S_ESTABLISHED if counted.insert(tcp.id) => {
+                        *sockets.connections.entry(tcp.port).or_default() += 1;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        sockets.listeners.sort_by_key(|l| (l.port, l.pid));
+        sockets.listeners.dedup();
+        Ok(sockets)
+    }
+}
+
+fn socket_fds(pid: u32) -> Vec<i32> {
+    let size = unsafe {
+        libc::proc_pidinfo(
+            pid as i32,
+            libc::PROC_PIDLISTFDS,
+            0,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if size <= 0 {
+        return Vec::new();
+    }
+    let mut fds = vec![
+        libc::proc_fdinfo {
+            proc_fd: 0,
+            proc_fdtype: 0
+        };
+        size as usize / mem::size_of::<libc::proc_fdinfo>()
+    ];
+    let read = unsafe {
+        libc::proc_pidinfo(
+            pid as i32,
+            libc::PROC_PIDLISTFDS,
+            0,
+            fds.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    fds.truncate(read.max(0) as usize / mem::size_of::<libc::proc_fdinfo>());
+    fds.into_iter()
+        .filter(|fd| fd.proc_fdtype == libc::PROX_FDTYPE_SOCKET as u32)
+        .map(|fd| fd.proc_fd)
+        .collect()
+}
+
+const PROC_PIDFDSOCKETINFO: i32 = 3;
+const SOCKINFO_TCP: i32 = 2;
+const TSI_S_LISTEN: i32 = 1;
+const TSI_S_ESTABLISHED: i32 = 4;
+const INI_IPV6: u8 = 2;
+
+/// `struct socket_fdinfo` from `<sys/proc_info.h>`, which libc doesn't bind.
+/// Offsets are from the macOS SDK header; only the fields read are named.
+#[repr(C)]
+struct SocketFdInfo {
+    /// `proc_fileinfo`, then `socket_info` up to `soi_so`.
+    _head: [u8; 160],
+    /// `soi_so`, the kernel's id for the socket.
+    so: u64,
+    _to_kind: [u8; 88],
+    /// `soi_kind`.
+    kind: i32,
+    _rfu: u32,
+    /// `soi_proto`: for TCP, a `tcp_sockinfo` that starts with `in_sockinfo`.
+    proto: [u8; 528],
+}
+
+const _: () = assert!(mem::size_of::<SocketFdInfo>() == 792);
+
+struct TcpSocket {
+    id: u64,
+    state: i32,
+    port: u16,
+    address: IpAddr,
+}
+
+impl TcpSocket {
+    fn read(pid: u32, fd: i32) -> Option<Self> {
+        let mut info: SocketFdInfo = unsafe { mem::zeroed() };
+        let size = mem::size_of::<SocketFdInfo>() as i32;
+        let read = unsafe {
+            libc::proc_pidfdinfo(
+                pid as i32,
+                fd,
+                PROC_PIDFDSOCKETINFO,
+                (&mut info as *mut SocketFdInfo).cast(),
+                size,
+            )
+        };
+        if read != size || info.kind != SOCKINFO_TCP {
+            return None;
+        }
+        // `in_sockinfo`: `insi_lport` at 4 (network order in its first two
+        // bytes), `insi_vflag` at 24, `insi_laddr` at 48. `tcpsi_state` at 80.
+        let p = &info.proto;
+        let local: [u8; 16] = p[48..64].try_into().ok()?;
+        Some(Self {
+            id: info.so,
+            state: i32::from_ne_bytes(p[80..84].try_into().ok()?),
+            port: u16::from_be_bytes([p[4], p[5]]),
+            address: if p[24] & INI_IPV6 != 0 {
+                IpAddr::V6(Ipv6Addr::from(local))
+            } else {
+                IpAddr::V4(Ipv4Addr::from(<[u8; 4]>::try_from(&local[12..]).ok()?))
+            },
         })
     }
 }

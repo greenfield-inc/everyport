@@ -4,7 +4,7 @@
 use ppm_core::platform::{native, Listener, ProcInfo};
 use ppm_core::protocol::ProcRef;
 use std::io;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::PathBuf;
 use std::process::{Child, Command};
@@ -106,6 +106,21 @@ fn listeners_include_sockets_we_bind() {
 }
 
 #[test]
+fn connections_count_accepted_sockets_by_local_port() {
+    let server = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = server.local_addr().unwrap().port();
+    let clients: Vec<TcpStream> = (0..2)
+        .map(|_| TcpStream::connect(("127.0.0.1", port)).unwrap())
+        .collect();
+    let accepted: Vec<TcpStream> = (0..2).map(|_| server.accept().unwrap().0).collect();
+
+    let counts = native().connections().expect("connections are known");
+    drop((clients, accepted));
+
+    assert_eq!(counts.get(&port), Some(&2));
+}
+
+#[test]
 fn processes_report_name_parent_and_start_time() {
     // `/proc/<pid>/stat` wraps the name in parentheses.
     let copy = SleepCopy::new("we) ird");
@@ -125,7 +140,7 @@ fn processes_report_name_parent_and_start_time() {
 }
 
 #[test]
-fn details_report_cwd_args_and_only_requested_env() {
+fn details_and_environment_match_the_launch() {
     let copy = SleepCopy::new("ppm-details");
     let dir = copy.program.parent().unwrap();
     // An empty argv[0] must keep its place.
@@ -134,11 +149,15 @@ fn details_report_cwd_args_and_only_requested_env() {
             .arg0("")
             .arg("30")
             .current_dir(dir)
+            .env_clear()
             .env("PPM_TEST_SESSION", "abc=123")
             .env("PPM_TEST_OTHER", "x"),
     );
 
     let details = native().details(child.id(), &["PPM_TEST_SESSION", "PPM_TEST_MISSING"]);
+    let mut environment = native()
+        .environment(child.id())
+        .expect("own process is readable");
     child.kill().unwrap();
     child.wait().unwrap();
 
@@ -148,6 +167,14 @@ fn details_report_cwd_args_and_only_requested_env() {
     assert_eq!(
         details.env,
         [("PPM_TEST_SESSION".to_string(), "abc=123".to_string())]
+    );
+    environment.sort();
+    assert_eq!(
+        environment,
+        [
+            ("PPM_TEST_OTHER".to_string(), "x".to_string()),
+            ("PPM_TEST_SESSION".to_string(), "abc=123".to_string()),
+        ]
     );
 }
 

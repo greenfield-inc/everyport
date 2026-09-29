@@ -50,16 +50,22 @@ pub(super) fn signal(
     }
 }
 
+/// `KEY=value` entries as pairs.
+pub(super) fn env_pairs(
+    entries: impl IntoIterator<Item = String>,
+) -> impl Iterator<Item = (String, String)> {
+    entries.into_iter().filter_map(|entry| {
+        let (key, value) = entry.split_once('=')?;
+        Some((key.to_string(), value.to_string()))
+    })
+}
+
 /// Keeps the `KEY=value` entries whose key is in `keys`.
 pub(super) fn pick_env(
-    entries: impl Iterator<Item = String>,
+    entries: impl IntoIterator<Item = String>,
     keys: &[&str],
 ) -> Vec<(String, String)> {
-    entries
-        .filter_map(|entry| {
-            let (key, value) = entry.split_once('=')?;
-            keys.contains(&key)
-                .then(|| (key.to_string(), value.to_string()))
-        })
+    env_pairs(entries)
+        .filter(|(key, _)| keys.contains(&key.as_str()))
         .collect()
 }
