@@ -116,6 +116,13 @@ pub fn native() -> Box<dyn Platform> {
     return Box::new(windows::Windows::new());
 }
 
+/// Runs this process as a platform helper, and exits, when ppm started it as
+/// one. A binary that stops servers through `native()` calls it first in `main`.
+pub fn run_helper() {
+    #[cfg(windows)]
+    windows::run_helper();
+}
+
 #[cfg(test)]
 mod tests {
     use super::is_wsl_owner;

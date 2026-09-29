@@ -80,6 +80,7 @@ fn config_dir() -> Option<PathBuf> {
 }
 
 fn main() -> ExitCode {
+    ppm_core::platform::run_helper();
     let cli = Cli::parse();
     let result = match cli.command {
         None if io::stdin().is_terminal() && io::stdout().is_terminal() => {
