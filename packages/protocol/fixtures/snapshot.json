@@ -19,7 +19,8 @@
       "clean_up": null,
       "workspace": {
         "kind": "conductor",
-        "name": "providence"
+        "name": "providence",
+        "open_url": null
       },
       "agent": {
         "kind": "claude_code",
@@ -376,7 +377,8 @@
       },
       "workspace": {
         "kind": "pane",
-        "name": "lisbon"
+        "name": "lisbon",
+        "open_url": "pane://open?pane=25893803-09c4-49b2-9fb2-248bfa13326b&panel=75c23f4d-3afe-4e60-86ee-dfd87cfb7d74"
       },
       "agent": null,
       "port": 5173,
@@ -714,7 +716,8 @@
       },
       "workspace": {
         "kind": "git_worktree",
-        "name": "fix-auth-timeout"
+        "name": "fix-auth-timeout",
+        "open_url": null
       },
       "agent": null,
       "port": 8000,

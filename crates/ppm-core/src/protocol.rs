@@ -179,6 +179,9 @@ pub struct VercelProject {
 pub struct Workspace {
     pub kind: WorkspaceKind,
     pub name: String,
+    /// Deep link that opens this workspace in its app, such as
+    /// `pane://open?pane=<id>&panel=<id>` from `PANE_SESSION_ID`/`PANE_PANEL_ID`.
+    pub open_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
