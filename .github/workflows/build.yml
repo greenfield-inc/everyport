@@ -76,12 +76,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with: { name: "bin-${{ matrix.sidecar || matrix.target }}", path: sidecar }
-      - name: Stage the ppm sidecar
+      # Artifacts drop the executable bit, and the sidecar script keeps the mode it copies.
+      - run: chmod +x sidecar/*
         shell: bash
-        run: |
-          mkdir -p apps/desktop/src-tauri/binaries
-          cp sidecar/* apps/desktop/src-tauri/binaries/ppm-${{ matrix.target }}${{ matrix.exe }}
-          chmod +x apps/desktop/src-tauri/binaries/*
 
       - name: Import the Windows signing certificate
         if: inputs.sign && runner.os == 'Windows'
@@ -108,6 +105,8 @@ jobs:
         env:
           # Not SIGN: the AppImage plugin gpg-signs whenever SIGN is set.
           PPM_SIGN: ${{ inputs.sign }}
+          # apps/desktop/scripts/sidecar.mjs bundles this prebuilt ppm instead of building one.
+          PPM_SIDECAR: ${{ github.workspace }}/sidecar/ppm-${{ matrix.sidecar || matrix.target }}${{ matrix.exe }}
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ inputs.sign && secrets.APPLE_ID || '' }}
