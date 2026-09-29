@@ -2,6 +2,25 @@
 
 use crate::protocol::ProcRef;
 use std::io;
+use std::sync::Mutex;
+
+/// Whole-machine CPU use from cumulative busy and total tick counters.
+#[derive(Default)]
+pub(super) struct CpuSampler {
+    previous: Mutex<Option<(u64, u64)>>,
+}
+
+impl CpuSampler {
+    /// Busy share, 0-100, since the previous sample. The first sample is 0.
+    pub(super) fn percent(&self, busy: u64, total: u64) -> f32 {
+        match self.previous.lock().unwrap().replace((busy, total)) {
+            Some((prev_busy, prev_total)) if total > prev_total && busy >= prev_busy => {
+                ((busy - prev_busy) as f64 / (total - prev_total) as f64 * 100.0) as f32
+            }
+            _ => 0.0,
+        }
+    }
+}
 
 /// Sends SIGTERM (SIGKILL with `force`) after checking that `target.pid` still
 /// has the start time the caller saw, so a reused pid is never signalled.

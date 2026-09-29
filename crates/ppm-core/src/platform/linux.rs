@@ -22,8 +22,7 @@ pub struct Linux {
     /// Processes that held listening sockets at the previous scan. They are
     /// searched first, so a steady scan reads only their descriptors.
     socket_owners: Mutex<Vec<u32>>,
-    /// Busy and total CPU ticks at the previous `cpu_percent` call.
-    cpu_ticks: Mutex<Option<(u64, u64)>>,
+    cpu: unix::CpuSampler,
 }
 
 impl Linux {
@@ -39,7 +38,7 @@ impl Linux {
             boot_ms: btime.unwrap_or(0) * 1000,
             uid: unsafe { libc::geteuid() },
             socket_owners: Mutex::new(Vec::new()),
-            cpu_ticks: Mutex::new(None),
+            cpu: unix::CpuSampler::default(),
         }
     }
 
@@ -111,7 +110,7 @@ impl Platform for Linux {
             cwd: fs::read_link(format!("/proc/{pid}/cwd"))
                 .ok()
                 .map(|path| path.to_string_lossy().into_owned()),
-            args: nul_separated(&cmdline).collect(),
+            args: arguments(&cmdline),
             env: unix::pick_env(nul_separated(&environ), env_keys),
         })
     }
@@ -168,13 +167,7 @@ impl Platform for Linux {
         let total: u64 = ticks.iter().sum();
         let idle = ticks[3] + ticks.get(4).copied().unwrap_or(0);
         let busy = total - idle;
-        let previous = self.cpu_ticks.lock().unwrap().replace((busy, total));
-        match previous {
-            Some((prev_busy, prev_total)) if total > prev_total && busy >= prev_busy => {
-                ((busy - prev_busy) as f64 / (total - prev_total) as f64 * 100.0) as f32
-            }
-            _ => 0.0,
-        }
+        self.cpu.percent(busy, total)
     }
 
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()> {
@@ -282,7 +275,21 @@ fn kb_field(text: &str, key: &str) -> Option<u64> {
         .ok()
 }
 
-/// Splits a NUL-separated block such as `/proc/<pid>/cmdline` into strings.
+/// `/proc/<pid>/cmdline`, keeping empty arguments. Trailing NULs are dropped:
+/// programs that rewrite their title, such as Node's `process.title`, pad the
+/// rest of the original arguments with them.
+fn arguments(cmdline: &[u8]) -> Vec<String> {
+    let end = cmdline.iter().rposition(|&b| b != 0).map_or(0, |i| i + 1);
+    if end == 0 {
+        return Vec::new();
+    }
+    cmdline[..end]
+        .split(|&b| b == 0)
+        .map(|s| String::from_utf8_lossy(s).into_owned())
+        .collect()
+}
+
+/// Splits a NUL-separated block such as `/proc/<pid>/environ` into strings.
 fn nul_separated(bytes: &[u8]) -> impl Iterator<Item = String> + '_ {
     bytes
         .split(|&b| b == 0)

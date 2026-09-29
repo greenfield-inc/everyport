@@ -7,14 +7,12 @@ use crate::protocol::ProcRef;
 use std::ffi::{c_char, c_void, CStr};
 use std::io;
 use std::mem;
-use std::sync::Mutex;
 
 pub struct Macos {
     host: libc::mach_port_t,
     /// Mach time units to nanoseconds, as numerator and denominator.
     timebase: (u64, u64),
-    /// Busy and total CPU ticks at the previous `cpu_percent` call.
-    cpu_ticks: Mutex<Option<(u64, u64)>>,
+    cpu: unix::CpuSampler,
 }
 
 impl Macos {
@@ -25,7 +23,7 @@ impl Macos {
         Self {
             host: unsafe { libc::mach_host_self() },
             timebase: (u64::from(timebase.numer), u64::from(timebase.denom.max(1))),
-            cpu_ticks: Mutex::new(None),
+            cpu: unix::CpuSampler::default(),
         }
     }
 }
@@ -119,13 +117,7 @@ impl Platform for Macos {
             + t[libc::CPU_STATE_SYSTEM as usize]
             + t[libc::CPU_STATE_NICE as usize];
         let total = busy + t[libc::CPU_STATE_IDLE as usize];
-        let previous = self.cpu_ticks.lock().unwrap().replace((busy, total));
-        match previous {
-            Some((prev_busy, prev_total)) if total > prev_total && busy >= prev_busy => {
-                ((busy - prev_busy) as f64 / (total - prev_total) as f64 * 100.0) as f32
-            }
-            _ => 0.0,
-        }
+        self.cpu.percent(busy, total)
     }
 
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()> {
@@ -188,8 +180,9 @@ fn cwd(pid: u32) -> Option<String> {
 }
 
 /// Arguments and environment from `KERN_PROCARGS2`: `argc`, the executable
-/// path, NUL padding, then `argc` arguments and the environment, each
-/// NUL-terminated.
+/// path padded with NULs to a multiple of 8 bytes, then `argc` arguments and
+/// the environment, each NUL-terminated. The padding is computed rather than
+/// skipped, so an empty `argv[0]` keeps its place.
 fn procargs(pid: u32) -> Option<(Vec<String>, Vec<String>)> {
     let arg_max = usize::try_from(sysctl_value::<i32>(c"kern.argmax")?).ok()?;
     let mut buffer = vec![0u8; arg_max];
@@ -211,11 +204,10 @@ fn procargs(pid: u32) -> Option<(Vec<String>, Vec<String>)> {
     buffer.truncate(size);
     let (argc, rest) = buffer.split_at(mem::size_of::<i32>());
     let argc = i32::from_ne_bytes(argc.try_into().ok()?).max(0) as usize;
-    // Skip the executable path and the padding after it.
-    let exec_end = rest.iter().position(|&b| b == 0)?;
-    let rest = &rest[exec_end..];
-    let start = rest.iter().position(|&b| b != 0).unwrap_or(rest.len());
-    let mut strings = rest[start..].split(|&b| b == 0);
+    let exec_len = rest.iter().position(|&b| b == 0)?;
+    let mut strings = rest
+        .get((exec_len + 1).next_multiple_of(8)..)?
+        .split(|&b| b == 0);
     let args = strings
         .by_ref()
         .take(argc)
