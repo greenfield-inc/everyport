@@ -2,7 +2,7 @@
 //! listener's port number as its local port, as the CI runner's own
 //! connections did. It is not an inbound one.
 
-use everyport_core::platform::native;
+use everyport::platform::native;
 use std::io::{BufRead, BufReader};
 use std::net::{TcpListener, TcpStream};
 use std::process::{Child, ChildStdout, Command, Stdio};

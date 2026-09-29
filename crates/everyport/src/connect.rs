@@ -1,5 +1,5 @@
 //! `everyport connect <port>`: pipes stdin and stdout to a server on this machine.
-//! everyport-client runs it through a connection such as `docker exec -i` to
+//! `everyport::client` runs it through a connection such as `docker exec -i` to
 //! forward a port that the connection can't forward itself.
 
 use std::io::{self, Read, Write};

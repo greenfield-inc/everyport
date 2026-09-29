@@ -1,8 +1,8 @@
 //! A session with `everyport serve`: events arrive as server-sent events on
 //! `GET /events`, and each request is a `POST /call` whose body is its result.
 
-use crate::session::{Ended, Reply, Session};
-use everyport_core::protocol::{Call, Event, Request};
+use crate::client::session::{Ended, Reply, Session};
+use crate::protocol::{Call, Event, Request};
 use reqwest::{header, StatusCode};
 use std::time::Duration;
 

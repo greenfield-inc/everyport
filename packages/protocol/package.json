@@ -5,7 +5,7 @@
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "scripts": {
-    "generate": "cd ../.. && cargo test -p everyport-core --quiet && node packages/protocol/scripts/write-index.mjs",
+    "generate": "cd ../.. && cargo test -p everyport --lib --quiet && node packages/protocol/scripts/write-index.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": { "typescript": "~6.0.3" }

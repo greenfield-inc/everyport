@@ -1,4 +1,4 @@
-use everyport_core::protocol::{CleanUpReason, ServerStatus, Snapshot};
+use everyport::protocol::{CleanUpReason, ServerStatus, Snapshot};
 
 /// The shared fixture that the UI renders must stay valid protocol.
 #[test]

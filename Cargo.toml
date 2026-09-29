@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/everyport-core", "crates/everyport", "crates/everyport-client", "apps/desktop/src-tauri"]
+members = ["crates/everyport", "apps/desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,8 +12,7 @@ readme = "README.md"
 keywords = ["ports", "dev-server", "localhost", "process", "cli"]
 
 [workspace.dependencies]
-everyport-core = { path = "crates/everyport-core", version = "0.1.0" }
-everyport-client = { path = "crates/everyport-client", version = "0.1.0" }
+everyport = { path = "crates/everyport" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"

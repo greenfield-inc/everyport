@@ -17,5 +17,4 @@ mod session;
 pub mod wsl;
 
 pub use connection::{Connection, Token};
-pub use everyport_core::protocol;
 pub use session::{connect, Client, Update};

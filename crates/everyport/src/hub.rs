@@ -1,8 +1,8 @@
 //! One scanner shared by every consumer in this process. `stdio`, `serve`,
 //! `watch` and the TUI subscribe to its events and send it calls.
 
-use everyport_core::engine::Engine;
-use everyport_core::protocol::{
+use everyport::engine::Engine;
+use everyport::protocol::{
     Alert, Call, Event, Hello, HostInfo, Request, RequestResult, Snapshot, PROTOCOL_VERSION,
 };
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
@@ -155,7 +155,7 @@ fn same_state(a: &Snapshot, b: &Snapshot) -> bool {
 #[cfg(test)]
 pub mod fixture {
     use super::*;
-    use everyport_core::protocol::{AlertKind, Os};
+    use everyport::protocol::{AlertKind, Os};
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
 

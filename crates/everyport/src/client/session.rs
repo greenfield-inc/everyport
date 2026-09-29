@@ -1,9 +1,9 @@
 //! Keeps one connection alive: runs a session, reports what happens, and
 //! starts a new session with backoff when it ends.
 
-use crate::remote;
-use crate::Connection;
-use everyport_core::protocol::{Call, Event, Os, Request, PROTOCOL_VERSION};
+use crate::client::remote;
+use crate::client::Connection;
+use crate::protocol::{Call, Event, Os, Request, PROTOCOL_VERSION};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
@@ -86,7 +86,9 @@ async fn supervise(
                     .stdio(remote::command(argv_prefix, os, &[everyport_path, "stdio"]))
                     .await
             }
-            Connection::Http { url, token } => crate::http::run(url, &token.0, &mut session).await,
+            Connection::Http { url, token } => {
+                crate::client::http::run(url, &token.0, &mut session).await
+            }
         };
         let Ended::Error(error) = ended else { return };
         if session.greeted {

@@ -12,7 +12,7 @@
 //! token = "..."
 //! ```
 
-use crate::connection::Token;
+use crate::client::connection::Token;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::io::Write;

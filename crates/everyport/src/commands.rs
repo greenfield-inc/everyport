@@ -4,10 +4,10 @@
 use crate::format;
 use crate::machine::{self, Feed, Install, Machine, RUNTIME};
 use crate::palette::Palette;
-use everyport_client::forward::forward;
-use everyport_core::engine::Engine;
-use everyport_core::platform;
-use everyport_core::protocol::{
+use everyport::client::forward::forward;
+use everyport::engine::Engine;
+use everyport::platform;
+use everyport::protocol::{
     AutoKill, Call, Config, Event, Os, ProcRef, Server, ServerStatus, Snapshot,
 };
 use std::collections::HashMap;
@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 
 /// The user's settings from `config.toml`, which the desktop app writes.
 pub fn config() -> io::Result<Config> {
-    match everyport_core::config::path() {
-        Some(path) => everyport_core::config::load(&path),
+    match everyport::config::path() {
+        Some(path) => everyport::config::load(&path),
         None => Ok(Config::default()),
     }
 }
@@ -508,7 +508,7 @@ pub fn clean(mut machine: Machine, yes: bool) -> io::Result<ExitCode> {
 }
 
 pub fn doctor(config_dir: Option<std::path::PathBuf>) -> ExitCode {
-    let host = everyport_core::host::info();
+    let host = everyport::host::info();
     let os = match host.os {
         Os::Macos => "macOS",
         Os::Linux => "Linux",
@@ -517,7 +517,7 @@ pub fn doctor(config_dir: Option<std::path::PathBuf>) -> ExitCode {
     println!(
         "everyport {} · protocol {} · {os} {} · {} cores",
         env!("CARGO_PKG_VERSION"),
-        everyport_core::protocol::PROTOCOL_VERSION,
+        everyport::protocol::PROTOCOL_VERSION,
         host.arch,
         host.cores
     );

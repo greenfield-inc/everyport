@@ -1,10 +1,8 @@
 //! Connections against stand-ins for `everyport stdio`, `ssh` and `everyport serve`.
 #![cfg(unix)]
 
-use everyport_client::protocol::{
-    Call, Event, Hello, HostInfo, Os, ProcRef, Snapshot, PROTOCOL_VERSION,
-};
-use everyport_client::{connect, install, Connection, Update};
+use everyport::client::{connect, install, Connection, Update};
+use everyport::protocol::{Call, Event, Hello, HostInfo, Os, ProcRef, Snapshot, PROTOCOL_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -32,7 +30,7 @@ fn hello() -> Event {
 }
 
 fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("everyport-client-{name}-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("everyport-connect-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir

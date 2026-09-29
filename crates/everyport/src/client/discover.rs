@@ -1,7 +1,7 @@
 //! Machines the user can add without typing a command: hosts in
 //! `~/.ssh/config`, Pane remote hosts, and WSL distros on Windows.
 
-use crate::machines::{Machine, Via};
+use crate::client::machines::{Machine, Via};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
@@ -28,13 +28,13 @@ pub async fn all() -> Vec<Found> {
         .map(found(Source::SshConfig))
         .chain(pane(&pane_dir).into_iter().map(found(Source::Pane)))
         .chain(
-            crate::wsl::distros()
+            crate::client::wsl::distros()
                 .await
                 .into_iter()
                 .map(|distro| Machine {
                     name: distro.clone(),
                     via: Via::Command {
-                        command: crate::wsl::prefix(&distro),
+                        command: crate::client::wsl::prefix(&distro),
                     },
                 })
                 .map(found(Source::Wsl)),

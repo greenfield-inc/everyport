@@ -1,11 +1,11 @@
 //! Engine behavior against a fake `Platform`. Expected values follow
 //! WhatThePort's rules and the defaults in `Config`.
 
-use everyport_core::engine::Engine;
-use everyport_core::platform::{
+use everyport::engine::Engine;
+use everyport::platform::{
     Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage,
 };
-use everyport_core::protocol::{
+use everyport::protocol::{
     AlertKind, AutoKill, Call, CleanUpReason, Config, ConfigChange, OtherPort, ProcRef, Server,
     ServerStatus, Snapshot,
 };

@@ -1,8 +1,8 @@
 //! Forwarding a port over a connection with no forwarding of its own, which
 //! relays through `everyport connect` on the machine. An empty prefix runs it here.
 
-use everyport_client::forward::forward;
-use everyport_client::Connection;
+use everyport::client::forward::forward;
+use everyport::client::Connection;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, TcpListener, TcpStream};
 use std::thread;

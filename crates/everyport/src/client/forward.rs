@@ -1,7 +1,7 @@
 //! Makes a remote server's port reachable on this machine, so its URL opens
 //! in the local browser.
 
-use crate::{remote, Connection};
+use crate::client::{remote, Connection};
 use anyhow::{bail, Context};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
 use std::process::Stdio;

@@ -7,7 +7,7 @@ There are two transports, with the same JSON:
 - `everyport stdio`: events on stdout, requests on stdin. The desktop app runs it as a sidecar, and runs it on remote machines through `ssh`, `docker exec -i`, `kubectl exec -i --` or `wsl`.
 - `everyport serve`: HTTP on loopback, with events as server-sent events.
 
-The types are defined in [`crates/everyport-core/src/protocol.rs`](../crates/everyport-core/src/protocol.rs), and TypeScript types are generated from it into `@everyport/protocol`.
+The types are defined in [`crates/everyport/src/protocol.rs`](../crates/everyport/src/protocol.rs), and TypeScript types are generated from it into `@everyport/protocol`.
 
 ## Conventions
 

@@ -4,9 +4,7 @@
 use super::chart::{sparkline, Canvas};
 use super::{App, Page};
 use crate::format;
-use everyport_core::protocol::{
-    AgentKind, CleanUpReason, Config, Server, ServerStatus, WorkspaceKind,
-};
+use everyport::protocol::{AgentKind, CleanUpReason, Config, Server, ServerStatus, WorkspaceKind};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -127,7 +125,7 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     sync_selection(app);
     let area = frame.area();
     let width = (area.width as usize).min(100);
-    let now = everyport_core::now_ms();
+    let now = everyport::now_ms();
     let view = View {
         app,
         s: Styles::new(app),
@@ -1034,7 +1032,7 @@ impl View<'_> {
         &self,
         server: &Server,
         dots: usize,
-        y: impl Fn(&everyport_core::protocol::Sample) -> i64,
+        y: impl Fn(&everyport::protocol::Sample) -> i64,
     ) -> Vec<(i64, i64)> {
         let start = self.taken_at.saturating_sub(HISTORY_MS);
         let mut points: Vec<(i64, i64)> = Vec::new();

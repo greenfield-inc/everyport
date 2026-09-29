@@ -23,7 +23,7 @@ pub enum Connection {
     Sidecar { path: PathBuf },
     /// A command prefix that runs a program on the machine, such as
     /// `ssh devbox` or `docker exec -i box`. `everyport_path` is where `everyport` lives
-    /// there, as found by [`crate::install::probe`].
+    /// there, as found by [`crate::client::install::probe`].
     Command {
         argv_prefix: Vec<String>,
         everyport_path: String,

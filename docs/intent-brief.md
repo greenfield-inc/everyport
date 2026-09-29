@@ -20,7 +20,7 @@ Developers who run several dev servers at once, often started by coding agents i
 |---|---|
 | Stack | Tauri 2, React 19, Tailwind 4. Rust for everything that touches the OS. |
 | Process model | The desktop app never scans in-process. It runs `everyport stdio` as a sidecar locally, and the same binary through a connection command remotely. One code path for every machine. |
-| Protocol | JSON over stdio or HTTP+SSE. Defined once in `crates/everyport-core/src/protocol.rs`, exported to TypeScript. |
+| Protocol | JSON over stdio or HTTP+SSE. Defined once in `crates/everyport/src/protocol.rs`, exported to TypeScript. |
 | UI package | `packages/ui` in this repo. React only, no Tauri imports, so Pane can embed it later. Extract to a shared Dcouple package only when a second product needs it. |
 | Look | Layout, spacing, type sizes and radii match the Paper design pixel for pixel (`docs/design/`). Colors and the body font come from the active Doozy theme. Numbers stay monospace. Animations are ours. See [design-spec.md](design-spec.md). |
 | Remote | Any command prefix (`ssh`, `docker exec -i`, `kubectl exec -i --`, `wsl --`, custom) or an `everyport serve` URL. Hosts come from `~/.ssh/config`, Pane remote hosts, and manual entry. Remote OSes: Linux, macOS, Windows. |

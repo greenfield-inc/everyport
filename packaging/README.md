@@ -30,20 +30,18 @@ The version lives only in `Cargo.toml` (`workspace.package`). The desktop app re
 ## Workflows
 
 - `build.yml` builds all of it, assembles it with `scripts/dist.sh`, checks the npm and PyPI packages with `npm publish --dry-run` and `twine check`, and runs `scripts/smoke-install.sh` on macOS, Windows and Linux. It never publishes.
-- `ci.yml` runs `pnpm check`, `scripts/publish-crates.sh --dry-run` and `build.yml` on every PR. It builds the desktop bundles only when `apps/`, `packages/`, the lockfile or `build.yml` change.
-- `release.yml` runs `build.yml` with bundles. On a `v*` tag it signs and notarizes the bundles, creates the GitHub release, and publishes to crates.io, npm, PyPI and the Homebrew tap. Run it by hand on a branch for an unsigned dry run that publishes nothing. Run it by hand on a tag with **unsigned** checked for an unsigned test release.
+- `ci.yml` runs `pnpm check`, `cargo publish -p everyport --dry-run` and `build.yml` on every PR. It builds the desktop bundles only when `apps/`, `packages/`, the lockfile or `build.yml` change.
+- `release.yml` runs `build.yml` with bundles. On a `v*` tag it signs and notarizes the bundles, creates the GitHub release, and publishes to crates.io, npm, PyPI and the Homebrew tap. crates.io gets one crate, `everyport`, which holds the library and the CLI. Run it by hand on a branch for an unsigned dry run that publishes nothing. Run it by hand on a tag with **unsigned** checked for an unsigned test release.
 
 ## Secrets
 
-A tag build fails when a signing or notarization secret is missing, unless it was started by hand with **unsigned**. To release before there is a Windows certificate, set the `WINDOWS_SIGNING` repository variable to `skip`: tag builds still sign and notarize macOS, and ship an unsigned `.msi` with a warning in the log. Unset or `required`, a tag build fails without the Windows secrets. The crates.io and Homebrew steps log a notice and skip when their token is missing. PyPI uses trusted publishing, so it needs no secret. npm uses `NPM_TOKEN` when it is set and trusted publishing otherwise. Builds that aren't from a tag never sign, so they never read the signing secrets.
+A tag build fails when a signing or notarization secret is missing, unless it was started by hand with **unsigned**. To release before there is a Windows certificate, set the `WINDOWS_SIGNING` repository variable to `skip`: tag builds still sign and notarize macOS, and ship an unsigned `.msi` with a warning in the log. Unset or `required`, a tag build fails without the Windows secrets. crates.io, npm and PyPI use trusted publishing, so they need no secret. Each registry's `everyport` package needs a trusted publisher with owner `greenfield-inc`, repository `everyport`, workflow `release.yml` and no environment. A missing one fails only that publish job, after the GitHub release exists. The Homebrew step logs a notice and skips when its token is missing. Builds that aren't from a tag never sign, so they never read the signing secrets.
 
 | Secret | Used for |
 |---|---|
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | macOS signing: the Developer ID Application certificate as base64 `.p12`, and its password |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_SPECIFIC_PASSWORD` | macOS notarization |
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | Windows signing: base64 `.pfx` and its password |
-| `CARGO_REGISTRY_TOKEN` | crates.io publish of `everyport` and the workspace crates it depends on |
-| `NPM_TOKEN` | npm publish, until npm trusted publishing is set up for the package |
 | `HOMEBREW_TAP_TOKEN` | Push to `greenfield-inc/homebrew-tap` |
 
 ## Cut a release

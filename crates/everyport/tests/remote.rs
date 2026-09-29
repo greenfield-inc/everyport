@@ -110,7 +110,7 @@ fn on_runs_the_command_on_the_named_machine() {
 
 /// A protocol fixture makes cross-user listeners reproducible without needing
 /// privileges or relying on the processes that happen to run on the test host.
-fn list_snapshot(snapshot: everyport_core::protocol::Snapshot, case: &str) -> String {
+fn list_snapshot(snapshot: everyport::protocol::Snapshot, case: &str) -> String {
     use base64::Engine as _;
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
@@ -145,8 +145,7 @@ fn list_snapshot(snapshot: everyport_core::protocol::Snapshot, case: &str) -> St
         writeln!(
             events,
             "data: {}\n",
-            serde_json::to_string(&everyport_core::protocol::Event::Snapshot(snapshot.clone()))
-                .unwrap()
+            serde_json::to_string(&everyport::protocol::Event::Snapshot(snapshot.clone())).unwrap()
         )
         .unwrap();
         let (mut call, _) = listener.accept().unwrap();
@@ -182,7 +181,7 @@ fn list_snapshot(snapshot: everyport_core::protocol::Snapshot, case: &str) -> St
         writeln!(
             events,
             "data: {}\n",
-            serde_json::to_string(&everyport_core::protocol::Event::Snapshot(snapshot)).unwrap()
+            serde_json::to_string(&everyport::protocol::Event::Snapshot(snapshot)).unwrap()
         )
         .unwrap();
     });
@@ -204,7 +203,7 @@ fn list_snapshot(snapshot: everyport_core::protocol::Snapshot, case: &str) -> St
 
 #[test]
 fn plain_list_includes_other_ports_and_only_calls_a_truly_empty_snapshot_empty() {
-    use everyport_core::protocol::{OtherPort, Snapshot};
+    use everyport::protocol::{OtherPort, Snapshot};
     let mut snapshot: Snapshot = serde_json::from_str(include_str!(
         "../../../packages/protocol/fixtures/snapshot.json"
     ))

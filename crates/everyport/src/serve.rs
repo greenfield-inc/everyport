@@ -278,7 +278,7 @@ fn write_head(
 mod tests {
     use super::*;
     use crate::hub::fixture;
-    use everyport_core::protocol::{Event, RequestResult};
+    use everyport::protocol::{Event, RequestResult};
 
     const TOKEN: &str = "s3cret";
 
