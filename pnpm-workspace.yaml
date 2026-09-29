@@ -2,3 +2,9 @@ packages:
   - apps/*
   - packages/*
   - site
+allowBuilds:
+  # next/image optimization, which the site does not use.
+  sharp: false
+overrides:
+  # nextra 4.6 fails to validate its layout props with zod 4.6; runpane-website runs 4.3.6.
+  zod: 4.3.6

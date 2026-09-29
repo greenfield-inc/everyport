@@ -168,8 +168,24 @@ code {
   color: var(--fg);
 }
 
-.github {
+.header-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-left: auto;
+}
+
+.docs-link {
+  color: var(--muted);
+  font-size: 13.5px;
+}
+
+.docs-link:hover {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.github {
   padding: 6px 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -177,7 +193,7 @@ code {
   font-size: 13.5px;
 }
 
-.header nav + .github {
+.header nav + .header-links {
   margin-left: 0;
 }
 
@@ -353,6 +369,7 @@ code {
 }
 
 .header nav a,
+.docs-link,
 .github,
 .tabs button,
 .segmented button,

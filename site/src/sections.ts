@@ -1,8 +1,5 @@
 import type { Os } from "@everyport/protocol";
 
-export const REPO = "https://github.com/greenfield-inc/everyport";
-export const RELEASES = `${REPO}/releases/latest`;
-
 /** What the popover shows while a section is on screen. */
 export type View = { kind: "list" } | { kind: "detail"; port: number } | { kind: "cleanUp" } | { kind: "terminal" };
 
@@ -21,10 +18,16 @@ export type SectionId = (typeof SECTIONS)[number]["id"];
 
 export const OS_NAMES: Record<Os, string> = { macos: "macOS", windows: "Windows", linux: "Linux" };
 
-/** The visitor's own OS, from the user agent. */
+/**
+ * The visitor's own OS. Chromium names the platform in userAgentData. Other
+ * browsers have only the user agent, where Android and ChromeOS also say Linux
+ * or X11, so Mac and those come first. Anything else gets macOS.
+ */
 export function visitorOs(): Os {
+  const platform = (navigator as { userAgentData?: { platform: string } }).userAgentData?.platform;
+  if (platform) return platform === "Windows" ? "windows" : platform === "Linux" ? "linux" : "macos";
   const agent = navigator.userAgent;
   if (/Windows/.test(agent)) return "windows";
-  if (/Linux|X11|CrOS|Android/.test(agent)) return "linux";
-  return "macos";
+  if (/Macintosh|iPhone|iPad|Android|CrOS/.test(agent)) return "macos";
+  return /Linux|X11/.test(agent) ? "linux" : "macos";
 }

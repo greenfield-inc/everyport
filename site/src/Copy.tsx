@@ -1,15 +1,16 @@
 import type { Os } from "@everyport/protocol";
 import { useEffect, useRef, useState } from "react";
 import { usePill } from "./pill.ts";
-import { OS_NAMES, RELEASES, REPO, type SectionId } from "./sections.ts";
+import { OS_NAMES, type SectionId } from "./sections.ts";
+import { RELEASES, REPO, SITE_URL, VERSION } from "./site.ts";
 
-const RAW = "https://github.com/greenfield-inc/everyport/releases/latest/download";
+const RAW = `${RELEASES}/download`;
 
 /** The one-line app install, served from the site root. */
 const APP_COMMAND: Record<Os, string> = {
-  macos: `curl -fsSL ${__SITE_URL__}install.sh | sh`,
-  windows: `irm ${__SITE_URL__}install.ps1 | iex`,
-  linux: `curl -fsSL ${__SITE_URL__}install.sh | sh`,
+  macos: `curl -fsSL ${SITE_URL}install.sh | sh`,
+  windows: `irm ${SITE_URL}install.ps1 | iex`,
+  linux: `curl -fsSL ${SITE_URL}install.sh | sh`,
 };
 
 /** CLI-only installs from the README. */
@@ -31,7 +32,7 @@ const DOWNLOADS: Download[] = [
   { id: "rpm", os: "linux", label: "Linux", detail: ".rpm", arch: "x86_64", ext: "rpm" },
 ];
 
-const href = ({ arch, ext }: Download) => `${RAW}/everyport-${__EVERYPORT_VERSION__}-${arch}.${ext}`;
+const href = ({ arch, ext }: Download) => `${RAW}/everyport-${VERSION}-${arch}.${ext}`;
 
 /**
  * Apple Silicon unless the browser says Intel. Chromium tells through

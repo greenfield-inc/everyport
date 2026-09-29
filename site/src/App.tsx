@@ -7,7 +7,8 @@ import { cliName, demoMachines, LOCAL } from "./machines.ts";
 import { usePill } from "./pill.ts";
 import { Screen } from "./Screen.tsx";
 import { Socket } from "./Socket.tsx";
-import { OS_NAMES, REPO, SECTIONS, type SectionId, visitorOs } from "./sections.ts";
+import { OS_NAMES, SECTIONS, type SectionId, visitorOs } from "./sections.ts";
+import { REPO } from "./site.ts";
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -177,7 +178,7 @@ export function App() {
         <Credit />
         <nav aria-label="Footer">
           <a href={REPO}>GitHub</a>
-          <a href={`${REPO}/tree/main/docs`}>Docs</a>
+          <a href="/docs">Docs</a>
           <a href={`${REPO}/releases`}>Releases</a>
           <a href={`${REPO}/blob/main/LICENSE`}>License</a>
         </nav>
@@ -208,9 +209,14 @@ function Header({ active, onNavigate }: { active?: number; onNavigate?: (id: Sec
           ))}
         </nav>
       )}
-      <a className="github" href={REPO}>
-        GitHub
-      </a>
+      <div className="header-links">
+        <a className="docs-link" href="/docs">
+          Docs
+        </a>
+        <a className="github" href={REPO}>
+          GitHub
+        </a>
+      </div>
     </header>
   );
 }
