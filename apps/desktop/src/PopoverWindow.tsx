@@ -1,9 +1,9 @@
+import { Popover } from "@ppm/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type { TauriPpmClient } from "./client";
 import { useFitWindow } from "./fit";
-import { ServerList } from "./ServerList";
 
 /** Hidden this long, the popover reopens on the list instead of where it was. */
 const RESET_AFTER_MS = 60_000;
@@ -22,6 +22,8 @@ export function PopoverWindow({ client }: { client: TauriPpmClient }) {
         document.documentElement.toggleAttribute("data-hidden", !visible);
         clearTimeout(reset);
         if (!visible) reset = window.setTimeout(() => setView((v) => ({ key: v.key + 1 })), RESET_AFTER_MS);
+        // Keys go to the panel; keep focus where it was, or give it to the panel.
+        else if (document.activeElement === document.body) document.querySelector<HTMLElement>(".ppm-panel")?.focus();
       }),
       listen<ServerRef>("popover:open-server", ({ payload }) =>
         setView((v) => ({ key: v.key + 1, initialServer: payload })),
@@ -43,7 +45,7 @@ export function PopoverWindow({ client }: { client: TauriPpmClient }) {
 
   return (
     <div ref={ref} className="window-content">
-      <ServerList key={view.key} client={client} initialServer={view.initialServer} onReady={onReady} />
+      <Popover key={view.key} client={client} initialServer={view.initialServer} onReady={onReady} />
     </div>
   );
 }

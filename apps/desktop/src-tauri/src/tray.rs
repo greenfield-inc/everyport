@@ -3,6 +3,8 @@
 //! opens the menu (Linux desktops often send every click to the menu, so its
 //! first item opens the popover).
 
+use std::sync::Mutex;
+
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
@@ -12,6 +14,8 @@ use tauri_plugin_autostart::ManagerExt as _;
 use crate::{popover, settings};
 
 const ID: &str = "tray";
+/// Paper's amber, until the page sends the theme's.
+const PAPER_AMBER: [u8; 3] = [0xFF, 0xB2, 0x24];
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -46,8 +50,12 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         ],
     )?;
     app.manage(LoginItem(launch_at_login));
+    app.manage(Mutex::new(Look {
+        state: State::Idle,
+        amber: PAPER_AMBER,
+    }));
     TrayIconBuilder::with_id(ID)
-        .icon(icon(State::Idle))
+        .icon(icon(State::Idle, PAPER_AMBER))
         .icon_as_template(true)
         .tooltip("Port Process Manager")
         .menu(&menu)
@@ -90,7 +98,34 @@ pub fn get(app: &AppHandle) -> Option<TrayIcon<Wry>> {
     app.tray_by_id(ID)
 }
 
+/// What the icon shows, and its attention color: the theme's warning color,
+/// which the page sends as sRGB.
+struct Look {
+    state: State,
+    amber: [u8; 3],
+}
+
 pub fn set_state(app: &AppHandle, state: State) {
+    look(app).state = state;
+    redraw(app);
+}
+
+/// Sets the attention color from the page's theme.
+#[tauri::command]
+pub fn set_attention_color(app: AppHandle, rgb: [u8; 3]) {
+    look(&app).amber = rgb;
+    redraw(&app);
+}
+
+fn look(app: &AppHandle) -> std::sync::MutexGuard<'_, Look> {
+    app.state::<Mutex<Look>>()
+        .inner()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn redraw(app: &AppHandle) {
+    let Look { state, amber } = *look(app);
     let Some(tray) = get(app) else { return };
     let (count, label) = match state {
         State::Idle => (None, "Port Process Manager, no servers".to_string()),
@@ -107,7 +142,7 @@ pub fn set_state(app: &AppHandle, state: State) {
             ),
         ),
     };
-    let _ = tray.set_icon(Some(icon(state)));
+    let _ = tray.set_icon(Some(icon(state, amber)));
     // Template images follow the menu bar's appearance; the amber one keeps its color.
     let _ = tray.set_icon_as_template(!matches!(state, State::Attention(_)));
     let _ = tray.set_title(count);
@@ -125,7 +160,7 @@ fn glyph(state: State) -> [&'static str; 5] {
 
 /// Renders the grid at 2x for an 18 pt menu bar: 36 px square with a 32 px
 /// grid, each dot 76% of its cell, antialiased by 4x4 supersampling.
-fn icon(state: State) -> Image<'static> {
+fn icon(state: State, amber: [u8; 3]) -> Image<'static> {
     const SIZE: usize = 36;
     const GRID: f64 = 32.0;
     const SAMPLES: usize = 4;
@@ -156,7 +191,7 @@ fn icon(state: State) -> Image<'static> {
             let dot = rows[row as usize].as_bytes()[column as usize];
             // Unlit dots are faint in the template icon, and dark holes in the amber one.
             let [r, g, b, a] = match dot {
-                b'a' => [0xFF, 0xB2, 0x24, 255],
+                b'a' => [amber[0], amber[1], amber[2], 255],
                 b'#' => [0, 0, 0, 255],
                 _ if matches!(state, State::Attention(_)) => [0x40, 0x40, 0x40, 255],
                 _ => [0, 0, 0, 80],

@@ -2,14 +2,7 @@
 :root {
   color-scheme: light dark;
   --ppm-shadow: none; /* the OS draws the window shadow */
-  --popover: rgb(255 255 255 / 0.8);
-  --foreground: #1d1d1f;
-  --muted-foreground: rgb(60 60 67 / 0.6);
-  --accent: rgb(0 0 0 / 0.06);
-  --border: rgb(0 0 0 / 0.1);
-  --destructive: #e5484d;
   font: 13px/1.4 system-ui, sans-serif;
-  color: var(--foreground);
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;
   user-select: none;
@@ -18,43 +11,13 @@
   overscroll-behavior: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --popover: rgb(32 32 36 / 0.72);
-    --foreground: #f5f5f7;
-    --muted-foreground: rgb(235 235 245 / 0.6);
-    --accent: rgb(255 255 255 / 0.08);
-    --border: rgb(255 255 255 / 0.08);
-  }
-}
-
-/* Without native blur (Linux), the panel is solid. */
-:root:not([data-vibrancy]) {
-  --popover: rgb(250 250 250);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-vibrancy]) {
-    --popover: rgb(32 32 36);
-  }
-}
-
-/* Paused while the popover is hidden. */
-:root[data-hidden] *,
-:root[data-hidden] *::before,
-:root[data-hidden] *::after {
-  animation-play-state: paused !important;
-}
-
-* {
-  box-sizing: border-box;
-}
-
 html,
 body {
   margin: 0;
   overflow: hidden;
 }
 
+/* The popover and alert draw their own panel over the native blur. */
 :root[data-window="popover"] body,
 :root[data-window="notification"] body {
   background: transparent;
@@ -71,80 +34,6 @@ button {
 
 .window-content {
   width: fit-content;
-}
-
-.panel {
-  width: 400px;
-  background: var(--popover);
-  border: 0.5px solid var(--border);
-  border-radius: 16px;
-  padding: 8px;
-  overflow: hidden;
-}
-
-.muted {
-  color: var(--muted-foreground);
-}
-
-.mono {
-  font-family: ui-monospace, "Geist Mono", monospace;
-}
-
-ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 8px;
-  font-weight: 500;
-}
-
-.row {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  padding: 6px 8px;
-  border-radius: 7px;
-}
-.row:hover {
-  background: var(--accent);
-}
-.grow {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.notification {
-  width: 356px;
-  border-radius: 22px;
-  padding: 12px 14px;
-}
-.notification p {
-  margin: 2px 0 10px;
-}
-.actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-.actions button {
-  font: inherit;
-  font-weight: 500;
-  color: inherit;
-  background: var(--accent);
-  border: none;
-  border-radius: 8px;
-  padding: 6px 0;
-}
-.actions .destructive {
-  color: var(--destructive);
 }
 
 .settings {

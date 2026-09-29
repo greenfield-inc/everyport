@@ -53,6 +53,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             fit_window,
+            tray::set_attention_color,
             popover::popover_ready,
             popover::hide_popover,
             popover::has_vibrancy,

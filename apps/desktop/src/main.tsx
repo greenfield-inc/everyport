@@ -2,7 +2,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
+import "@ppm/ui/styles.css";
 import "./app.css";
+import { syncAttentionColor } from "./attention";
 import { TauriPpmClient } from "./client";
 import { NotificationWindow } from "./NotificationWindow";
 import { PopoverWindow } from "./PopoverWindow";
@@ -21,6 +23,7 @@ async function page(): Promise<ReactNode> {
   root.toggleAttribute("data-vibrancy", await invoke<boolean>("has_vibrancy"));
   if (label === "notification") return <NotificationWindow />;
   root.toggleAttribute("data-hidden", true);
+  syncAttentionColor();
   return <PopoverWindow client={new TauriPpmClient()} />;
 }
 

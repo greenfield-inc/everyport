@@ -29,6 +29,9 @@ importers:
         specifier: ^19.1.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
+      '@tailwindcss/vite':
+        specifier: ^4.3.3
+        version: 4.3.3(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0))
       '@tauri-apps/cli':
         specifier: ^2
         version: 2.12.0
@@ -41,6 +44,9 @@ importers:
       '@vitejs/plugin-react':
         specifier: ^6.0.2
         version: 6.1.1(vite@8.3.1(@types/node@26.6.3)(jiti@2.7.0))
+      tailwindcss:
+        specifier: ^4.3.3
+        version: 4.3.3
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
