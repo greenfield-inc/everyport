@@ -63,6 +63,14 @@ export class TauriPpmClient implements PpmClient {
     return invoke<void>("resume_session", { machineId, session });
   }
 
+  connectMachine(machineId: string) {
+    return invoke<void>("connect_machine", { machineId });
+  }
+
+  installPpm(machineId: string) {
+    return invoke<void>("install_ppm", { machineId });
+  }
+
   openSettings() {
     void invoke("open_settings");
   }
