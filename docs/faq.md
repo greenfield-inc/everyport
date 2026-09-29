@@ -25,7 +25,7 @@ Not by default. Databases such as `postgres` and `redis-server` are on the **Nev
 
 ## Can I see servers on another machine?
 
-Yes: a devbox over SSH, a Docker container, a Kubernetes pod or a WSL distro. The first time you connect, Everyport asks, then installs itself in `~/.local/bin` there over the same connection. See [Machines](remote-machines.md).
+Yes: a devbox over SSH, a Docker container, a Kubernetes pod or a WSL distro. The first time you connect, Everyport asks, then installs itself there over the same connection, in `~/.local/bin` or `%LOCALAPPDATA%\everyport` on Windows. See [Machines](remote-machines.md).
 
 ## Do I need the desktop app?
 
