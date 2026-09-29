@@ -74,9 +74,12 @@ param([switch]$Cli, [switch]$NoOpen)
 
     if ($setup) {
       # The installer is per-user (no admin prompt). In silent mode it closes a running copy first.
-      $appDir = if ($env:PPM_APP_DIR) { $env:PPM_APP_DIR } else { Join-Path $env:LOCALAPPDATA 'Port Process Manager' }
+      # /D must come last and unquoted. Without it, the installer uses the default folder.
+      $setupArgs = @('/S')
+      if ($env:PPM_APP_DIR) { $setupArgs += "/D=$env:PPM_APP_DIR" }
+      $appDir = if ($env:PPM_APP_DIR) { $env:PPM_APP_DIR } else { Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Port Process Manager' }
       Write-Host 'Installing Port Process Manager'
-      $process = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$appDir" -Wait -PassThru
+      $process = Start-Process -FilePath $setup -ArgumentList $setupArgs -Wait -PassThru
       if ($process.ExitCode -ne 0) { throw "Port Process Manager install: the installer exited with code $($process.ExitCode)" }
       $exe = Join-Path $appDir 'ppm-desktop.exe'
       if (-not (Test-Path $exe)) { throw "Port Process Manager install: the installer finished, but $exe is missing" }
