@@ -3,16 +3,29 @@
 
 use crate::{remote, Connection};
 use anyhow::{bail, Context};
-use std::net::{Ipv4Addr, TcpListener, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpListener, TcpStream};
 use std::process::Stdio;
 use std::time::Duration;
 
 /// A forwarded port. Dropping it closes the tunnel.
 #[derive(Debug)]
 pub struct Forward {
-    /// Open `http://localhost:<local_port>`.
+    /// The URL to open, such as `http://127.0.0.1:5173`.
+    pub url: String,
     pub local_port: u16,
     _tunnel: Option<tokio::process::Child>,
+}
+
+impl Forward {
+    /// The server is reachable here as it is, at `localhost`, which reaches
+    /// servers bound to `::1` as well as `127.0.0.1`.
+    fn direct(port: u16) -> Self {
+        Self {
+            url: format!("http://localhost:{port}"),
+            local_port: port,
+            _tunnel: None,
+        }
+    }
 }
 
 /// Forwards `port` on the machine behind `connection` to this machine. Uses
@@ -20,17 +33,9 @@ pub struct Forward {
 /// (WSL forwards `localhost` itself) need no tunnel.
 pub async fn forward(connection: &Connection, port: u16) -> anyhow::Result<Forward> {
     let prefix = match connection {
-        Connection::Sidecar { .. } => {
-            return Ok(Forward {
-                local_port: port,
-                _tunnel: None,
-            })
-        }
+        Connection::Sidecar { .. } => return Ok(Forward::direct(port)),
         Connection::Command { argv_prefix, .. } if remote::program(argv_prefix) == "wsl" => {
-            return Ok(Forward {
-                local_port: port,
-                _tunnel: None,
-            })
+            return Ok(Forward::direct(port))
         }
         Connection::Command { argv_prefix, .. } => argv_prefix,
         Connection::Http { url, .. } => {
@@ -67,7 +72,10 @@ pub async fn forward(connection: &Connection, port: u16) -> anyhow::Result<Forwa
             );
         }
         if TcpStream::connect((Ipv4Addr::LOCALHOST, local_port)).is_ok() {
+            // The tunnel listens on 127.0.0.1 only. `localhost` can resolve
+            // to ::1 first and reach a different local server.
             return Ok(Forward {
+                url: format!("http://127.0.0.1:{local_port}"),
                 local_port,
                 _tunnel: Some(child),
             });
@@ -77,25 +85,29 @@ pub async fn forward(connection: &Connection, port: u16) -> anyhow::Result<Forwa
     bail!("Forwarding port {port} took longer than 10 s.")
 }
 
-/// `port` when nothing listens on it here, otherwise any free port.
+/// `port` when no local server answers on it at 127.0.0.1 or ::1, otherwise
+/// any free port.
 fn free_port(port: u16) -> anyhow::Result<u16> {
-    let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, port))
-        .or_else(|_| TcpListener::bind((Ipv4Addr::LOCALHOST, 0)))?;
-    Ok(listener.local_addr()?.port())
+    let answers = |ip: IpAddr| {
+        TcpStream::connect_timeout(&(ip, port).into(), Duration::from_millis(200)).is_ok()
+    };
+    let taken = answers(Ipv4Addr::LOCALHOST.into()) || answers(Ipv6Addr::LOCALHOST.into());
+    if !taken && TcpListener::bind((Ipv4Addr::LOCALHOST, port)).is_ok() {
+        return Ok(port);
+    }
+    Ok(TcpListener::bind((Ipv4Addr::LOCALHOST, 0))?
+        .local_addr()?
+        .port())
 }
 
 /// The command that forwards `remote` to `local` for a connection prefix.
 fn tunnel(prefix: &[String], local: u16, remote: u16) -> anyhow::Result<Vec<String>> {
     match remote::program(prefix).as_str() {
         "ssh" => {
-            // Options go before the destination the prefix already names.
-            let mut argv = vec![prefix[0].clone()];
-            argv.extend(
-                ["-N", "-o", "ExitOnForwardFailure=yes", "-L", &format!("{local}:localhost:{remote}")]
-                    .map(String::from),
-            );
-            argv.extend(prefix[1..].iter().cloned());
-            Ok(argv)
+            let spec = format!("127.0.0.1:{local}:localhost:{remote}");
+            let mut options = remote::SSH_KEEPALIVE.to_vec();
+            options.extend(["-N", "-o", "ExitOnForwardFailure=yes", "-L", &spec]);
+            Ok(remote::ssh_with(prefix, &options))
         }
         "kubectl" => kubectl_port_forward(prefix, local, remote),
         program => bail!(
@@ -105,14 +117,14 @@ fn tunnel(prefix: &[String], local: u16, remote: u16) -> anyhow::Result<Vec<Stri
 }
 
 /// `kubectl [global flags] exec -i <pod> [-n ns] [-c ctr] --` becomes
-/// `kubectl [global flags] port-forward [-n ns] <pod> <local>:<remote>`.
+/// `kubectl [global flags] port-forward --address 127.0.0.1 [-n ns] <pod> <local>:<remote>`.
 fn kubectl_port_forward(prefix: &[String], local: u16, remote: u16) -> anyhow::Result<Vec<String>> {
     let exec = prefix
         .iter()
         .position(|a| a == "exec")
         .context("A kubectl connection runs `kubectl exec`.")?;
     let mut argv = prefix[..exec].to_vec();
-    argv.push("port-forward".into());
+    argv.extend(["port-forward", "--address", "127.0.0.1"].map(String::from));
     let mut pod = None;
     let mut args = prefix[exec + 1..].iter();
     while let Some(arg) = args.next() {
@@ -149,11 +161,13 @@ mod tests {
             tunnel(&strings(&["ssh", "-p", "2222", "me@devbox"]), 3000, 3000).unwrap(),
             strings(&[
                 "ssh",
+                "-o",
+                "ServerAliveInterval=15",
                 "-N",
                 "-o",
                 "ExitOnForwardFailure=yes",
                 "-L",
-                "3000:localhost:3000",
+                "127.0.0.1:3000:localhost:3000",
                 "-p",
                 "2222",
                 "me@devbox"
@@ -188,6 +202,8 @@ mod tests {
                 "--context",
                 "prod",
                 "port-forward",
+                "--address",
+                "127.0.0.1",
                 "-n",
                 "web",
                 "api-7d9f",
@@ -201,7 +217,14 @@ mod tests {
                 3000
             )
             .unwrap(),
-            strings(&["kubectl", "port-forward", "deploy/web", "3000:3000"])
+            strings(&[
+                "kubectl",
+                "port-forward",
+                "--address",
+                "127.0.0.1",
+                "deploy/web",
+                "3000:3000"
+            ])
         );
     }
 

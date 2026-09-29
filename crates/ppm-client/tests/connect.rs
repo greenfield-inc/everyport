@@ -170,12 +170,13 @@ async fn probes_installs_and_connects_through_an_ssh_style_prefix() {
     // The remote home has a space, so every path must survive the remote shell.
     let home = dir.join("remote home");
     std::fs::create_dir_all(&home).unwrap();
-    // Like ssh: drop the host, join the rest with spaces, run it in a shell.
+    // Like ssh: skip `-o` options and the host, join the rest with spaces,
+    // and run it in a shell.
     let ssh = dir.join("ssh");
     write_script(
         &ssh,
         &format!(
-            "shift\nHOME='{}' PATH=/usr/bin:/bin:/usr/sbin:/sbin exec sh -c \"$*\"\n",
+            "while [ \"$1\" = -o ]; do shift 2; done\nshift\nHOME='{}' PATH=/usr/bin:/bin:/usr/sbin:/sbin exec sh -c \"$*\"\n",
             home.display()
         ),
     );

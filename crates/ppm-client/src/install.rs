@@ -19,7 +19,10 @@ use tokio::io::AsyncWriteExt;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 const RELEASES: &str = "https://github.com/greenfield-inc/port-process-manager/releases/download";
+/// How long a command may take, plus time for its input at 32 KB/s (a
+/// 256 kbit/s uplink), so copying the binary never times out on a slow link.
 const TIMEOUT: Duration = Duration::from_secs(30);
+const SLOWEST_UPLOAD: u64 = 32 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Probe {
@@ -289,15 +292,16 @@ async fn send(prefix: &[String], os: Os, args: &[&str], input: &[u8]) -> anyhow:
         .spawn()
         .with_context(|| format!("Couldn't run {program}"))?;
     let mut stdin = child.stdin.take().context("no stdin")?;
+    let timeout = TIMEOUT + Duration::from_secs(input.len() as u64 / SLOWEST_UPLOAD);
     let input = input.to_vec();
     let writer = tokio::spawn(async move {
         let result = stdin.write_all(&input).await;
         drop(stdin);
         result
     });
-    let out = tokio::time::timeout(TIMEOUT, child.wait_with_output())
+    let out = tokio::time::timeout(timeout, child.wait_with_output())
         .await
-        .with_context(|| format!("{program} didn't answer within {} s", TIMEOUT.as_secs()))??;
+        .with_context(|| format!("{program} didn't answer within {} s", timeout.as_secs()))??;
     let written = writer.await?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);

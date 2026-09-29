@@ -1,7 +1,20 @@
 use anyhow::{bail, Context};
 use base64::Engine as _;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::path::PathBuf;
+
+/// A `ppm serve` bearer token. `Debug` hides the value, so logs and error
+/// reports never carry it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Token(pub String);
+
+impl fmt::Debug for Token {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Token(..)")
+    }
+}
 
 /// How to reach `ppm` on a machine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,7 +29,7 @@ pub enum Connection {
         ppm_path: String,
     },
     /// `ppm serve`, reached over HTTP.
-    Http { url: String, token: String },
+    Http { url: String, token: Token },
 }
 
 impl Connection {
@@ -38,7 +51,7 @@ impl Connection {
             .context("The connection code is damaged. Copy it again from `ppm serve`.")?;
         Ok(Self::Http {
             url: url.trim_end_matches('/').to_string(),
-            token,
+            token: Token(token),
         })
     }
 }
@@ -53,8 +66,9 @@ mod tests {
         let code = "ppm://eyJ1cmwiOiJodHRwOi8vMTI3LjAuMC4xOjc3NjciLCJ0b2tlbiI6InMzY3JldCJ9";
         let expected = Connection::Http {
             url: "http://127.0.0.1:7767".into(),
-            token: "s3cret".into(),
+            token: Token("s3cret".into()),
         };
+        assert!(!format!("{expected:?}").contains("s3cret"));
         assert_eq!(Connection::from_code(code).unwrap(), expected);
         assert_eq!(
             Connection::from_code(&format!(" {code}==\n")).unwrap(),

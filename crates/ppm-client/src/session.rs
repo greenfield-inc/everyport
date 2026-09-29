@@ -91,7 +91,7 @@ async fn supervise(
                     .stdio(remote::command(argv_prefix, os, &[ppm_path, "stdio"]))
                     .await
             }
-            Connection::Http { url, token } => crate::http::run(url, token, &mut session).await,
+            Connection::Http { url, token } => crate::http::run(url, &token.0, &mut session).await,
         };
         let Ended::Error(error) = ended else { return };
         if session.greeted {

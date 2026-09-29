@@ -12,8 +12,10 @@
 //! token = "..."
 //! ```
 
+use crate::connection::Token;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -29,7 +31,7 @@ pub enum Via {
     /// A command prefix, such as `["ssh", "devbox"]`.
     Command { command: Vec<String> },
     /// A `ppm serve` URL and its token, from a `ppm://` code.
-    Url { url: String, token: String },
+    Url { url: String, token: Token },
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -70,12 +72,13 @@ pub fn save(path: &Path, machines: &[Machine]) -> anyhow::Result<()> {
         std::fs::create_dir_all(dir)?;
     }
     let part = path.with_extension("toml.part");
-    std::fs::write(&part, text)?;
+    // A leftover part file would keep its old mode, so start from a new one.
+    let _ = std::fs::remove_file(&part);
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
     #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&part, std::fs::Permissions::from_mode(0o600))?;
-    }
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(&part)?.write_all(text.as_bytes())?;
     std::fs::rename(&part, path).with_context(|| format!("Couldn't write {}", path.display()))
 }
 
@@ -113,7 +116,7 @@ token = "t0k"
                 name: "mac-mini".into(),
                 via: Via::Url {
                     url: "https://mac-mini.tail1234.ts.net".into(),
-                    token: "t0k".into(),
+                    token: Token("t0k".into()),
                 },
             },
         ];
@@ -122,6 +125,13 @@ token = "t0k"
         let saved = dir.join("nested").join("machines.toml");
         save(&saved, &expected).unwrap();
         assert_eq!(load(&saved).unwrap(), expected);
+        assert!(!format!("{expected:?}").contains("t0k"));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&saved).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
         assert_eq!(load(&dir.join("missing.toml")).unwrap(), vec![]);
         std::fs::remove_dir_all(&dir).unwrap();
     }

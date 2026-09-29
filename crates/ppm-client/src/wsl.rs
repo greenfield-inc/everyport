@@ -34,21 +34,22 @@ pub async fn distros() -> Vec<String> {
 /// `wsl.exe -l -q` prints one distro per line in UTF-16LE, or UTF-8 when
 /// `WSL_UTF8=1` is honored. Docker Desktop's own distros hold no servers.
 fn parse_list(stdout: &[u8]) -> Vec<String> {
-    let utf16 = stdout.len() >= 2 && stdout.len().is_multiple_of(2) && stdout[1] == 0;
-    let text = if utf16 {
-        let units: Vec<u16> = stdout
-            .chunks_exact(2)
-            .map(|p| u16::from_le_bytes([p[0], p[1]]))
-            .collect();
-        String::from_utf16_lossy(&units)
-    } else {
-        String::from_utf8_lossy(stdout).into_owned()
+    let text = match stdout {
+        [0xFF, 0xFE, rest @ ..] => utf16le(rest),
+        [_, 0, ..] => utf16le(stdout),
+        _ => String::from_utf8_lossy(stdout).into_owned(),
     };
     text.lines()
-        .map(|line| line.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}' || c == '\0'))
+        .map(|line| line.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}'))
         .filter(|name| !name.is_empty() && !name.starts_with("docker-desktop"))
         .map(String::from)
         .collect()
+}
+
+fn utf16le(bytes: &[u8]) -> String {
+    let (pairs, _) = bytes.as_chunks::<2>();
+    let units: Vec<u16> = pairs.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
+    String::from_utf16_lossy(&units)
 }
 
 /// Removes the servers from a Windows snapshot that WSL relays for a distro,
@@ -86,6 +87,8 @@ mod tests {
         let text = "Ubuntu-22.04\r\ndocker-desktop\r\nDebian\r\n";
         let utf16: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
         assert_eq!(parse_list(&utf16), ["Ubuntu-22.04", "Debian"]);
+        let with_bom = [&[0xFF, 0xFE][..], &utf16].concat();
+        assert_eq!(parse_list(&with_bom), ["Ubuntu-22.04", "Debian"]);
         assert_eq!(parse_list(text.as_bytes()), ["Ubuntu-22.04", "Debian"]);
         assert_eq!(parse_list(b""), Vec::<String>::new());
     }

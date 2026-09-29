@@ -18,6 +18,18 @@ pub(crate) fn program(prefix: &[String]) -> String {
     name.strip_suffix(".exe").unwrap_or(&name).to_string()
 }
 
+/// Notices a dead ssh connection within 45 s (3 missed replies).
+pub(crate) const SSH_KEEPALIVE: [&str; 2] = ["-o", "ServerAliveInterval=15"];
+
+/// An ssh prefix with `options` added right after the program, before the
+/// destination the prefix already names.
+pub(crate) fn ssh_with(prefix: &[String], options: &[&str]) -> Vec<String> {
+    let mut argv = vec![prefix[0].clone()];
+    argv.extend(options.iter().map(|o| o.to_string()));
+    argv.extend(prefix[1..].iter().cloned());
+    argv
+}
+
 /// True when the prefix runs its arguments through the remote shell.
 fn joins_into_shell(prefix: &[String]) -> bool {
     match program(prefix).as_str() {
@@ -31,7 +43,11 @@ fn joins_into_shell(prefix: &[String]) -> bool {
 /// with stdin, stdout and stderr piped. `os` is the remote OS, which picks the
 /// shell quoting.
 pub(crate) fn command(prefix: &[String], os: Os, args: &[&str]) -> Command {
-    let mut argv: Vec<String> = prefix.to_vec();
+    let mut argv = if program(prefix) == "ssh" {
+        ssh_with(prefix, &SSH_KEEPALIVE)
+    } else {
+        prefix.to_vec()
+    };
     if joins_into_shell(prefix) {
         argv.extend(args.iter().map(|a| quote(a, os)));
     } else {
@@ -86,7 +102,14 @@ mod tests {
                 Os::Linux,
                 &["/home/a b/.local/bin/ppm", "stdio"]
             ),
-            ["ssh", "devbox", "'/home/a b/.local/bin/ppm'", "stdio"]
+            [
+                "ssh",
+                "-o",
+                "ServerAliveInterval=15",
+                "devbox",
+                "'/home/a b/.local/bin/ppm'",
+                "stdio"
+            ]
         );
         assert_eq!(
             argv(
@@ -94,7 +117,13 @@ mod tests {
                 Os::Linux,
                 &["/home/o'neil/ppm"]
             ),
-            ["/usr/bin/ssh", "devbox", r"'/home/o'\''neil/ppm'"]
+            [
+                "/usr/bin/ssh",
+                "-o",
+                "ServerAliveInterval=15",
+                "devbox",
+                r"'/home/o'\''neil/ppm'"
+            ]
         );
         assert_eq!(
             argv(
@@ -104,6 +133,8 @@ mod tests {
             ),
             [
                 "ssh.exe",
+                "-o",
+                "ServerAliveInterval=15",
                 "win",
                 r"C:\Users\me\AppData\Local\ppm\ppm.exe",
                 "stdio"
@@ -111,7 +142,13 @@ mod tests {
         );
         assert_eq!(
             argv(&["ssh", "win"], Os::Windows, &[r"C:\Users\Jo Doe\ppm.exe"]),
-            ["ssh", "win", r#""C:\Users\Jo Doe\ppm.exe""#]
+            [
+                "ssh",
+                "-o",
+                "ServerAliveInterval=15",
+                "win",
+                r#""C:\Users\Jo Doe\ppm.exe""#
+            ]
         );
     }
 

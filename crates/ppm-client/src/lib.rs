@@ -16,6 +16,6 @@ mod remote;
 mod session;
 pub mod wsl;
 
-pub use connection::Connection;
+pub use connection::{Connection, Token};
 pub use ppm_core::protocol;
 pub use session::{connect, Client, Update};
