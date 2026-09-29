@@ -1,14 +1,46 @@
-# Port Process Manager
+![Port Process Manager: every dev server on every machine, one click from your menu bar](docs/assets/banner.png)
 
-See every dev server running on your machine, or on any box you can reach, from your menu bar.
+<p align="center">
+  <img src="docs/assets/logo.png" alt="Port Process Manager" width="96" height="96">
+</p>
+
+<p align="center">
+  <strong>See every dev server on your machine, or on any box you can reach, from your menu bar.</strong><br>
+  <em>What it is, which branch it's on, which agent started it, and what it costs you.</em>
+</p>
+
+<div align="center">
+
+<img src="docs/assets/hero.png" alt="The Port Process Manager popover: a server's detail with its Claude Code session, the server list with a leaking Storybook, a leak alert, and Clean up" width="100%">
+
+[![CI](https://img.shields.io/github/actions/workflow/status/greenfield-inc/port-process-manager/ci.yml?branch=main&label=CI&labelColor=333333&color=666666)](https://github.com/greenfield-inc/port-process-manager/actions/workflows/ci.yml)
+[![MIT License](https://img.shields.io/badge/License-MIT-555555.svg?labelColor=333333&color=666666)](./LICENSE)
+[![Platforms](https://img.shields.io/badge/macOS%20%C2%B7%20Windows%20%C2%B7%20Linux-555555?labelColor=333333&color=666666&label=Runs%20on)](#install)
+[![Latest release](https://img.shields.io/github/v/release/greenfield-inc/port-process-manager?label=Release&labelColor=333333&color=666666)](https://github.com/greenfield-inc/port-process-manager/releases/latest)
+[![npm](https://img.shields.io/npm/v/port-process-manager?label=npm&labelColor=333333&color=666666)](https://www.npmjs.com/package/port-process-manager)
+[![crates.io](https://img.shields.io/crates/v/port-process-manager?label=crates.io&labelColor=333333&color=666666)](https://crates.io/crates/port-process-manager)
+[![PyPI](https://img.shields.io/pypi/v/port-process-manager?label=PyPI&labelColor=333333&color=666666)](https://pypi.org/project/port-process-manager/)
+[![Built with Tauri](https://img.shields.io/badge/Built%20with-Tauri%20%2B%20Rust-555555?labelColor=333333&color=666666&logo=tauri&logoColor=white)](https://tauri.app)
+
+<br />
+
+**Quick install**
+
+<sub>Desktop app: macOS, Windows, Linux</sub><br />
+<a href="https://github.com/greenfield-inc/port-process-manager/releases/latest">Download from Releases</a> · <code>brew install --cask greenfield-inc/tap/port-process-manager</code> · <code>winget install Greenfield.PortProcessManager</code>
+
+<sub>CLI only: servers, VMs, containers</sub><br />
+<pre><code>curl -fsSL https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.sh | sh</code></pre>
+
+[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Remote machines](#remote-machines) · [CLI](#cli) · [Docs](#documentation)
+
+</div>
 
 Port Process Manager (`ppm`) finds every local server listening on a port. It shows what the server is, which branch it's on, which coding agent started it, and how much memory and CPU it uses. Stop the ones you forgot about in one click.
 
 It runs on macOS, Windows and Linux. It also watches remote machines over SSH, Docker, Kubernetes, WSL, or any command that can run a program there.
 
 Free and open source. No account. No telemetry.
-
-![Port Process Manager showing five dev servers in the menu bar](docs/assets/popover.png)
 
 ## Features
 
@@ -43,6 +75,20 @@ Free and open source. No account. No telemetry.
 **Works in your terminal too**
 - `ppm` opens the same server list as a terminal UI
 - `ppm list --json` and `ppm watch --jsonl` feed scripts and other tools
+
+## Screenshots
+
+| | |
+|---|---|
+| <img src="docs/assets/screens/02b-detail-expanded-dark.png" alt="Server detail with memory and CPU charts, the process tree, and the session menu" width="380"> | <img src="docs/assets/screens/03-clean-up-dark.png" alt="Clean up: servers whose worktree was deleted or that are idle, with protected databases skipped" width="380"> |
+| **Server detail.** Memory and CPU history, the process tree, and the session that started it. | **Clean up.** Deleted worktrees, idle and leaking servers. Protected databases are never touched. |
+| <img src="docs/assets/screens/05-machines-dark.png" alt="The machine switcher: this Mac, a devbox over SSH, a WSL distro and a GPU box" width="380"> | <img src="docs/assets/screens/07-protected-stop-dark.png" alt="Stopping a protected Postgres asks for confirmation first" width="380"> |
+| **Any machine.** Switch between this Mac, a devbox over SSH, a WSL distro and more. | **Safe by default.** Stopping a protected server asks first. |
+
+<p align="center">
+  <img src="docs/assets/screens/tui-dark.png" alt="The ppm terminal UI listing servers" width="760"><br>
+  <sub>The same list in your terminal: run <code>ppm</code>.</sub>
+</p>
 
 ## Install
 
