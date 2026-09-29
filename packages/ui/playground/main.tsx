@@ -1,14 +1,14 @@
 // Renders every view from the fixture. URL parameters pick the state, so the
 // screenshot script can load each one directly:
 //   scenario  paper | protected | machines | empty
-//   view      popover | notification
+//   view      popover | notification | onboarding
 //   port      open this server's detail
 //   theme     a theme name;  mode  light | dark | system
 //   live      advance snapshots every 2 s;  shot  hide the toolbar
 import { fixtureSnapshot } from "@everyport/protocol";
 import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
-import { type Appearance, DEFAULT_THEME, NotificationCard, Popover, themeList } from "../src/index.ts";
+import { type Appearance, DEFAULT_THEME, NotificationCard, Onboarding, type OnboardingHost, Popover, themeList } from "../src/index.ts";
 import "../src/styles.css";
 import { fixtureClient, scenarios } from "./scenarios.ts";
 
@@ -61,6 +61,7 @@ function Playground() {
           <select value={view} onChange={(event) => navigate("view", event.target.value)}>
             <option>popover</option>
             <option>notification</option>
+            <option>onboarding</option>
           </select>
           <select value={theme} onChange={(event) => navigate("theme", event.target.value)}>
             {themeList.map(({ name, title }) => (
@@ -80,7 +81,11 @@ function Playground() {
           <span style={{ opacity: 0.6 }}>Keys: ↑ ↓ Enter ← Esc, ⌘O ⌘⌫ ⌘R. Actions log to the console.</span>
         </div>
       )}
-      {view === "notification" ? (
+      {view === "onboarding" ? (
+        <div style={{ width: 480, height: 620, borderRadius: 12, overflow: "hidden", boxShadow: "0 24px 64px rgb(0 0 0 / 0.4)" }}>
+          <Onboarding host={onboardingHost} machines={client.machines()} theme={theme} appearance={mode} />
+        </div>
+      ) : view === "notification" ? (
         <NotificationCard
           theme={theme}
           appearance={mode}
@@ -102,6 +107,33 @@ function Playground() {
     </div>
   );
 }
+
+/** Answers onboarding's checks after a short wait, like a real computer. */
+const later = <T,>(value: T, ms = 900) => () => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
+const onboardingHost: OnboardingHost = {
+  platform: "macos",
+  shortcut: "⌥⌘P",
+  launchAtLogin: true,
+  setLaunchAtLogin: (on) => console.info("[everyport] launch at login", on),
+  previews: false,
+  setPreviews: (on) => console.info("[everyport] previews", on),
+  tools: later([
+    { name: "Claude Code", kind: "claude_code", found: "~/.claude" },
+    { name: "Codex", kind: "codex", found: "~/.codex" },
+    { name: "Conductor", kind: "conductor", found: null },
+    { name: "Pane", kind: "pane", found: "~/.pane" },
+    { name: "Editor", kind: "editor", found: "Cursor" },
+    { name: "GitHub CLI", kind: "gh", found: "gh" },
+  ]),
+  cli: later({ path: "~/.local/bin/everyport", installed: false, hint: null }),
+  installCli: later({ path: "~/.local/bin/everyport", installed: true, hint: "If your terminal can't find it, add ~/.local/bin to your PATH." }, 1500),
+  machines: later([
+    { name: "devbox", source: "SSH config" },
+    { name: "Ubuntu", source: "WSL" },
+  ]),
+  openMachineSettings: () => console.info("[everyport] machine settings"),
+  finish: () => console.info("[everyport] finish"),
+};
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

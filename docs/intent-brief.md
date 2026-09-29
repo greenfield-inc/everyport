@@ -58,7 +58,7 @@ These are what separate "a web page in a window" from an app that belongs in the
 7. **App chrome behavior in CSS.** Use `user-select: none` everywhere except copyable values, `cursor: default` (pointer only on links), `overscroll-behavior: none`, and no default context menu (right-click opens our own menu, or nothing). Show focus rings only on `:focus-visible`. Use tabular numbers (`font-variant-numeric: tabular-nums`) and `-webkit-font-smoothing: antialiased`.
 8. **Full keyboard use.** Up and Down move the selection, Enter opens detail, Left or Escape goes back, ⌘/Ctrl+O opens the URL, ⌘/Ctrl+Backspace stops, ⌘/Ctrl+R restarts. The global shortcut ⌥⌘P or Ctrl+Alt+P toggles the popover (`tauri-plugin-global-shortcut`).
 9. **One instance** (`tauri-plugin-single-instance`). Launching again opens the popover.
-10. **Launch at login** is off by default and offered in onboarding (`tauri-plugin-autostart`).
+10. **Launch at login** is on by default (`tauri-plugin-autostart`). First launch turns it on once and opens onboarding, whose last step shows the toggle. Later launches never turn it back on.
 11. **Tray right-click opens a native menu** (Tauri `Menu`): Open, Settings, Launch at login, Quit.
 12. **Settings is a normal, decorated window**, created on first open and then kept like the popover.
 13. **Motion is ours, short and interruptible.** Open: 140 ms opacity 0→1 and scale 0.98→1 from the tray edge. View changes: 180 ms slide with a spring. Rows: height and opacity on add and remove. Honor `prefers-reduced-motion`. Motion must never delay input.
@@ -76,7 +76,7 @@ These are what separate "a web page in a window" from an app that belongs in the
 
 ### Windows
 
-22. **Flyout above the tray icon.** Position from the tray rect and the monitor work area, so it handles a taskbar on any edge. Hide on deactivate.
+22. **Flyout above the tray icon.** Position from the tray rect and the monitor work area, so it handles a taskbar on any edge. An icon in the ^ overflow has no usable rect, so the flyout opens above the bottom right corner. Hide on deactivate.
 23. **Mica on Windows 11, Acrylic on 10:** `window-vibrancy` `apply_mica` or `apply_acrylic`. Request rounded corners with `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_ROUND`.
 24. **WebView2:** ship the Evergreen bootstrapper. Turn off browser accelerator keys and the default context menu with the WebView2 settings Tauri exposes.
 25. **Toasts** go through the notification plugin, with the app's AppUserModelID set by the installer.

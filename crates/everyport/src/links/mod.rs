@@ -15,6 +15,7 @@ use crate::protocol::{AgentSession, Project, Workspace};
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
+pub use agent::Dirs as AgentDirs;
 pub use preview::set_vercel_previews;
 
 /// Environment variables `details()` should read for agent and workspace detection.

@@ -19,7 +19,7 @@ use everyport::protocol::{AgentSession, Call, Event, HostInfo, Server, ServerSta
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::{notify, popover, settings, tray, updates};
+use crate::{notify, onboarding, popover, settings, tray, updates};
 
 pub const LOCAL: &str = "local";
 const SNOOZE: Duration = Duration::from_secs(3600);
@@ -647,13 +647,17 @@ fn list(app: &AppHandle) -> Vec<Machine> {
 }
 
 /// Sends every machine to the popover, if it's showing or still waiting for
-/// its first data, and to Settings while it's open.
+/// its first data, and to Settings and onboarding while they're open.
 pub fn publish(app: &AppHandle) {
-    let settings = app
-        .get_webview_window(settings::LABEL)
-        .is_some_and(|w| w.is_visible().unwrap_or(false));
+    let windows: Vec<_> = [settings::LABEL, onboarding::LABEL]
+        .into_iter()
+        .filter(|label| {
+            app.get_webview_window(label)
+                .is_some_and(|w| w.is_visible().unwrap_or(false))
+        })
+        .collect();
     let popover = popover::wants_data(app);
-    if !(settings || popover) {
+    if windows.is_empty() && !popover {
         return;
     }
     if popover {
@@ -666,8 +670,11 @@ pub fn publish(app: &AppHandle) {
             Err(error) => eprintln!("machines update: {error}"),
         }
     }
-    if settings {
-        let _ = app.emit_to(settings::LABEL, "machines", &list(app));
+    if !windows.is_empty() {
+        let list = list(app);
+        for label in windows {
+            let _ = app.emit_to(label, "machines", &list);
+        }
     }
 }
 

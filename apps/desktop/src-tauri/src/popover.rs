@@ -8,9 +8,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewWindow};
 
-use crate::placement::{place, Rect};
+use crate::placement::{clock_end, on_taskbar, place, Rect};
 use crate::{machines, tray};
 
 pub const LABEL: &str = "popover";
@@ -311,8 +311,9 @@ pub fn fit(app: &AppHandle, size: LogicalSize<f64>) {
     });
 }
 
-/// Places the popover next to the tray icon, or the cursor where the tray
-/// can't report its rect (Linux), or the top center of the main screen.
+/// Places the popover next to the tray icon. Where the tray can't report its
+/// rect, it goes next to the cursor on Linux, above the bottom right corner on
+/// Windows (the icon may be in the ^ overflow), and top center on macOS.
 /// Takes the size to place rather than reading it back, since a resize may not
 /// have reached the window yet.
 fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
@@ -328,13 +329,17 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
                 height: size.height,
             }
         })
+        .filter(|icon| !cfg!(windows) || icon_on_taskbar(app, *icon))
         .or_else(|| {
-            app.cursor_position().ok().map(|p| Rect {
-                x: p.x,
-                y: p.y,
-                width: 0.0,
-                height: 0.0,
-            })
+            cfg!(target_os = "linux")
+                .then(|| app.cursor_position().ok())
+                .flatten()
+                .map(|p| Rect {
+                    x: p.x,
+                    y: p.y,
+                    width: 0.0,
+                    height: 0.0,
+                })
         });
     let monitor = anchor
         .and_then(|a| {
@@ -345,18 +350,18 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
         .or_else(|| app.primary_monitor().ok().flatten());
     let Some(monitor) = monitor else { return };
     let scale = monitor.scale_factor();
-    let work = monitor.work_area();
-    let area = Rect {
-        x: work.position.x.into(),
-        y: work.position.y.into(),
-        width: work.size.width.into(),
-        height: work.size.height.into(),
-    };
-    let anchor = anchor.unwrap_or(Rect {
-        x: area.x + area.width / 2.0,
-        y: area.y,
-        width: 0.0,
-        height: 0.0,
+    let area = work_area(&monitor);
+    let anchor = anchor.unwrap_or_else(|| {
+        if cfg!(windows) {
+            clock_end(bounds(&monitor), area)
+        } else {
+            Rect {
+                x: area.x + area.width / 2.0,
+                y: area.y,
+                width: 0.0,
+                height: 0.0,
+            }
+        }
     });
     let (x, y) = place(
         anchor,
@@ -365,6 +370,33 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
         GAP * scale,
     );
     let _ = window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
+}
+
+fn icon_on_taskbar(app: &AppHandle, icon: Rect) -> bool {
+    let (x, y) = (icon.x + icon.width / 2.0, icon.y + icon.height / 2.0);
+    app.monitor_from_point(x, y)
+        .ok()
+        .flatten()
+        .is_some_and(|monitor| on_taskbar(icon, bounds(&monitor), work_area(&monitor)))
+}
+
+fn bounds(monitor: &Monitor) -> Rect {
+    Rect {
+        x: monitor.position().x.into(),
+        y: monitor.position().y.into(),
+        width: monitor.size().width.into(),
+        height: monitor.size().height.into(),
+    }
+}
+
+fn work_area(monitor: &Monitor) -> Rect {
+    let work = monitor.work_area();
+    Rect {
+        x: work.position.x.into(),
+        y: work.position.y.into(),
+        width: work.size.width.into(),
+        height: work.size.height.into(),
+    }
 }
 
 /// The page rendered its first data: show it if someone already asked.

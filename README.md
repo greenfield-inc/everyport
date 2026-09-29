@@ -138,6 +138,8 @@ macOS builds are signed and notarized. Windows builds are not signed yet, so Sma
 
 On GNOME, the tray icon needs the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
 
+The first launch opens a short onboarding: live memory status, the agents and editors it found, Vercel previews, the `everyport` command, and your other machines. It also turns on launch at login, which you can turn off there or in Settings.
+
 ### CLI only
 
 Use the CLI on servers, VMs and containers, or if you prefer the terminal. It's one self-contained binary, `everyport`, for macOS, Windows and Linux (x86_64 and arm64). Pick one of these:

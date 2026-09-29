@@ -314,3 +314,113 @@ html[data-hidden] .everyport-panel {
     transition: none !important;
   }
 }
+
+/*
+ * Onboarding fills its window, on the panel color, with a soft glow behind
+ * the Socket hero (brand green, amber on the leaks step) and a static film
+ * grain: one small feTurbulence tile, drawn once, under the content.
+ */
+.everyport-onboarding {
+  --everyport-glow: light-dark(#2f9a5d, #7fd89d);
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  background: color-mix(in oklab, var(--popover) var(--everyport-tint), transparent);
+}
+
+.everyport-onboarding:has([data-glow="warn"]) {
+  --everyport-glow: var(--everyport-warn);
+}
+
+.everyport-onboarding::after,
+.everyport-onboarding-hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.everyport-onboarding-hero {
+  position: relative;
+}
+
+.everyport-onboarding-hero::before {
+  left: 50%;
+  top: 50%;
+  width: 480px;
+  height: 400px;
+  translate: -50% -50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--everyport-glow) 22%, transparent),
+    transparent
+  );
+}
+
+.everyport-onboarding::after {
+  inset: 0;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+.everyport-onboarding[data-appearance="dark"]::after {
+  opacity: 0.06;
+  mix-blend-mode: screen;
+}
+
+/* The done step's slot stays lit, with no plug-in. */
+.everyport-onboarding-hero[data-steady] .everyport-socket-slot {
+  animation: none;
+}
+
+.everyport-onboarding-check {
+  animation: everyport-check-in 200ms ease-out;
+}
+
+@keyframes everyport-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.everyport-pager-dot {
+  transition: opacity 250ms ease-in-out;
+}
+
+/* An on/off switch, as in the host's settings. */
+.everyport-switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--foreground) 18%, transparent);
+  transition: background 150ms ease-out;
+}
+
+.everyport-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform 150ms ease-out;
+}
+
+.everyport-switch:checked {
+  background: var(--primary);
+}
+
+.everyport-switch:checked::after {
+  transform: translateX(12px);
+}
+
+.everyport-switch:disabled {
+  opacity: 0.4;
+}

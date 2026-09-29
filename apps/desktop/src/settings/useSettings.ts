@@ -5,7 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 
 /** `settings::App` in the app's Rust side, from `app.toml`. */
-export type AppSettings = { theme: string | null; appearance: Appearance; shortcut: string };
+export type AppSettings = { theme: string | null; appearance: Appearance; shortcut: string; onboarded: boolean };
 
 export type Settings = {
   /** The scanner settings in `config.toml`, which `everyport` also reads. */

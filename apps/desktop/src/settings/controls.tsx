@@ -23,18 +23,7 @@ export function Section({ title, children }: { title?: string; children: ReactNo
   );
 }
 
-export function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <input
-      type="checkbox"
-      role="switch"
-      className="settings-switch"
-      aria-label={label}
-      checked={checked}
-      onChange={(event) => onChange(event.target.checked)}
-    />
-  );
-}
+export { Switch as Toggle } from "@everyport/ui";
 
 export function Segmented<T extends string>({
   label,

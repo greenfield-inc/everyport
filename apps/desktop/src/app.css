@@ -35,3 +35,10 @@ a {
 .window-content {
   width: fit-content;
 }
+
+/* Onboarding fills its window. */
+:root[data-window="onboarding"],
+:root[data-window="onboarding"] body,
+:root[data-window="onboarding"] #root {
+  height: 100%;
+}
