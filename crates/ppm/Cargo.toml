@@ -12,4 +12,12 @@ path = "src/main.rs"
 
 [dependencies]
 ppm-core.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+clap.workspace = true
+base64 = "0.23"
+dirs = "7"
+getrandom = "0.4"
+open = "5"
+ratatui = "0.30"
+terminal-colorsaurus = "1"
