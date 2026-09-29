@@ -21,8 +21,9 @@ mod windows {
     use std::process::Command;
     use std::time::{Duration, Instant};
 
-    /// Writes `graceful` to its folder on SIGINT (Ctrl+C), then exits.
-    const SERVER: &str = "process.on('SIGINT',()=>{require('fs').writeFileSync('graceful','1');process.exit(0)});require('http').createServer().listen(+process.argv[1])";
+    /// On SIGINT (Ctrl+C), waits 500 ms, writes `graceful` to its folder and
+    /// exits. The file exists only if the stop left it that time.
+    const SERVER: &str = "process.on('SIGINT',()=>setTimeout(()=>{require('fs').writeFileSync('graceful','1');process.exit(0)},500));require('http').createServer().listen(+process.argv[1])";
 
     pub fn ctrl_c_stops_a_server_on_its_own_console() {
         let graceful = stop(|port| format!("node -e \"{SERVER}\" {port}"));

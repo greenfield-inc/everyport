@@ -32,10 +32,11 @@ const HELPER_ARG: &str = "--ppm-console-ctrl-c";
 /// The first word of the helper's reply when it sent Ctrl+C. The processes
 /// from the tree that got it follow.
 const SENT: &str = "sent";
+/// How long ppm waits for the helper's reply before it terminates instead.
+const REPLY_WITHIN: Duration = Duration::from_secs(2);
 /// How long the helper stays to answer "Terminate batch job (Y/N)?": the
-/// engine's 3 s grace period, and time for a launching shell to ask after
-/// the engine kills the rest.
-const ANSWER_FOR: Duration = Duration::from_secs(5);
+/// engine's grace period, after which it kills the batch runner anyway.
+const ANSWER_FOR: Duration = Duration::from_secs(3);
 /// Shells that ignore Ctrl+C while they wait on a command.
 const SHELLS: &[&str] = &["cmd", "powershell", "pwsh", "bash", "sh"];
 
@@ -57,12 +58,25 @@ pub fn interrupt(tree: &[ProcRef]) -> Vec<ProcRef> {
     let Ok(mut helper) = helper else {
         return Vec::new();
     };
-    let mut line = String::new();
+    // The engine is paused while it waits, so a stalled helper (for example
+    // on a hung console) must not hold it.
+    let (reply_tx, reply_rx) = std::sync::mpsc::channel();
     if let Some(stdout) = helper.stdout.take() {
-        let _ = BufReader::new(stdout).read_line(&mut line);
+        std::thread::spawn(move || {
+            let mut line = String::new();
+            let _ = BufReader::new(stdout).read_line(&mut line);
+            let _ = reply_tx.send(line);
+        });
+    }
+    let line = reply_rx.recv_timeout(REPLY_WITHIN);
+    if line.is_err() {
+        let _ = helper.kill();
     }
     // After sending, it keeps answering batch prompts, so reap it later.
     std::thread::spawn(move || helper.wait());
+    let Ok(line) = line else {
+        return Vec::new();
+    };
     let mut reply = line.split_whitespace();
     if reply.next() != Some(SENT) {
         return Vec::new();
@@ -81,11 +95,15 @@ pub fn run_helper() {
     // the pipe to ppm.
     let mut reply = unsafe { File::from_raw_handle(std::io::stdout().as_raw_handle()) };
     match send(&tree) {
-        Ok(Sent { members, shells }) => {
+        Ok(Sent {
+            members,
+            shells,
+            batch_runners,
+        }) => {
             let members: Vec<String> = members.iter().map(proc_arg).collect();
             let _ = writeln!(reply, "{SENT} {}", members.join(" "));
             drop(reply);
-            answer_batch_prompts(&shells);
+            answer_batch_prompts(&shells, &batch_runners);
             std::process::exit(0)
         }
         Err(reason) => {
@@ -112,7 +130,11 @@ struct Sent {
     /// Processes from the tree on the console.
     members: Vec<ProcRef>,
     /// Pids of the shells on the console, from the tree or launching it.
-    shells: Vec<(u32, String)>,
+    shells: Vec<u32>,
+    /// Pids of the tree's `cmd.exe` processes, whose batch prompt the helper
+    /// may answer. Empty when a launching `cmd` is on the console too, since
+    /// the answer could land at a person's prompt there.
+    batch_runners: Vec<u32>,
 }
 
 /// Attaches to the tree's console and sends Ctrl+C when that is safe.
@@ -140,34 +162,53 @@ fn check(tree: &[ProcRef], procs: &[ProcInfo], attached: &[u32]) -> Result<Sent,
     let by_pid: HashMap<u32, &ProcInfo> = procs.iter().map(|p| (p.proc.pid, p)).collect();
     let mut launchers = HashSet::new();
     for member in tree {
-        let mut pid = member.pid;
+        let mut child = by_pid.get(&member.pid).copied();
         // A parent always started first, but equal start times could loop.
         for _ in 0..procs.len() {
-            let Some(parent) = by_pid.get(&pid).and_then(|p| p.parent) else {
+            // As `Table::parent`: a recorded parent pid that now belongs to
+            // a younger process was reused, so it is not the parent.
+            let Some(parent) = child.and_then(|c| {
+                let pid = c.parent.filter(|&pid| pid > 1)?;
+                by_pid
+                    .get(&pid)
+                    .copied()
+                    .filter(|p| p.proc.started_at <= c.proc.started_at)
+            }) else {
                 break;
             };
-            launchers.insert(parent);
-            pid = parent;
+            launchers.insert(parent.proc.pid);
+            child = Some(parent);
         }
     }
     let mut sent = Sent {
         members: Vec::new(),
         shells: Vec::new(),
+        batch_runners: Vec::new(),
     };
+    let mut launching_cmd = false;
     for pid in attached {
         let Some(info) = by_pid.get(pid) else {
             return Err(format!("pid {pid} on the console has exited"));
         };
         let name = stem(&info.name);
         let shell = SHELLS.contains(&name.as_str());
+        let cmd = name == "cmd";
         if tree.contains(&info.proc) {
             sent.members.push(info.proc);
-        } else if !(shell && launchers.contains(pid)) {
+            if cmd {
+                sent.batch_runners.push(*pid);
+            }
+        } else if shell && launchers.contains(pid) {
+            launching_cmd |= cmd;
+        } else {
             return Err(format!("{} (pid {pid}) shares the console", info.name));
         }
         if shell {
-            sent.shells.push((*pid, name));
+            sent.shells.push(*pid);
         }
+    }
+    if launching_cmd {
+        sent.batch_runners.clear();
     }
     if sent.members.is_empty() {
         return Err("the server isn't on this console".into());
@@ -192,16 +233,13 @@ fn console_processes() -> Vec<u32> {
 }
 
 /// `cmd.exe` asks "Terminate batch job (Y/N)?" when a batch file such as
-/// `npm.cmd` gets Ctrl+C, and waits. Answers yes while `cmd` is on the
-/// console, but only once the checked shells are all that is left, so the
-/// keys can reach nothing else.
-fn answer_batch_prompts(shells: &[(u32, String)]) {
-    let is_shell = |pid: &u32| shells.iter().any(|(shell, _)| shell == pid);
-    let cmds: Vec<u32> = shells
-        .iter()
-        .filter(|(_, name)| name == "cmd")
-        .map(|(pid, _)| *pid)
-        .collect();
+/// `npm.cmd` gets Ctrl+C, and waits. Answers yes while a batch runner from
+/// the tree is on the console, but only once the checked shells are all
+/// that is left, so the keys can reach nothing else.
+fn answer_batch_prompts(shells: &[u32], batch_runners: &[u32]) {
+    if batch_runners.is_empty() {
+        return;
+    }
     let open = |name| OpenOptions::new().read(true).write(true).open(name);
     let (Ok(input), Ok(output)) = (open("CONIN$"), open("CONOUT$")) else {
         return;
@@ -210,12 +248,12 @@ fn answer_batch_prompts(shells: &[(u32, String)]) {
     let mut answered = false;
     while Instant::now() < deadline {
         let attached = console_processes();
-        if !attached.iter().any(|pid| cmds.contains(pid)) {
+        if !attached.iter().any(|pid| batch_runners.contains(pid)) {
             return;
         }
         match prompt_answer(&cursor_line(&output)) {
             // Answer once, then wait for the prompt to go before the next.
-            Some(yes) if !answered && attached.iter().all(is_shell) => {
+            Some(yes) if !answered && attached.iter().all(|pid| shells.contains(pid)) => {
                 answered = type_line(&input, yes);
             }
             Some(_) => {}
@@ -321,12 +359,30 @@ mod tests {
             proc(50, 40, "node.exe"),
         ];
         let tree = [at(50), at(40), at(30)];
-        let shells = [(10, "pwsh"), (20, "cmd"), (40, "cmd")];
+        // The launching cmd could be a person's prompt, so no batch answers.
         assert_eq!(
             check(&tree, &procs, &[10, 20, 30, 40, 50]),
             Ok(Sent {
                 members: vec![at(30), at(40), at(50)],
-                shells: shells.map(|(pid, name)| (pid, name.to_string())).to_vec(),
+                shells: vec![10, 20, 40],
+                batch_runners: vec![],
+            })
+        );
+
+        // ppm's restart: node npm-cli > cmd /c vite > node, on a console of
+        // its own, launched through PowerShell.
+        let procs = [
+            proc(10, 1, "powershell.exe"),
+            proc(30, 10, "node.exe"),
+            proc(40, 30, "cmd.exe"),
+            proc(50, 40, "node.exe"),
+        ];
+        assert_eq!(
+            check(&tree, &procs, &[10, 30, 40, 50]),
+            Ok(Sent {
+                members: vec![at(30), at(40), at(50)],
+                shells: vec![10, 40],
+                batch_runners: vec![40],
             })
         );
     }
@@ -365,6 +421,13 @@ mod tests {
         };
         assert!(check(&[reused], &procs, &[10, 30]).is_err());
         assert!(check(&[at(30)], &procs, &[10]).is_err());
+
+        // The server's parent exited and a younger cmd took its pid.
+        let procs = [proc(40, 1, "cmd.exe"), proc(30, 40, "node.exe")];
+        assert_eq!(
+            check(&[at(30)], &procs, &[40, 30]),
+            Err("cmd.exe (pid 40) shares the console".into())
+        );
     }
 
     #[test]
