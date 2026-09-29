@@ -222,6 +222,8 @@ The result arrives as soon as the processes are asked to quit. The server leaves
 
 Stop the server, then run its `command` again in its `launch_dir`, detached from `ppm`. The result arrives as soon as the old tree is asked to quit. Once that tree is gone and `port` is free, `ppm` starts the command, and the new server shows up in a later snapshot.
 
+An error `result` covers what `ppm` can check up front: the process changed, or its command or folder can't be read. A failure after that gets no second `result`. The server just doesn't come back on `port` in the snapshots over the next 10 s or so. The new server's output is in `port-process-manager/port-<port>.log` in the system temp folder (`$TMPDIR` or `%TEMP%`), and a failure to start it is one line on `ppm`'s stderr.
+
 ```json
 { "id": 3, "method": "restart", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 } } }
 ```
