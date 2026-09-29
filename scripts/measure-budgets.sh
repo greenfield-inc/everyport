@@ -7,7 +7,8 @@
 # `app` is the release .app or its binary (default: the one `pnpm --filter
 # @ppm/desktop build` writes). Starts 5 throwaway servers on ports 39101-39105,
 # launches the app hidden, lets it settle, then measures every process it runs:
-# the app, its WebKit processes and the ppm sidecar. Quit the app first.
+# the app, its WebKit processes and the ppm sidecar. Quit the app first, and
+# free those ports.
 # Popover open and snapshot-to-UI time need the page on screen, so they're not here.
 set -euo pipefail
 
@@ -23,14 +24,23 @@ if pgrep -xq ppm-desktop; then
   exit 1
 fi
 
+ports=(39101 39102 39103 39104 39105)
+for port in "${ports[@]}"; do
+  if nc -z 127.0.0.1 "$port" 2> /dev/null; then
+    echo "Port $port is in use. Free ports ${ports[0]}-${ports[${#ports[@]} - 1]} first." >&2
+    exit 1
+  fi
+done
+
 started=()
-trap 'kill "${started[@]}" 2>/dev/null || true' EXIT
-for port in 39101 39102 39103 39104 39105; do
-  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$(mktemp -d)" > /dev/null 2>&1 &
+work="$(mktemp -d)"
+trap 'kill "${started[@]}" 2>/dev/null || true; rm -rf "$work"' EXIT
+for port in "${ports[@]}"; do
+  python3 -m http.server "$port" --bind 127.0.0.1 --directory "$work" > /dev/null 2>&1 &
   started+=($!)
 done
 
-webkit() { pgrep -f 'com\.apple\.WebKit\.' | sort; }
+webkit() { pgrep -f 'com\.apple\.WebKit\.' | sort || true; }
 before="$(webkit)"
 
 # Cold start: the app creates the tray icon, then spawns the sidecar.
@@ -47,7 +57,15 @@ started+=("$sidecar")
 
 echo "Settling for $settle s with the popover hidden..." >&2
 sleep "$settle"
-pages="$(comm -13 <(echo "$before") <(webkit))"
+# WebKit runs its processes under launchd, so the app's are the new ones that
+# macOS holds the same process responsible for as the app: the app itself, or
+# the terminal that started it.
+pages="$(comm -13 <(echo "$before") <(webkit) | python3 -c '
+import ctypes, sys
+responsible = ctypes.CDLL(None).responsibility_get_pid_responsible_for_pid
+app = responsible(int(sys.argv[1]))
+print(*(p for p in sys.stdin.read().split() if responsible(int(p)) == app))
+' "$pid")"
 
 name() { ps -o comm= -p "$1" | sed 's|.*/||; s|com\.apple\.WebKit\.||'; }
 footprint_mb() {
