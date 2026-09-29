@@ -30,8 +30,8 @@ The version lives only in `Cargo.toml` (`workspace.package`). The desktop app re
 ## Workflows
 
 - `build.yml` builds all of it, assembles it with `scripts/dist.sh`, checks the npm and PyPI packages with `npm publish --dry-run` and `twine check`, and runs `scripts/smoke-install.sh` on macOS, Windows and Linux. It never publishes.
-- `ci.yml` runs `pnpm check`, `cargo publish -p everyport --dry-run` and `build.yml` on every PR. It builds the desktop bundles only when `apps/`, `packages/`, the lockfile or `build.yml` change.
-- `release.yml` runs `build.yml` with bundles. On a `v*` tag it signs and notarizes the bundles, creates the GitHub release, and publishes to crates.io, npm, PyPI and the Homebrew tap. crates.io gets one crate, `everyport`, which holds the library and the CLI. Run it by hand on a branch for an unsigned dry run that publishes nothing. Run it by hand on a tag with **unsigned** checked for an unsigned test release.
+- `ci.yml` runs `pnpm check` and `cargo publish -p everyport --dry-run` on every PR. A PR runs `build.yml` only when it changes `packaging/`, the install scripts, `apps/desktop/src-tauri`, `Cargo.lock` or the CI workflows. Pushes to `main` and manual runs (`gh workflow run CI --ref <branch>`) always run `build.yml`.
+- `release.yml` runs `build.yml`. On a `v*` tag it signs and notarizes the bundles, creates the GitHub release, and publishes to crates.io, npm, PyPI and the Homebrew tap. crates.io gets one crate, `everyport`, which holds the library and the CLI. Run it by hand on a branch for an unsigned dry run that publishes nothing. Run it by hand on a tag with **unsigned** checked for an unsigned test release.
 
 ## Secrets
 

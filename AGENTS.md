@@ -40,7 +40,7 @@ pnpm dev        # run the desktop app (macOS: needs Xcode command line tools)
 cargo run -p everyport -- list
 ```
 
-CI runs `pnpm check` on macOS, Windows and Linux. A PR merges when CI is green on all three.
+CI runs `pnpm check` on Linux, and clippy and `cargo test` on macOS and Windows when a PR changes Rust. A PR merges when CI is green.
 
 ## Verify like a user
 
