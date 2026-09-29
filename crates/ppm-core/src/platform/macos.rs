@@ -1,9 +1,10 @@
 //! macOS implementation of [`Platform`], on libproc, sysctl and Mach host
 //! statistics. Without root, libproc shows only our own user's sockets, as
 //! with `lsof`. Other users' listeners come from `nettop`, which reads every
-//! socket through a kernel channel open only to Apple's own tools. The
-//! `net.inet.tcp.pcblist_n` sysctl behind `netstat` returns no sockets to a
-//! program started from an app on macOS 27, so it isn't used.
+//! socket through a kernel channel open only to Apple's own tools, whoever
+//! starts it. On macOS 27 the `net.inet.tcp.pcblist_n` sysctl behind
+//! `netstat` returns no sockets when an app or a non-Apple program started
+//! it, so it isn't used.
 
 use super::{
     inbound_connections, unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails,
