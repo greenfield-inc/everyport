@@ -20,13 +20,21 @@ pub struct Resolver {
 
 #[derive(Clone)]
 struct Resolved {
+    /// Named by `name`, or else by the process.
     project: Project,
+    name: Option<String>,
     git: Option<Git>,
 }
 
 impl Resolver {
-    pub fn project(&self, cwd: &Path, command: Option<&str>) -> Project {
-        let Resolved { mut project, git } = self.resolve(cwd);
+    /// `process_name` names a project that has no usable folder name.
+    pub fn project(&self, cwd: &Path, command: Option<&str>, process_name: &str) -> Project {
+        let Resolved {
+            mut project,
+            name,
+            git,
+        } = self.resolve(cwd);
+        project.name = name.unwrap_or_else(|| process_name.to_string());
         if command.is_some_and(runs_storybook) {
             project.framework = Some("Storybook".into());
         }
@@ -129,14 +137,27 @@ fn file_name(path: &Path) -> Option<String> {
     path.file_name().map(|n| n.to_string_lossy().into_owned())
 }
 
-/// Walks up from `cwd` to the nearest git root (or the home folder), taking
-/// the nearest manifest on the way.
+/// Package managers and the OS install here. Their own git repos (Homebrew
+/// is one) and folders never name a server's project.
+const SYSTEM_PREFIXES: &[&str] = &[
+    "/opt/homebrew",
+    "/usr/local/Homebrew",
+    "/usr/local",
+    "/usr",
+    "/nix",
+    "/opt/local",
+    "/home/linuxbrew/.linuxbrew",
+];
+
+/// Walks up from `cwd` to the nearest git root (or the home folder or a
+/// system prefix), taking the nearest manifest on the way.
 fn resolve(cwd: &Path) -> (Vec<PathBuf>, Resolved) {
     let home = home();
+    let in_system = SYSTEM_PREFIXES.iter().any(|p| cwd.starts_with(p));
     let mut manifest: Option<(PathBuf, Manifest)> = None;
     let mut git = None;
     for dir in cwd.ancestors() {
-        if home.as_deref() == Some(dir) {
+        if home.as_deref() == Some(dir) || SYSTEM_PREFIXES.iter().any(|p| dir == Path::new(p)) {
             break;
         }
         if manifest.is_none() {
@@ -182,10 +203,9 @@ fn resolve(cwd: &Path) -> (Vec<PathBuf>, Resolved) {
         .as_ref()
         .and_then(|(_, m)| m.name.clone())
         .or_else(|| repo_folder.and_then(file_name))
-        .or_else(|| file_name(cwd))
-        .unwrap_or_else(|| cwd.to_string_lossy().into_owned());
+        .or_else(|| file_name(cwd).filter(|_| !in_system));
     let project = Project {
-        name,
+        name: String::new(),
         root: git
             .as_ref()
             .map(|g| g.root.as_path())
@@ -200,7 +220,7 @@ fn resolve(cwd: &Path) -> (Vec<PathBuf>, Resolved) {
         github,
         vercel,
     };
-    (files, Resolved { project, git })
+    (files, Resolved { project, name, git })
 }
 
 // ---------------------------------------------------------------- git
@@ -484,7 +504,7 @@ mod tests {
         );
         let cwd = tmp.write("app/src/.keep", "");
 
-        let project = Resolver::default().project(cwd.parent().unwrap(), Some("next dev"));
+        let project = Resolver::default().project(cwd.parent().unwrap(), Some("next dev"), "node");
         assert_eq!(
             project,
             Project {
@@ -523,11 +543,31 @@ mod tests {
             ("vite --config vite.storybook.config.ts", "Next.js"),
         ];
         for (command, framework) in cases {
-            let project = resolver.project(&tmp.path("app"), Some(command));
+            let project = resolver.project(&tmp.path("app"), Some(command), "node");
             assert_eq!(project.framework.as_deref(), Some(framework), "{command}");
         }
         // No manifest name, so the repo folder names it.
-        assert_eq!(resolver.project(&tmp.path("app"), None).name, "app");
+        assert_eq!(resolver.project(&tmp.path("app"), None, "node").name, "app");
+    }
+
+    /// Homebrew's Postgres runs in `/opt/homebrew/var/postgresql@15`, and
+    /// `/opt/homebrew` is itself a git repo on the `stable` branch.
+    #[test]
+    fn the_filesystem_root_and_system_folders_are_named_by_the_process() {
+        let resolver = Resolver::default();
+        for cwd in [
+            "/",
+            "/opt/homebrew/var/postgresql@15",
+            "/usr/local/var/postgres",
+            "/home/linuxbrew/.linuxbrew/var/postgres",
+        ] {
+            let project = resolver.project(Path::new(cwd), None, "postgres");
+            assert_eq!(
+                (project.name.as_str(), project.root, project.branch),
+                ("postgres", None, None),
+                "{cwd}"
+            );
+        }
     }
 
     #[test]
@@ -542,7 +582,7 @@ mod tests {
             let tmp = TempDir::new();
             repo(&tmp);
             tmp.write(&format!("app/{file}"), text);
-            let project = Resolver::default().project(&tmp.path("app"), None);
+            let project = Resolver::default().project(&tmp.path("app"), None, "node");
             assert_eq!(
                 (project.name.as_str(), project.framework.as_deref()),
                 (name, Some(framework)),
@@ -562,14 +602,14 @@ mod tests {
         let resolver = Resolver::default();
         assert_eq!(
             resolver
-                .project(&tmp.path("app"), None)
+                .project(&tmp.path("app"), None, "node")
                 .framework
                 .as_deref(),
             Some("Rails")
         );
         assert_eq!(
             resolver
-                .project(&tmp.path("app/site"), None)
+                .project(&tmp.path("app/site"), None, "node")
                 .framework
                 .as_deref(),
             Some("Django")
@@ -582,7 +622,7 @@ mod tests {
         repo(&tmp);
         let root = worktree(&tmp, "trees/providence", "menubar-port-monitor");
 
-        let project = Resolver::default().project(&root, None);
+        let project = Resolver::default().project(&root, None, "node");
         assert_eq!(project.root, Some(s(&root)));
         assert_eq!(project.branch.as_deref(), Some("menubar-port-monitor"));
         assert_eq!(project.worktree.as_deref(), Some("providence"));
@@ -602,7 +642,7 @@ mod tests {
             "app/.git/HEAD",
             "c34cbbcad31977b5c1eb75ded1fae6d08cdd286f\n",
         );
-        let project = Resolver::default().project(&tmp.path("app"), None);
+        let project = Resolver::default().project(&tmp.path("app"), None, "node");
         assert_eq!(project.branch.as_deref(), Some("c34cbbc"));
     }
 
@@ -611,7 +651,7 @@ mod tests {
         let tmp = TempDir::new();
         repo(&tmp);
         let resolver = Resolver::default();
-        let branch = || resolver.project(&tmp.path("app"), None).branch;
+        let branch = || resolver.project(&tmp.path("app"), None, "node").branch;
         assert_eq!(branch().as_deref(), Some("main"));
 
         // What `git switch` does: write HEAD.lock, then rename it over HEAD.
@@ -664,7 +704,7 @@ mod tests {
                 "app/.git/config",
                 &format!("[core]\n\tbare = false\n{config}"),
             );
-            let project = Resolver::default().project(&tmp.path("app"), None);
+            let project = Resolver::default().project(&tmp.path("app"), None, "node");
             assert_eq!(project.github.as_deref(), github, "{config}");
         }
     }

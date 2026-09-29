@@ -34,9 +34,10 @@ static AGENTS: LazyLock<agent::Resolver> =
     LazyLock::new(|| agent::Resolver::new(agent::Dirs::from_env()));
 
 /// `command` is the server's command line. It tells a Storybook server apart
-/// from the app it lives in.
-pub fn project(cwd: &str, command: Option<&str>) -> Project {
-    PROJECTS.project(Path::new(cwd), command)
+/// from the app it lives in. `process_name` names a project whose folder
+/// can't, such as `/` or Homebrew's `var/postgresql@15`.
+pub fn project(cwd: &str, command: Option<&str>, process_name: &str) -> Project {
+    PROJECTS.project(Path::new(cwd), command, process_name)
 }
 
 /// `chain` is the server's process and its ancestors, nearest first. The
