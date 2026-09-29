@@ -11,6 +11,8 @@ const APPEARANCES = [
   { value: "dark", label: "Dark" },
 ] as const satisfies readonly { value: Appearance; label: string }[];
 
+const DOCS_URL = "https://github.com/greenfield-inc/port-process-manager#documentation";
+
 const INTERVALS = [1, 2, 5, 10].map((s) => ({ value: s * 1000, label: count(s, "second") }));
 
 export function GeneralPane({ settings }: { settings: Settings }) {
@@ -56,6 +58,11 @@ export function GeneralPane({ settings }: { settings: Settings }) {
           onChange={(theme) => void saveApp({ theme })}
         />
       </Section>
+      <footer className="settings-footer">
+        <button type="button" className="settings-link" onClick={() => void invoke("open_external", { url: DOCS_URL })}>
+          Documentation
+        </button>
+      </footer>
     </>
   );
 }

@@ -21,25 +21,24 @@ Free and open source. No account. No telemetry.
 - Spike alerts when a server's memory crosses your threshold or keeps climbing
 - Clean up: servers whose worktree was deleted, or that are idle, long-running or leaking memory
 - Auto-kill for those servers, set to ask first or act on its own
-- Stop or restart any server. Clean up and auto-kill skip protected processes, such as databases, and Stop asks first. You can edit the protected list in **Settings → Clean up**.
+- Stop or restart any server. Clean up and auto-kill skip protected processes, such as databases, and Stop and Restart ask before touching them. You can edit the protected list in **Settings → Clean up**.
 
 **Jump to the work**
 - Open `localhost:<port>` in your browser, or the Vercel preview for the same branch
-- See the Claude Code or Codex session that started a server, and resume it in your terminal
-- Groups servers by [Conductor](https://conductor.build) workspace, [Pane](https://runpane.com) worktree or git worktree
+- See the Claude Code or Codex session that started a server, and resume it in your terminal (on this computer and in WSL)
+- See the [Conductor](https://conductor.build) workspace, [Pane](https://runpane.com) worktree or git worktree each server runs in. Pane is our workspace app for coding agents.
 
 **Watch any machine**
 - On Windows, every WSL distro shows up on its own, with the real Linux process behind each port
 - Add machines from `~/.ssh/config`, your Pane remote hosts, or by hand
 - Connect over `ssh`, `docker exec`, `kubectl exec`, `wsl`, or any command you choose
 - The app offers to install `ppm` on a machine the first time you connect
-- Opening a remote server's URL forwards its port to your machine
+- Opening a remote server's URL forwards its port to your machine (except for `ppm serve` machines)
 
 **Feels native**
 - Opens instantly from the menu bar, the tray, or a global shortcut
-- Floats over full-screen apps without stealing focus, with the system's blur behind it
+- Floats over full-screen apps without stealing focus, with the system's blur behind it on macOS and Windows
 - Follows light and dark mode, with 40 color themes
-- Idles under 60 MB of memory
 
 **Works in your terminal too**
 - `ppm` opens the same server list as a terminal UI
@@ -53,13 +52,13 @@ Free and open source. No account. No telemetry.
 |---|---|
 | macOS 13+ | `brew install --cask greenfield-inc/tap/port-process-manager`, or the `.dmg` from [Releases](https://github.com/greenfield-inc/port-process-manager/releases/latest) |
 | Windows 10/11 | `winget install Greenfield.PortProcessManager`, or the `.msi` from [Releases](https://github.com/greenfield-inc/port-process-manager/releases/latest) |
-| Linux | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/port-process-manager/releases/latest) |
+| Linux (x86_64) | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/port-process-manager/releases/latest) |
 
 macOS builds are signed and notarized, and Windows builds are signed. On GNOME, the tray icon needs the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
 
 ### CLI only
 
-Use the CLI on servers, VMs and containers, or if you prefer the terminal. It's one self-contained binary, `ppm`, for macOS, Windows and Linux (x86_64 and arm64).
+Use the CLI on servers, VMs and containers, or if you prefer the terminal. It's one self-contained binary, `ppm`, for macOS, Windows and Linux (x86_64 and arm64). Pick one of these:
 
 ```bash
 curl -fsSL https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.sh | sh
@@ -69,21 +68,41 @@ uvx port-process-manager          # or: pipx install port-process-manager
 cargo install port-process-manager
 ```
 
-The install script and the npm and PyPI packages download the release binary for your platform and check its SHA-256 checksum. `cargo install` builds it from source.
+On Windows, use PowerShell instead of the install script:
+
+```powershell
+irm https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.ps1 | iex
+```
+
+The install scripts and the npm and PyPI packages download the release binary for your platform and check its SHA-256 checksum. `cargo install` builds it from source.
 
 ## Quick start
 
-1. Open Port Process Manager. Its icon shows how many servers are running.
-2. Click the icon to see your servers. Click a server for its details, charts and process tree.
+1. Open Port Process Manager. On macOS, its menu bar icon shows how many servers are running.
+2. Click the icon to see your servers. On many Linux desktops, the click opens a menu: pick **Open Port Process Manager**. Click a server for its details, charts and process tree.
 3. Click **Clean up** to stop the servers you no longer need.
 
 Press <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>P</kbd> on Windows and Linux) to open it from anywhere. Change the shortcut in **Settings → General**.
+
+With the CLI only, run `ppm`. See [Getting started](docs/getting-started.md) for more.
+
+## Clean up and auto-kill
+
+**Clean up** suggests stopping servers whose folder or worktree was deleted, or that are idle, long-running or leaking memory. Set the limits in **Settings → Clean up**.
+
+Auto-kill acts on servers as they start to qualify. Pick one mode in **Settings → Clean up → When servers qualify**:
+
+- **Off** (default): they wait under Clean up.
+- **Ask**: a notification asks before stopping each one.
+- **Stop them**: the app stops them for you.
+
+Auto-kill runs only in the desktop app, for this computer. `ppm watch`, the terminal UI and `ppm stdio` never turn it on by themselves. It skips protected servers, and leaves leaking ones under Clean up for you to decide. See [Settings and clean up](docs/settings.md).
 
 ## Remote machines
 
 On Windows, each installed WSL distro is added for you. Servers running inside WSL show under their distro with their Linux process tree, and open at `localhost` as usual.
 
-To add another machine, open **Settings → Machines**. Hosts from `~/.ssh/config` and your Pane remote hosts are already listed. Pick one, and its servers appear in the menu next to your local ones.
+To add another machine, open **Settings → Machines**. Hosts from `~/.ssh/config` and your Pane remote hosts are listed under **Found on this computer**. Add one, and its servers appear in the app next to your local ones.
 
 A machine is any command that runs a program on it:
 
@@ -95,7 +114,7 @@ A machine is any command that runs a program on it:
 | WSL | `wsl -d Ubuntu --` |
 | Anything else | your own command prefix |
 
-The first time you connect, the app checks the machine's OS and CPU and asks to install the matching `ppm` binary in `~/.local/bin`. It copies the binary through the same connection, verifies its checksum, and updates it when the app updates. On read-only machines, or to install it yourself, use any command from [CLI only](#cli-only).
+The first time you connect, the app checks the machine's OS and CPU and asks to install the matching `ppm` binary in `~/.local/bin` (`%LOCALAPPDATA%\ppm` on Windows). It copies the binary through the same connection, verifies its checksum, and updates that copy when the app updates. On read-only machines, or to install it yourself, use any command from [CLI only](#cli-only).
 
 From the terminal:
 
@@ -108,20 +127,22 @@ ppm --on devbox open 5173         # forwards the port and opens it here
 ppm remote rm devbox
 ```
 
-`ppm --on <machine>` works with `list`, `watch`, `stop`, `restart`, `open`, `clean` and the terminal UI. A machine can be a saved one or any host `ppm remote list` discovers. The first time, ppm asks before installing itself there. Pass `--yes` to install without asking, as in scripts. `open` forwards through ssh or kubectl, or through `ppm connect` on the machine for other connections such as Docker, and keeps the forward open until you press Ctrl-C.
+`ppm --on <machine>` works with `list`, `watch`, `stop`, `restart`, `open`, `clean` and the terminal UI. A machine can be a saved one or any host `ppm remote list` discovers. The first time, ppm asks before installing itself there. Pass `--yes` to install without asking, as in scripts. `open` forwards the port through ssh or kubectl. For other connections, such as Docker, ppm runs `ppm connect` on the machine to relay it. The forward stays open until you press Ctrl-C.
 
-To add a machine that runs `ppm serve`, use its connection code: `ppm remote add mac-mini --code ppm://…`.
+See [Remote machines](docs/remote-machines.md) for more.
 
 ### Connect through Tailscale or a proxy
 
-When a command connection won't work, for example from a browser, run `ppm serve` on the machine:
+When you can't run a command on the machine, or want to reach it from a web page, run `ppm serve` there:
 
 ```bash
 tailscale serve --bg http://127.0.0.1:7767
 ppm serve --url https://devbox.tail1234.ts.net   # listens on 127.0.0.1:7767 and prints a connection code
 ```
 
-`ppm serve` only listens on loopback, so it's reachable only through a tunnel or proxy you set up, and every request needs the token in the connection code. `--url` puts the address clients use into the code. Paste the code into **Settings → Machines → Add by code**.
+`ppm serve` only listens on loopback, so it's reachable only through a tunnel or proxy you set up, and every request needs the token in the connection code. `--url` puts the address clients use into the code. Keep `ppm serve` running, for example in `tmux` or as a service.
+
+Paste the code into **Settings → Machines → Add a machine**, or add it from the terminal with the code `ppm serve` printed: `ppm remote add devbox --code ppm://…`.
 
 Web pages can't read its responses unless you allow their origin, as in `ppm serve --allow-origin https://dash.example.com`. See [docs/protocol.md](docs/protocol.md#browsers).
 
@@ -142,11 +163,17 @@ ppm --on <machine> ...     Run the command on another machine
 ppm doctor                 Check permissions and platform support
 ```
 
+Every command and option is in the [CLI reference](docs/cli.md).
+
 ## Permissions and privacy
 
-`ppm` needs no special permissions or admin rights. It sees every listening port, and full details for processes your user owns. For processes owned by other users or the system, it shows the port and process name only.
+`ppm` needs no special permissions or admin rights. It shows full details for processes your user owns. Ports owned by other users or the system show with less:
 
-Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `port-process-manager`).
+- **Linux:** the port and its owner. Linux shows which process holds the port only to root, so run `sudo ppm` to see it.
+- **Windows:** the port, its owner and the process name. Without admin rights, the owner can be missing.
+- **macOS:** the port, its owner and the process name. A new one can take up to 10 seconds to appear.
+
+Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on, and to download `ppm` from GitHub Releases when you install it on another machine. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `port-process-manager`).
 
 ## Build on ppm
 
@@ -169,6 +196,17 @@ cargo run -p port-process-manager -- list   # run the CLI
 ```
 
 See [AGENTS.md](AGENTS.md) for the repo layout and checks.
+
+## Documentation
+
+- [Getting started](docs/getting-started.md)
+- [Remote machines](docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, `ppm serve` and Tailscale
+- [Settings and clean up](docs/settings.md)
+- [CLI reference](docs/cli.md)
+- [Troubleshooting](docs/troubleshooting.md): `ppm doctor`, the Linux tray and blank windows
+- [The ppm protocol](docs/protocol.md)
+
+For coding agents, [llms.txt](llms.txt) links every page.
 
 ## Credits
 
