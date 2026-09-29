@@ -317,6 +317,7 @@ pub enum Call {
         root: ProcRef,
         force: bool,
         #[serde(default)]
+        #[ts(as = "Option<bool>", optional)]
         confirm_protected: bool,
     },
     /// Stop, then run `command` again in `launch_dir`. Refuses a protected
@@ -325,6 +326,7 @@ pub enum Call {
         port: u16,
         root: ProcRef,
         #[serde(default)]
+        #[ts(as = "Option<bool>", optional)]
         confirm_protected: bool,
     },
     /// Replace the scanner config for this connection.
