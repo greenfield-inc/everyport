@@ -416,10 +416,10 @@ mod tests {
             &format!(".claude/projects/-Users-dev-conductor-workspaces-everyport-providence/{CLAUDE_ID}.jsonl"),
             &[
                 r#"{"type":"permission-mode","permissionMode":"default","sessionId":"x"}"#.to_string(),
-                serde_json::json!({"type": "user", "cwd": workspace, "message": {"role": "user", "content": "Make the menu bar icon a dot grid\nwith 3 rows"}}).to_string(),
-                r#"{"type":"ai-title","aiTitle":"Menu bar icon","sessionId":"x"}"#.to_string(),
-                r#"{"type":"custom-title","customTitle":"Dot-grid menu bar icon","sessionId":"x"}"#.to_string(),
-                r#"{"type":"ai-title","aiTitle":"Dot grid icon polish","sessionId":"x"}"#.to_string(),
+                serde_json::json!({"type": "user", "cwd": workspace, "message": {"role": "user", "content": "Show the server count on the tray icon\nfor Windows and Linux"}}).to_string(),
+                r#"{"type":"ai-title","aiTitle":"Tray icon","sessionId":"x"}"#.to_string(),
+                r#"{"type":"custom-title","customTitle":"Tray count badge","sessionId":"x"}"#.to_string(),
+                r#"{"type":"ai-title","aiTitle":"Tray badge polish","sessionId":"x"}"#.to_string(),
             ]
             .join("\n"),
         );
@@ -431,7 +431,7 @@ mod tests {
 
         let found = discovered(&resolver(&tmp), &chain);
         assert_eq!(found.kind, AgentKind::ClaudeCode);
-        assert_eq!(found.title.as_deref(), Some("Dot-grid menu bar icon"));
+        assert_eq!(found.title.as_deref(), Some("Tray count badge"));
         assert_eq!(found.directory.as_deref(), Some(workspace));
         assert_eq!(found.transcript_path, Some(s(&transcript)));
         assert_eq!(found.resume_command, format!("claude --resume {CLAUDE_ID}"));
@@ -554,13 +554,13 @@ mod tests {
         let mut file = File::options().append(true).open(&transcript).unwrap();
         std::io::Write::write_all(
             &mut file,
-            b"{\"type\":\"custom-title\",\"customTitle\":\"Dot-grid menu bar icon\"}\n",
+            b"{\"type\":\"custom-title\",\"customTitle\":\"Tray count badge\"}\n",
         )
         .unwrap();
         let renamed = eventually(|| {
             resolver
                 .agent(&chain)
-                .filter(|a| a.title.as_deref() == Some("Dot-grid menu bar icon"))
+                .filter(|a| a.title.as_deref() == Some("Tray count badge"))
         });
         assert_eq!(renamed.transcript_path, Some(s(&transcript)));
     }

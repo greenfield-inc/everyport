@@ -38,26 +38,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* The dot grid from the tray icon, faded toward the edges. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -120px 0;
-  pointer-events: none;
-  background-image: radial-gradient(#ffffff12 1.1px, transparent 1.2px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 30%, transparent 85%);
-  transform: translateY(calc(var(--scroll, 0) * -0.04px));
-  animation: drift 40s linear infinite;
-}
-
-/* Very slow, one grid cell per loop, so it never jumps. */
-@keyframes drift {
-  to {
-    background-position: 22px 22px;
-  }
-}
-
 a {
   color: var(--green);
   text-decoration: none;
@@ -752,15 +732,6 @@ footer nav a,
     radial-gradient(70% 60% at 22% 30%, color-mix(in oklab, var(--glow) 26%, transparent), transparent 70%),
     radial-gradient(60% 60% at 90% 100%, color-mix(in oklab, var(--glow) 12%, transparent), transparent 70%),
     var(--wall);
-}
-
-.wallpaper::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(#ffffff1c 1.2px, transparent 1.3px);
-  background-size: 24px 24px;
-  mask-image: linear-gradient(115deg, #000 10%, transparent 60%);
 }
 
 .wallpaper[data-active] {

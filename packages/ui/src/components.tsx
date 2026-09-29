@@ -24,23 +24,18 @@ export function Header({ title, mark, onBack }: { title: string; mark?: ReactNod
   );
 }
 
-/** The two status dots before every port: filled, glowing on attention, outlined when idle. */
-export function Colon({ status, color, large = false }: { status: ServerStatus; color: string; large?: boolean }) {
-  const size = large ? 6 : 4;
-  const dotColor = status === "attention" ? "var(--everyport-warn)" : color;
-  const style =
-    status === "idle"
-      ? { width: size, height: size, boxShadow: `inset 0 0 0 1.1px ${dotColor}` }
-      : {
-          width: size,
-          height: size,
-          background: dotColor,
-          boxShadow: status === "attention" ? `0 0 5px ${dotColor}` : undefined,
-        };
+/**
+ * The status slot before every port, shaped like the socket mark's lit slot:
+ * filled while running, outlined when idle, amber and breathing on attention.
+ */
+export function StatusSlot({ status, color, large = false }: { status: ServerStatus; color: string; large?: boolean }) {
+  const slotColor = status === "attention" ? "var(--everyport-warn)" : color;
   return (
-    <span className={`everyport:flex everyport:shrink-0 everyport:flex-col everyport:justify-center ${large ? "everyport:gap-1.5" : "everyport:w-[9px] everyport:gap-[3px]"}`} aria-hidden>
-      <span className="everyport:rounded-full" style={style} />
-      <span className="everyport:rounded-full" style={style} />
+    <span className={`everyport:flex everyport:shrink-0 everyport:items-center ${large ? "" : "everyport:w-[9px]"}`} aria-hidden>
+      <span
+        className={`everyport:rounded-full ${large ? "everyport:h-[15px] everyport:w-[5px]" : "everyport:h-[9px] everyport:w-[3px]"} ${status === "attention" ? "everyport-breathe" : ""}`}
+        style={status === "idle" ? { boxShadow: `inset 0 0 0 1px ${slotColor}` } : { background: slotColor }}
+      />
     </span>
   );
 }

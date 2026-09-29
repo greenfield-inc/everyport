@@ -225,7 +225,7 @@ describe("embedded in a page", () => {
 describe("styles", () => {
   // Tailwind utilities only apply with the everyport: prefix. The rest are the
   // package's own classes from styles.css.
-  const OWN = new Set(["everyport-root", "everyport-panel", "everyport-view", "everyport-grow", "everyport-scroll", "everyport-spin", "everyport-socket", "everyport-socket-slot", "selectable"]);
+  const OWN = new Set(["everyport-root", "everyport-panel", "everyport-view", "everyport-grow", "everyport-scroll", "everyport-spin", "everyport-breathe", "everyport-socket", "everyport-socket-slot", "selectable"]);
   const unstyled = () =>
     [...document.querySelectorAll("[class]")].flatMap((element) =>
       [...element.classList].filter((name) => !name.startsWith("everyport:") && !OWN.has(name)),
@@ -242,7 +242,7 @@ describe("styles", () => {
     press("Enter");
     click("6 more");
     click("Processes");
-    click("Dot-grid menu bar icon");
+    click("Tray count badge");
     expect(document.querySelector("[role=menu]")).not.toBeNull();
     expect(unstyled()).toEqual([]);
     press("Escape");

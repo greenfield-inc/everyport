@@ -1,5 +1,5 @@
 import type { Server } from "@everyport/protocol";
-import { Colon, Header, useTween } from "../components.tsx";
+import { Header, StatusSlot, useTween } from "../components.tsx";
 import type { ViewContext } from "../context.ts";
 import { memory, totalParts } from "../format.ts";
 import { CheckIcon, LockIcon, ReasonIcon } from "../icons.tsx";
@@ -129,7 +129,7 @@ function Row({
         {checked && <CheckIcon />}
       </span>
       <span className="everyport:flex everyport:w-[52px] everyport:shrink-0 everyport:items-center">
-        <Colon status={server.status} color={ctx.colorOf(server.port)} />
+        <StatusSlot status={server.status} color={ctx.colorOf(server.port)} />
         <span className="everyport:font-mono everyport:text-13 everyport:font-medium everyport:text-fg">{server.port}</span>
       </span>
       <span className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:flex-col everyport:gap-0.5">

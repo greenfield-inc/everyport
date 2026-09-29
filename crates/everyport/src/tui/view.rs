@@ -261,13 +261,14 @@ impl View<'_> {
 
     fn port_label(&self, server: &Server) -> Spans {
         let style = self.port_style(server.port);
-        let colon = match server.status {
+        // The status slot, drawn like the socket mark's lit slot.
+        let slot = match server.status {
             ServerStatus::Idle => self.s.faint,
             ServerStatus::Attention => style.add_modifier(Modifier::BOLD),
             ServerStatus::Running => style,
         };
         vec![
-            span(":", colon),
+            span("▎", slot),
             span(server.port.to_string(), style.add_modifier(Modifier::BOLD)),
         ]
     }

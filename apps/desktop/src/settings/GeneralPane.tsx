@@ -119,8 +119,8 @@ function ThemePicker({ value, appearance, onChange }: { value: string; appearanc
         <button key={name} type="button" role="radio" aria-checked={name === value} title={title} onClick={() => onChange(name)}>
           <Themed theme={name} appearance={appearance} className="settings-swatch">
             <span className="settings-swatch-row">
-              <span className="settings-swatch-colon" />
-              <span className="settings-swatch-port">:3000</span>
+              <span className="settings-swatch-slot" />
+              <span className="settings-swatch-port">3000</span>
               <span className="settings-swatch-warn" />
             </span>
             <span className="settings-swatch-bar" />

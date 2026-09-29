@@ -285,10 +285,11 @@
   gap: 5px;
 }
 
-.settings-swatch-colon {
-  width: 4px;
-  height: 10px;
-  background: radial-gradient(circle, var(--primary) 1.8px, transparent 2px) 0 0 / 4px 5px;
+.settings-swatch-slot {
+  width: 3px;
+  height: 9px;
+  border-radius: 1.5px;
+  background: var(--primary);
 }
 
 .settings-swatch-port {

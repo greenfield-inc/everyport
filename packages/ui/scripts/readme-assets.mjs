@@ -25,15 +25,13 @@ const pages = {
     size: [1280, 360],
     html: `<style>${base}
       body { width: 1280px; height: 360px; background: radial-gradient(120% 140% at 15% 0%, #1d2a22 0%, #101310 55%, #0b0d0b 100%); color: #f2f4f0; display: flex; align-items: center; padding: 0 96px; gap: 56px; overflow: hidden; position: relative; }
-      .dots { position: absolute; inset: 0; background-image: radial-gradient(#ffffff14 1.2px, transparent 1.3px); background-size: 22px 22px; mask-image: linear-gradient(90deg, transparent 35%, #000 100%); }
       .ports { position: absolute; right: 64px; top: 40px; font: 500 22px ui-monospace, "SF Mono", Menlo, monospace; color: #ffffff2e; line-height: 2.1; text-align: right; }
       .ports b { color: #7fd89d; font-weight: 500; } .ports i { color: #ffb224; font-style: normal; }
       h1 { font-size: 64px; font-weight: 700; letter-spacing: -1.5px; }
       p { margin-top: 14px; font-size: 25px; color: #b9c2b8; }
       .logo { flex: none; margin: 0 -20px; }
     </style>
-    <div class="dots"></div>
-    <div class="ports">:3000 <b>next dev</b><br>:5173 <b>vite</b><br>:6006 <i>storybook</i><br>:8000 uvicorn<br>:5432 postgres</div>
+    <div class="ports">3000 <b>next dev</b><br>5173 <b>vite</b><br>6006 <i>storybook</i><br>8000 uvicorn<br>5432 postgres</div>
     <img class="logo" src="${svg("socket-app")}" width="190" height="190">
     <div><h1>Everyport</h1><p>Every dev server on every machine, one click from your menu bar.</p></div>`,
   },
@@ -59,8 +57,9 @@ const pages = {
   },
   logo: {
     size: [240, 240],
-    html: `<style>${base} body { width: 240px; height: 240px; display: grid; place-items: center; overflow: hidden; background: transparent; }</style>
-      <img src="${svg("socket-app")}" width="268" height="268">`,
+    // The SVG's tile spans 100 to 924 of 1024; at 268 px, a -14 px margin leaves 12 px on every side.
+    html: `<style>${base} body { width: 240px; height: 240px; overflow: hidden; background: transparent; }</style>
+      <img src="${svg("socket-app")}" width="268" height="268" style="display: block; margin: -14px">`,
     transparent: true,
   },
 };
