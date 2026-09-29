@@ -305,7 +305,9 @@ function OtherPorts({ ports }: { ports: OtherPort[] }) {
         <Chevron direction={open ? "down" : "right"} className="ppm:text-fg3" />
       </button>
       <div className="ppm-grow" data-closed={!open || undefined} inert={!open}>
-        <div className="ppm-scroll" style={{ maxHeight: VISIBLE_ROWS * 26 }}>
+        {/* `.ppm-grow > *` clips its child, so the scroller sits one level in. */}
+        <div>
+          <div className="ppm-scroll" style={{ maxHeight: VISIBLE_ROWS * 26 }}>
           {ports.map((other) => (
             <div
               key={other.port}
@@ -318,6 +320,7 @@ function OtherPorts({ ports }: { ports: OtherPort[] }) {
               <span className="ppm:shrink-0 ppm:text-11 ppm:text-fg3">{other.owner}</span>
             </div>
           ))}
+          </div>
         </div>
       </div>
     </div>

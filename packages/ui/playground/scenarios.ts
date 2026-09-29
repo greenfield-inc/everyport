@@ -58,9 +58,12 @@ export const scenarios: Record<string, () => Machine[]> = {
     { id: "gpu", label: "gpu-01", host: null, state: "error", error: "ssh: connect to host gpu-01 port 22: Connection refused", snapshot: null },
   ],
   empty: () => [local(withServers([]))],
-  /** 50 servers, for scrolling and update cost. */
+  /** 50 servers and 12 other ports, for scrolling and update cost. */
   many: () => [
-    local(withServers(Array.from({ length: 50 }, (_, index) => ({ ...fixtureSnapshot.servers[index % 5], port: 3000 + index })))),
+    local({
+      ...withServers(Array.from({ length: 50 }, (_, index) => ({ ...fixtureSnapshot.servers[index % 5], port: 3000 + index }))),
+      other_ports: Array.from({ length: 12 }, (_, index) => ({ ...fixtureSnapshot.other_ports[1], port: 5432 + index })),
+    }),
   ],
 };
 
