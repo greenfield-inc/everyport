@@ -20,7 +20,6 @@ const COLORS = [
   "chart-3",
   "chart-4",
   "chart-5",
-  "destructive-foreground",
   "warning",
 ];
 
