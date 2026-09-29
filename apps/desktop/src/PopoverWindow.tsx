@@ -1,0 +1,49 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { useCallback, useEffect, useState } from "react";
+import type { TauriPpmClient } from "./client";
+import { useFitWindow } from "./fit";
+import { ServerList } from "./ServerList";
+
+/** Hidden this long, the popover reopens on the list instead of where it was. */
+const RESET_AFTER_MS = 60_000;
+
+type ServerRef = { machineId: string; port: number };
+
+export function PopoverWindow({ client }: { client: TauriPpmClient }) {
+  // A new key remounts the view: back to the list, or onto `initialServer`.
+  const [view, setView] = useState<{ key: number; initialServer?: ServerRef }>({ key: 0 });
+  const ref = useFitWindow<HTMLDivElement>();
+
+  useEffect(() => {
+    let reset: number | undefined;
+    const unlisten = [
+      listen<boolean>("popover:visible", ({ payload: visible }) => {
+        document.documentElement.toggleAttribute("data-hidden", !visible);
+        clearTimeout(reset);
+        if (!visible) reset = window.setTimeout(() => setView((v) => ({ key: v.key + 1 })), RESET_AFTER_MS);
+      }),
+      listen<ServerRef>("popover:open-server", ({ payload }) =>
+        setView((v) => ({ key: v.key + 1, initialServer: payload })),
+      ),
+    ];
+    // Views that go back on Escape call preventDefault; otherwise it closes.
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) void invoke("hide_popover");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      clearTimeout(reset);
+      for (const off of unlisten) void off.then((f) => f());
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
+
+  const onReady = useCallback(() => void invoke("popover_ready"), []);
+
+  return (
+    <div ref={ref} className="window-content">
+      <ServerList key={view.key} client={client} initialServer={view.initialServer} onReady={onReady} />
+    </div>
+  );
+}
