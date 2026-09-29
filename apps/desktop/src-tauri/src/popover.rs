@@ -30,8 +30,63 @@ pub struct State {
     vibrancy: bool,
 }
 
+#[derive(Debug, PartialEq)]
+enum Toggle {
+    Show,
+    Hide,
+}
+
+impl State {
+    /// Whether to show now. Before the page is ready, keeps the request (and
+    /// its server) for `ready`.
+    fn show(&mut self, server: Option<ServerRef>) -> bool {
+        if !self.ready {
+            self.pending = Some(server);
+            return false;
+        }
+        self.visible = true;
+        true
+    }
+
+    /// Whether it was showing.
+    fn hide(&mut self, now: Instant) -> bool {
+        if !self.visible {
+            return false;
+        }
+        self.visible = false;
+        self.hidden_at = Some(now);
+        true
+    }
+
+    /// What a tray click or the shortcut does. Nothing when a blur just closed
+    /// it, because that blur was this same click.
+    fn toggle(&self, now: Instant) -> Option<Toggle> {
+        if self.visible {
+            Some(Toggle::Hide)
+        } else if self
+            .hidden_at
+            .is_some_and(|at| now.duration_since(at) < REOPEN_GUARD)
+        {
+            None
+        } else {
+            Some(Toggle::Show)
+        }
+    }
+
+    /// The page rendered data. Returns a show request that came before.
+    fn ready(&mut self) -> Option<Option<ServerRef>> {
+        self.ready = true;
+        self.pending.take()
+    }
+
+    /// Showing, or not yet ready: the page needs data to render its first frame.
+    fn wants_data(&self) -> bool {
+        self.visible || !self.ready
+    }
+}
+
 /// A server to open the popover on.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerRef {
     pub machine_id: String,
@@ -153,8 +208,7 @@ fn is_visible(app: &AppHandle) -> bool {
 
 /// Showing, or not yet ready: the page needs data to render its first frame.
 pub fn wants_data(app: &AppHandle) -> bool {
-    let state = state(app);
-    state.visible || !state.ready
+    state(app).wants_data()
 }
 
 /// Runs `f` on the main thread, which AppKit requires for window calls.
@@ -169,17 +223,11 @@ pub fn toggle(app: &AppHandle) {
 }
 
 fn toggle_now(app: &AppHandle) {
-    let (visible, just_hidden) = {
-        let state = state(app);
-        let just_hidden = state
-            .hidden_at
-            .is_some_and(|at| at.elapsed() < REOPEN_GUARD);
-        (state.visible, just_hidden)
-    };
-    if visible {
-        hide_now(app);
-    } else if !just_hidden {
-        show_now(app, None);
+    let toggle = state(app).toggle(Instant::now());
+    match toggle {
+        Some(Toggle::Show) => show_now(app, None),
+        Some(Toggle::Hide) => hide_now(app),
+        None => {}
     }
 }
 
@@ -193,13 +241,8 @@ pub fn show_server(app: &AppHandle, server: Option<ServerRef>) {
 }
 
 fn show_now(app: &AppHandle, server: Option<ServerRef>) {
-    {
-        let mut state = state(app);
-        if !state.ready {
-            state.pending = Some(server);
-            return;
-        }
-        state.visible = true;
+    if !state(app).show(server.clone()) {
+        return;
     }
     let window = window(app);
     if let Some(server) = server {
@@ -227,13 +270,8 @@ pub fn hide(app: &AppHandle) {
 }
 
 fn hide_now(app: &AppHandle) {
-    {
-        let mut state = state(app);
-        if !state.visible {
-            return;
-        }
-        state.visible = false;
-        state.hidden_at = Some(Instant::now());
+    if !state(app).hide(Instant::now()) {
+        return;
     }
     let window = window(app);
     #[cfg(target_os = "macos")]
@@ -313,11 +351,7 @@ fn position(app: &AppHandle, window: &WebviewWindow) {
 /// The page rendered its first data: show it if someone already asked.
 #[tauri::command]
 pub fn popover_ready(app: AppHandle) {
-    let pending = {
-        let mut state = state(&app);
-        state.ready = true;
-        state.pending.take()
-    };
+    let pending = state(&app).ready();
     if let Some(server) = pending {
         show_server(&app, server);
     }
@@ -333,4 +367,69 @@ pub fn hide_popover(app: AppHandle) {
 #[tauri::command]
 pub fn has_vibrancy(app: AppHandle) -> bool {
     state(&app).vibrancy
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn server() -> Option<ServerRef> {
+        Some(ServerRef {
+            machine_id: "local".into(),
+            port: 6006,
+        })
+    }
+
+    #[test]
+    fn a_show_before_the_first_frame_waits_for_it() {
+        let mut state = State::default();
+        // An alert's Details at launch, before the page has data.
+        assert!(!state.show(server()));
+        assert_eq!(state.ready(), Some(server()));
+        assert!(state.show(None));
+    }
+
+    #[test]
+    fn ready_without_a_request_stays_hidden() {
+        let mut state = State::default();
+        assert_eq!(state.ready(), None);
+        assert!(!state.visible);
+    }
+
+    #[test]
+    fn the_click_that_closed_it_does_not_reopen_it() {
+        let mut state = State::default();
+        state.ready();
+        let t0 = Instant::now();
+        assert_eq!(state.toggle(t0), Some(Toggle::Show));
+        state.show(None);
+        assert_eq!(state.toggle(t0), Some(Toggle::Hide));
+        // A click on the tray blurs the popover first, which hides it...
+        assert!(state.hide(t0));
+        // ...then the same click arrives as a toggle.
+        assert_eq!(state.toggle(t0 + Duration::from_millis(100)), None);
+        assert_eq!(
+            state.toggle(t0 + Duration::from_millis(400)),
+            Some(Toggle::Show)
+        );
+    }
+
+    #[test]
+    fn hiding_twice_is_one_hide() {
+        let mut state = State::default();
+        state.ready();
+        state.show(None);
+        assert!(state.hide(Instant::now()));
+        assert!(!state.hide(Instant::now()));
+    }
+
+    #[test]
+    fn data_flows_until_ready_and_then_only_while_showing() {
+        let mut state = State::default();
+        assert!(state.wants_data());
+        state.ready();
+        assert!(!state.wants_data());
+        state.show(None);
+        assert!(state.wants_data());
+    }
 }
