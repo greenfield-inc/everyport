@@ -36,8 +36,8 @@ pub struct Engine {
     details: HashMap<ProcRef, Option<Arc<ProcDetails>>>,
     /// Last CPU time and when it was read, per process.
     cpu: HashMap<ProcRef, (u64, u64)>,
-    /// Workspace and agent session, per root process.
-    links: HashMap<ProcRef, (Option<Workspace>, Option<AgentSession>)>,
+    /// Each root's process chain, for `links`, which caches its own results.
+    chains: HashMap<ProcRef, Vec<ProcDetails>>,
     tracked: HashMap<(u16, ProcRef), Tracked>,
     alerts: alerts::Alerts,
     pending: Vec<control::Pending>,
@@ -55,7 +55,7 @@ impl Engine {
             config,
             details: HashMap::new(),
             cpu: HashMap::new(),
-            links: HashMap::new(),
+            chains: HashMap::new(),
             tracked: HashMap::new(),
             alerts: alerts::Alerts::default(),
             pending: Vec::new(),
@@ -113,7 +113,7 @@ impl Engine {
         let live_roots: Vec<ProcRef> = servers.iter().map(|s| s.root).collect();
         self.details.retain(|p, _| table.live(*p).is_some());
         self.cpu.retain(|p, _| usage.contains_key(p));
-        self.links.retain(|root, _| live_roots.contains(root));
+        self.chains.retain(|root, _| live_roots.contains(root));
         self.tracked
             .retain(|key, _| servers.iter().any(|s| (s.port, s.root) == *key));
         let alerts = self.alerts.evaluate(&servers, &self.config, now);
@@ -223,6 +223,7 @@ impl Engine {
 
         let launcher = self.launcher(&members);
         let launch_dir = self.details(launcher).and_then(|d| d.cwd.clone());
+        let command = root_details.map(|d| command::pretty(&d.args, &root.name));
         let (workspace, agent) = self.links(table, listener, root, cwd.as_deref());
         let name = tree::stem(&listener.name);
         let protected = self.config.protected.iter().any(|n| tree::stem(n) == name);
@@ -234,13 +235,13 @@ impl Engine {
             process_name: listener.name.clone(),
             addresses: seen.addresses,
             cwd_exists: cwd.as_deref().is_none_or(|c| Path::new(c).exists()),
-            command: root_details.map(|d| command::pretty(&d.args, &root.name)),
-            launch_dir: launch_dir.or_else(|| cwd.clone()),
-            started_at: Some(root.proc.started_at),
             project: match &cwd {
-                Some(cwd) => links::project(cwd),
+                Some(cwd) => links::project(cwd, command.as_deref()),
                 None => unknown_project(&listener.name),
             },
+            command,
+            launch_dir: launch_dir.or_else(|| cwd.clone()),
+            started_at: Some(root.proc.started_at),
             workspace,
             agent,
             cwd,
@@ -301,7 +302,8 @@ impl Engine {
         (usage.memory, cpu as f32)
     }
 
-    /// Workspace and agent session, resolved once per root process.
+    /// Workspace and agent session. The process chain is read once per root
+    /// process; `links` is called every scan and answers from its cache.
     fn links(
         &mut self,
         table: &Table,
@@ -309,9 +311,19 @@ impl Engine {
         root: &ProcInfo,
         cwd: Option<&str>,
     ) -> (Option<Workspace>, Option<AgentSession>) {
-        if let Some(found) = self.links.get(&root.proc) {
-            return found.clone();
+        if !self.chains.contains_key(&root.proc) {
+            let chain = self.chain(table, listener, root);
+            self.chains.insert(root.proc, chain);
         }
+        let chain = &self.chains[&root.proc];
+        (
+            cwd.and_then(|cwd| links::workspace(cwd, chain)),
+            links::agent(chain),
+        )
+    }
+
+    /// The listener and its ancestors, nearest first, with their details.
+    fn chain(&mut self, table: &Table, listener: &ProcInfo, root: &ProcInfo) -> Vec<ProcDetails> {
         // Tools that rename their process (Next.js sets `process.title`)
         // overwrite the memory their environment is read from, so session
         // variables often survive only on a parent. Look two past the root.
@@ -329,13 +341,10 @@ impl Engine {
             }
             chain.push(parent);
         }
-        let chain: Vec<ProcDetails> = chain
+        chain
             .into_iter()
             .map(|p| self.details(p).map(|d| (*d).clone()).unwrap_or_default())
-            .collect();
-        let found = (cwd.and_then(links::workspace), links::agent(&chain));
-        self.links.insert(root.proc, found.clone());
-        found
+            .collect()
     }
 }
 
