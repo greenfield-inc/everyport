@@ -67,12 +67,11 @@ pub trait Platform: Send + Sync {
 ///   Network Service. If Windows lists an owner at all, it is `wslservice.exe`
 ///   or an HNS `svchost.exe`. The latter can't be told apart from other
 ///   services by name, so match those ports against the distro's instead.
-/// - `vmmem` (`vmmemWSL` on Windows 11) is the WSL VM itself.
 pub fn is_wsl_owner(process_name: &str) -> bool {
     let name = process_name.to_ascii_lowercase();
     matches!(
         name.strip_suffix(".exe").unwrap_or(&name),
-        "wslrelay" | "wslhost" | "wslservice" | "vmmem" | "vmmemwsl"
+        "wslrelay" | "wslhost" | "wslservice"
     )
 }
 
@@ -98,13 +97,11 @@ mod tests {
     use super::is_wsl_owner;
 
     #[test]
-    fn wsl_owners_are_the_relay_the_service_and_the_vm() {
+    fn wsl_owners_are_the_relays_and_the_service() {
         for name in [
             "wslrelay.exe",
             "wslhost.exe",
             "WslService.exe",
-            "vmmem",
-            "vmmemWSL",
             "WSLRELAY.EXE",
         ] {
             assert!(is_wsl_owner(name), "{name}");
