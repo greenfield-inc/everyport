@@ -81,12 +81,7 @@ async fn supervise(
                 argv_prefix,
                 ppm_path,
             } => {
-                // Probe returns backslashed paths for Windows machines only.
-                let os = if ppm_path.contains('\\') {
-                    Os::Windows
-                } else {
-                    Os::Linux
-                };
+                let os = remote::os_of(ppm_path);
                 session
                     .stdio(remote::command(argv_prefix, os, &[ppm_path, "stdio"]))
                     .await

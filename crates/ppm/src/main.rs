@@ -1,15 +1,19 @@
 //! `ppm`: the CLI, terminal UI, and protocol server.
 
 mod commands;
+mod connect;
 mod format;
 mod hub;
+mod machine;
 mod palette;
+mod remote;
 mod serve;
 mod stdio;
 mod tui;
 
 use clap::{Parser, Subcommand};
 use hub::Hub;
+use machine::{Install, Machine};
 use std::io::{self, IsTerminal};
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -22,6 +26,12 @@ use std::process::ExitCode;
     about = "See every dev server running on your machine. Run with no command for the terminal UI."
 )]
 struct Cli {
+    /// Run the command on another machine (see `ppm remote list`)
+    #[arg(long, value_name = "MACHINE")]
+    on: Option<String>,
+    /// Don't ask: install ppm on the machine, or stop what clean suggests
+    #[arg(long, short, global = true)]
+    yes: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -52,11 +62,7 @@ enum Command {
     /// Open http://localhost:<port>
     Open { port: u16 },
     /// Stop the servers Clean up suggests
-    Clean {
-        /// Stop them without asking
-        #[arg(long, short)]
-        yes: bool,
-    },
+    Clean,
     /// Speak the ppm protocol on stdin and stdout
     Stdio,
     /// Speak the ppm protocol over HTTP on loopback
@@ -71,8 +77,35 @@ enum Command {
         #[arg(long = "allow-origin", value_name = "ORIGIN")]
         allow_origin: Vec<String>,
     },
+    /// Manage remote machines
+    Remote {
+        #[command(subcommand)]
+        command: Remote,
+    },
     /// Check permissions and platform support
     Doctor,
+    /// Pipe stdin and stdout to a port on this machine, for forwarding
+    #[command(hide = true)]
+    Connect { port: u16 },
+}
+
+#[derive(Subcommand)]
+enum Remote {
+    /// Save a machine: `ppm remote add devbox -- ssh devbox`, or `--code` from `ppm serve`
+    Add {
+        /// Name to use with --on
+        name: String,
+        /// Connection code that `ppm serve` prints
+        #[arg(long, value_name = "CODE", conflicts_with = "command")]
+        code: Option<String>,
+        /// Command prefix that runs a program on the machine
+        #[arg(last = true, required_unless_present = "code", value_name = "COMMAND")]
+        command: Vec<String>,
+    },
+    /// List saved and discovered machines, and the ppm installed on each
+    List,
+    /// Remove a saved machine
+    Rm { name: String },
 }
 
 fn config_dir() -> Option<PathBuf> {
@@ -82,17 +115,40 @@ fn config_dir() -> Option<PathBuf> {
 fn main() -> ExitCode {
     ppm_core::platform::run_helper();
     let cli = Cli::parse();
-    let result = match cli.command {
-        None if io::stdin().is_terminal() && io::stdout().is_terminal() => {
-            tui::run(Hub::start(commands::engine())).map(|()| ExitCode::SUCCESS)
+    let result = run(cli);
+    match result {
+        Ok(code) => code,
+        // The reader went away, as with `ppm watch --jsonl | head`.
+        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("ppm: {error}");
+            ExitCode::FAILURE
         }
-        None => commands::list(false),
-        Some(Command::List { json }) => commands::list(json),
-        Some(Command::Watch { .. }) => commands::watch(),
-        Some(Command::Stop { port, force }) => Ok(commands::stop(port, force)),
-        Some(Command::Restart { port }) => Ok(commands::restart(port)),
-        Some(Command::Open { port }) => Ok(commands::open(port)),
-        Some(Command::Clean { yes }) => commands::clean(yes),
+    }
+}
+
+fn run(cli: Cli) -> io::Result<ExitCode> {
+    let install = if cli.yes { Install::Yes } else { Install::Ask };
+    let machine = || match &cli.on {
+        None => Ok(Machine::local()),
+        Some(name) => Machine::remote(name, install).map_err(io::Error::other),
+    };
+    let tty = io::stdin().is_terminal() && io::stdout().is_terminal();
+    match cli.command {
+        None if tty => {
+            let machine = machine()?;
+            tui::run(machine).map(|()| ExitCode::SUCCESS)
+        }
+        None => commands::list(machine()?, false),
+        Some(Command::List { json }) => commands::list(machine()?, json),
+        Some(Command::Watch { .. }) => commands::watch(machine()?),
+        Some(Command::Stop { port, force }) => commands::stop(machine()?, port, force),
+        Some(Command::Restart { port }) => commands::restart(machine()?, port),
+        Some(Command::Open { port }) => commands::open(machine()?, port),
+        Some(Command::Clean) => commands::clean(machine()?, cli.yes),
+        Some(_) if cli.on.is_some() => Err(io::Error::other(
+            "--on works with list, watch, stop, restart, open, clean and the terminal UI",
+        )),
         Some(Command::Stdio) => {
             let hub = Hub::start(commands::engine());
             stdio::run(hub, io::BufReader::new(io::stdin()), io::stdout().lock())
@@ -103,16 +159,17 @@ fn main() -> ExitCode {
             url,
             allow_origin,
         }) => serve(listen, url, allow_origin),
+        Some(Command::Remote { command }) => match command {
+            Remote::Add {
+                name,
+                code,
+                command,
+            } => remote::add(name, code, command),
+            Remote::List => remote::list(),
+            Remote::Rm { name } => remote::rm(&name),
+        },
         Some(Command::Doctor) => Ok(commands::doctor(config_dir())),
-    };
-    match result {
-        Ok(code) => code,
-        // The reader went away, as with `ppm watch --jsonl | head`.
-        Err(error) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("ppm: {error}");
-            ExitCode::FAILURE
-        }
+        Some(Command::Connect { port }) => connect::run(port),
     }
 }
 

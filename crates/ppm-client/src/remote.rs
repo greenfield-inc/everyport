@@ -30,6 +30,16 @@ pub(crate) fn ssh_with(prefix: &[String], options: &[&str]) -> Vec<String> {
     argv
 }
 
+/// The OS whose shell quoting fits `ppm_path`. Probe returns backslashed
+/// paths for Windows machines only.
+pub(crate) fn os_of(ppm_path: &str) -> Os {
+    if ppm_path.contains('\\') {
+        Os::Windows
+    } else {
+        Os::Linux
+    }
+}
+
 /// True when the prefix runs its arguments through the remote shell.
 fn joins_into_shell(prefix: &[String]) -> bool {
     match program(prefix).as_str() {

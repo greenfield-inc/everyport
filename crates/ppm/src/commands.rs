@@ -1,29 +1,65 @@
 //! The one-shot commands: list, watch, stop, restart, open, clean and doctor.
+//! Each runs against a [`Machine`], this one or another, through the protocol.
 
 use crate::format;
-use crate::hub::Hub;
+use crate::machine::{Feed, Machine, RUNTIME};
 use crate::palette::Palette;
 use ppm_core::engine::Engine;
 use ppm_core::platform;
 use ppm_core::protocol::{Call, Config, Event, Os, ProcRef, Server, ServerStatus, Snapshot};
+use std::collections::HashMap;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::ExitCode;
-use std::sync::mpsc;
+use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 pub fn engine() -> Engine {
     Engine::new(platform::native(), Config::default())
 }
 
-/// CPU is measured between two scans.
-fn scan_twice(engine: &mut Engine) -> Snapshot {
-    engine.scan();
-    std::thread::sleep(Duration::from_millis(500));
-    engine.scan().0
+/// Asks a yes or no question in the terminal. No is the default.
+pub fn confirm(question: &str) -> io::Result<bool> {
+    print!("{question} [y/N] ");
+    io::stdout().flush()?;
+    let mut answer = String::new();
+    io::stdin().lock().read_line(&mut answer)?;
+    Ok(matches!(answer.trim(), "y" | "Y" | "yes"))
 }
 
-pub fn list(json: bool) -> io::Result<ExitCode> {
-    let snapshot = scan_twice(&mut engine());
+fn lost(machine: &Machine, error: String) -> io::Error {
+    match &machine.name {
+        Some(name) => io::Error::other(format!("lost {name}: {error}")),
+        None => io::Error::other(error),
+    }
+}
+
+/// The next snapshot. A lost connection ends a one-shot command.
+fn next_snapshot(machine: &Machine) -> io::Result<Snapshot> {
+    loop {
+        match machine.recv() {
+            Some(Feed::Event(Event::Snapshot(snapshot))) => return Ok(snapshot),
+            Some(Feed::Event(_)) => {}
+            Some(Feed::Lost(error)) => return Err(lost(machine, error)),
+            None => return Err(lost(machine, "the connection closed".into())),
+        }
+    }
+}
+
+/// CPU is measured between two scans, so this asks for a second one.
+fn measured_snapshot(machine: &mut Machine) -> io::Result<Snapshot> {
+    let first = next_snapshot(machine)?;
+    std::thread::sleep(Duration::from_millis(500));
+    machine.call(Call::Refresh);
+    loop {
+        let snapshot = next_snapshot(machine)?;
+        if snapshot.taken_at > first.taken_at {
+            return Ok(snapshot);
+        }
+    }
+}
+
+pub fn list(mut machine: Machine, json: bool) -> io::Result<ExitCode> {
+    let snapshot = measured_snapshot(&mut machine)?;
     let mut out = io::stdout().lock();
     if json {
         serde_json::to_writer_pretty(&mut out, &snapshot)?;
@@ -40,6 +76,7 @@ pub fn list(json: bool) -> io::Result<ExitCode> {
     }
     Ok(ExitCode::SUCCESS)
 }
+
 
 fn write_table(out: &mut impl Write, snapshot: &Snapshot) -> io::Result<()> {
     let palette = Palette::detect();
@@ -110,17 +147,19 @@ fn write_table(out: &mut impl Write, snapshot: &Snapshot) -> io::Result<()> {
     Ok(())
 }
 
-/// One snapshot per line, only when something changed.
-pub fn watch() -> io::Result<ExitCode> {
-    let hub = Hub::start(engine());
-    let (events, rx) = mpsc::channel();
-    hub.subscribe(events);
+/// One snapshot per line, only when something changed. Keeps going through
+/// reconnects to another machine.
+pub fn watch(machine: Machine) -> io::Result<ExitCode> {
     let mut out = io::stdout().lock();
-    for event in rx {
-        if let Event::Snapshot(snapshot) = event {
-            serde_json::to_writer(&mut out, &snapshot)?;
-            writeln!(out)?;
-            out.flush()?;
+    while let Some(feed) = machine.recv() {
+        match feed {
+            Feed::Event(Event::Snapshot(snapshot)) => {
+                serde_json::to_writer(&mut out, &snapshot)?;
+                writeln!(out)?;
+                out.flush()?;
+            }
+            Feed::Event(_) => {}
+            Feed::Lost(error) => eprintln!("ppm: {}, reconnecting", lost(&machine, error)),
         }
     }
     Ok(ExitCode::SUCCESS)
@@ -128,21 +167,60 @@ pub fn watch() -> io::Result<ExitCode> {
 
 /// How long the engine lets a server quit before it kills what's left.
 const GRACE: Duration = Duration::from_secs(3);
+/// How long a kill takes to show in a scan.
+const SETTLE: Duration = Duration::from_secs(5);
 /// How long a restarted server gets to listen on its port again.
 const COME_BACK: Duration = Duration::from_secs(10);
 
-/// Scans until every stop and restart has finished. Returns the last
-/// snapshot, and whether it took past the grace period, so the engine had
-/// to kill what ignored the request to quit.
-fn finish(engine: &mut Engine) -> (Snapshot, bool) {
-    let start = Instant::now();
-    loop {
-        let (snapshot, _) = engine.scan();
-        if !engine.pending() {
-            return (snapshot, start.elapsed() >= GRACE);
+struct Settled {
+    done: bool,
+    last: Snapshot,
+    /// Errors from the requests, by request id.
+    errors: HashMap<u64, String>,
+}
+
+/// Asks for a scan every 250 ms, which also moves stops and restarts along,
+/// until `done` holds for the latest snapshot and the request errors so far,
+/// or `limit` passes.
+fn settle(
+    machine: &mut Machine,
+    ids: &[u64],
+    mut last: Snapshot,
+    limit: Duration,
+    done: impl Fn(&Snapshot, &HashMap<u64, String>) -> bool,
+) -> io::Result<Settled> {
+    let deadline = Instant::now() + limit;
+    let mut errors = HashMap::new();
+    while !done(&last, &errors) {
+        if Instant::now() >= deadline {
+            return Ok(Settled {
+                done: false,
+                last,
+                errors,
+            });
         }
-        std::thread::sleep(Duration::from_millis(100));
+        match machine.recv_timeout(Duration::from_millis(250)) {
+            Ok(Feed::Event(Event::Snapshot(snapshot))) => last = snapshot,
+            Ok(Feed::Event(Event::Result(result))) => {
+                if let Some(error) = result.error.filter(|_| ids.contains(&result.id)) {
+                    errors.insert(result.id, error);
+                }
+            }
+            Ok(Feed::Event(_)) => {}
+            Ok(Feed::Lost(error)) => return Err(lost(machine, error)),
+            Err(RecvTimeoutError::Timeout) => {
+                machine.call(Call::Refresh);
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(lost(machine, "the connection closed".into()))
+            }
+        }
     }
+    Ok(Settled {
+        done: true,
+        last,
+        errors,
+    })
 }
 
 /// Whether any server still runs from the tree under `root`.
@@ -159,88 +237,109 @@ fn failed(error: String) -> ExitCode {
     ExitCode::FAILURE
 }
 
-pub fn stop(port: u16, force: bool) -> ExitCode {
-    let mut engine = engine();
-    let (snapshot, _) = engine.scan();
-    let Some(server) = find(&snapshot, port) else {
-        return failed(format!("nothing listening on :{port}"));
+pub fn stop(mut machine: Machine, port: u16, force: bool) -> io::Result<ExitCode> {
+    let snapshot = next_snapshot(&machine)?;
+    let Some(server) = find(&snapshot, port).cloned() else {
+        return Ok(failed(format!("nothing listening on :{port}")));
     };
     let root = server.root;
-    if let Err(error) = engine.call(&Call::Stop { port, root, force }) {
-        return failed(error);
+    let start = Instant::now();
+    let id = machine.call(Call::Stop { port, root, force });
+    let settled = settle(&mut machine, &[id], snapshot, GRACE + SETTLE, |s, errors| {
+        errors.contains_key(&id) || !running(s, root)
+    })?;
+    if let Some(error) = settled.errors.get(&id) {
+        return Ok(failed(error.clone()));
     }
-    let (after, slow) = finish(&mut engine);
-    if running(&after, root) {
-        return failed(format!(
+    if !settled.done {
+        return Ok(failed(format!(
             ":{port} is still running, even after it was killed"
-        ));
+        )));
     }
     let how = if force {
         ", killed"
-    } else if slow {
+    } else if start.elapsed() >= GRACE {
         ", killed after it ignored the request to quit for 3 s"
     } else {
         ""
     };
     println!("Stopped {} :{port}{how}", server.project.name);
-    ExitCode::SUCCESS
+    machine.close();
+    Ok(ExitCode::SUCCESS)
 }
 
-pub fn restart(port: u16) -> ExitCode {
-    let mut engine = engine();
-    let (snapshot, _) = engine.scan();
-    let Some(server) = find(&snapshot, port) else {
-        return failed(format!("nothing listening on :{port}"));
+pub fn restart(mut machine: Machine, port: u16) -> io::Result<ExitCode> {
+    let snapshot = next_snapshot(&machine)?;
+    let Some(server) = find(&snapshot, port).cloned() else {
+        return Ok(failed(format!("nothing listening on :{port}")));
     };
     let root = server.root;
-    if let Err(error) = engine.call(&Call::Restart { port, root }) {
-        return failed(error);
+    let id = machine.call(Call::Restart { port, root });
+    let settled = settle(
+        &mut machine,
+        &[id],
+        snapshot,
+        GRACE + COME_BACK,
+        |s, errors| errors.contains_key(&id) || find(s, port).is_some_and(|s| s.root != root),
+    )?;
+    if let Some(error) = settled.errors.get(&id) {
+        return Ok(failed(error.clone()));
     }
-    finish(&mut engine);
-    // The new server needs a moment to listen on its port.
-    let deadline = Instant::now() + COME_BACK;
-    loop {
-        let (after, _) = engine.scan();
-        if find(&after, port).is_some_and(|s| s.root != root) {
-            let command = server.command.as_deref().unwrap_or("its command");
-            println!("Restarted :{port} with {command}");
-            return ExitCode::SUCCESS;
-        }
-        if Instant::now() >= deadline {
-            return failed(if running(&after, root) {
-                format!("the old server on :{port} is still running")
-            } else {
-                let log =
-                    std::env::temp_dir().join(format!("port-process-manager/port-{port}.log"));
-                format!(
-                    "nothing is listening on :{port} {} s after the restart; its output is in {}",
-                    COME_BACK.as_secs(),
-                    log.display()
-                )
-            });
-        }
-        std::thread::sleep(Duration::from_millis(250));
+    if settled.done {
+        let command = server.command.as_deref().unwrap_or("its command");
+        println!("Restarted :{port} with {command}");
+        machine.close();
+        return Ok(ExitCode::SUCCESS);
     }
+    let log = format!("port-process-manager/port-{port}.log");
+    let error = if running(&settled.last, root) {
+        format!("the old server on :{port} is still running")
+    } else if machine.is_local() {
+        format!(
+            "nothing is listening on :{port} {} s after the restart; its output is in {}",
+            COME_BACK.as_secs(),
+            std::env::temp_dir().join(log).display()
+        )
+    } else {
+        format!(
+            "nothing is listening on :{port} {} s after the restart; its output is in {log} in the temp folder on {}",
+            COME_BACK.as_secs(),
+            machine.label()
+        )
+    };
+    machine.close();
+    Ok(failed(error))
 }
 
-pub fn open(port: u16) -> ExitCode {
-    let url = format!("http://localhost:{port}");
-    match open::that_detached(&url) {
-        Ok(()) => {
-            println!("Opened {url}");
-            ExitCode::SUCCESS
-        }
-        Err(error) => failed(error.to_string()),
+/// Opens the server in the browser. A server on another machine is
+/// forwarded first, and the forward stays open until Ctrl-C.
+pub fn open(mut machine: Machine, port: u16) -> io::Result<ExitCode> {
+    let url = match machine.url(port) {
+        Ok(url) => url,
+        Err(error) => return Ok(failed(error)),
+    };
+    if let Err(error) = open::that_detached(&url) {
+        return Ok(failed(error.to_string()));
     }
+    if !machine.is_forwarding() {
+        println!("Opened {url}");
+        return Ok(ExitCode::SUCCESS);
+    }
+    println!(
+        "Opened {url}, forwarded from :{port} on {}. Press Ctrl-C to stop forwarding.",
+        machine.label()
+    );
+    RUNTIME.block_on(tokio::signal::ctrl_c())?;
+    Ok(ExitCode::SUCCESS)
 }
 
-pub fn clean(yes: bool) -> io::Result<ExitCode> {
-    let mut engine = engine();
-    let snapshot = scan_twice(&mut engine);
-    let picks: Vec<&Server> = snapshot
+pub fn clean(mut machine: Machine, yes: bool) -> io::Result<ExitCode> {
+    let snapshot = measured_snapshot(&mut machine)?;
+    let picks: Vec<Server> = snapshot
         .servers
         .iter()
         .filter(|s| format::preselected(s))
+        .cloned()
         .collect();
     if picks.is_empty() {
         println!("Nothing to clean up.");
@@ -266,45 +365,49 @@ pub fn clean(yes: bool) -> io::Result<ExitCode> {
             eprintln!("ppm: run `ppm clean --yes` to stop these without asking");
             return Ok(ExitCode::FAILURE);
         }
-        print!("Stop {count} and free {}? [y/N] ", format::bytes(memory));
-        io::stdout().flush()?;
-        let mut answer = String::new();
-        io::stdin().lock().read_line(&mut answer)?;
-        if !matches!(answer.trim(), "y" | "Y" | "yes") {
+        if !confirm(&format!("Stop {count} and free {}?", format::bytes(memory)))? {
             return Ok(ExitCode::SUCCESS);
         }
     }
+    let asked: Vec<(u64, &Server)> = picks
+        .iter()
+        .map(|server| {
+            let id = machine.call(Call::Stop {
+                port: server.port,
+                root: server.root,
+                force: false,
+            });
+            (id, server)
+        })
+        .collect();
+    let ids: Vec<u64> = asked.iter().map(|(id, _)| *id).collect();
+    let settled = settle(&mut machine, &ids, snapshot, GRACE + SETTLE, |s, errors| {
+        asked
+            .iter()
+            .all(|(id, server)| errors.contains_key(id) || !running(s, server.root))
+    })?;
     let mut ok = true;
-    let mut asked = Vec::new();
-    for server in &picks {
-        let call = Call::Stop {
-            port: server.port,
-            root: server.root,
-            force: false,
-        };
-        match engine.call(&call) {
-            Ok(()) => asked.push(*server),
-            Err(error) => {
-                eprintln!("ppm: :{}: {error}", server.port);
-                ok = false;
-            }
+    let mut stopped = Vec::new();
+    for (id, server) in &asked {
+        if let Some(error) = settled.errors.get(id) {
+            eprintln!("ppm: :{}: {error}", server.port);
+            ok = false;
+        } else if running(&settled.last, server.root) {
+            eprintln!(
+                "ppm: :{} is still running, even after it was killed",
+                server.port
+            );
+            ok = false;
+        } else {
+            stopped.push(*server);
         }
-    }
-    let (after, _) = finish(&mut engine);
-    let (stopped, left): (Vec<&Server>, Vec<&Server>) =
-        asked.into_iter().partition(|s| !running(&after, s.root));
-    for server in &left {
-        eprintln!(
-            "ppm: :{} is still running, even after it was killed",
-            server.port
-        );
-        ok = false;
     }
     println!(
         "Stopped {}, freeing {}.",
         format::plural(stopped.len(), "server", "servers"),
         format::bytes(stopped.iter().map(|s| s.memory).sum())
     );
+    machine.close();
     Ok(if ok {
         ExitCode::SUCCESS
     } else {

@@ -5,15 +5,17 @@ mod chart;
 mod view;
 
 use crate::format;
-use crate::hub::Hub;
+use crate::machine::{machines_path, Feed, Install, Machine};
 use crate::palette::Palette;
-use ppm_core::protocol::{Call, Event, Request, Server, Snapshot};
+use ppm_client::machines;
+use ppm_core::protocol::{Call, Event, Server, Snapshot};
 use ratatui::crossterm::event::{
     self, Event as Input, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };
 use std::collections::HashSet;
 use std::io;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::thread;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -29,9 +31,26 @@ struct Toast {
     until: Instant,
 }
 
+/// A machine the switcher can show. Other machines connect on first view.
+struct Slot {
+    /// `None` for this machine.
+    name: Option<String>,
+    state: State,
+    /// The latest snapshot and core count while another machine is shown.
+    snapshot: Option<Snapshot>,
+    cores: u32,
+}
+
+enum State {
+    Idle,
+    Connecting(Receiver<Result<Machine, String>>),
+    Ready(Machine),
+    Failed(String),
+}
+
 pub struct App {
-    hub: Hub,
-    events: Sender<Event>,
+    machines: Vec<Slot>,
+    current: usize,
     palette: Palette,
     snapshot: Option<Snapshot>,
     cores: u32,
@@ -49,18 +68,36 @@ pub struct App {
     list_offset: usize,
     detail_offset: usize,
     help_offset: usize,
-    next_request: u64,
     quit: bool,
 }
 
-pub fn run(hub: Hub) -> io::Result<()> {
-    let palette = Palette::detect();
-    let (events, rx) = mpsc::channel();
-    hub.subscribe(events.clone());
+/// Runs the TUI on `machine`. Tab switches to this machine and the saved ones.
+pub fn run(machine: Machine) -> io::Result<()> {
+    let mut names: Vec<Option<String>> = vec![None];
+    let saved = machines_path().and_then(|path| machines::load(&path));
+    names.extend(saved.unwrap_or_default().into_iter().map(|m| Some(m.name)));
+    if !names.contains(&machine.name) {
+        names.push(machine.name.clone());
+    }
+    let current = names.iter().position(|n| *n == machine.name).unwrap_or(0);
+    let mut first = Some(machine);
+    let machines = names
+        .into_iter()
+        .enumerate()
+        .map(|(index, name)| Slot {
+            name,
+            state: match first.take_if(|_| index == current) {
+                Some(machine) => State::Ready(machine),
+                None => State::Idle,
+            },
+            snapshot: None,
+            cores: 1,
+        })
+        .collect();
     let mut app = App {
-        hub,
-        events,
-        palette,
+        machines,
+        current,
+        palette: Palette::detect(),
         snapshot: None,
         cores: 1,
         page: Page::Servers,
@@ -77,24 +114,22 @@ pub fn run(hub: Hub) -> io::Result<()> {
         list_offset: 0,
         detail_offset: 0,
         help_offset: 0,
-        next_request: 1,
         quit: false,
     };
     let mut terminal = ratatui::init();
-    let result = app.run(&mut terminal, &rx);
+    let result = app.run(&mut terminal);
     ratatui::restore();
-    // The scanner exits once it has finished any stop or restart.
-    drop(app);
-    for _ in rx {}
+    // This machine's scanner exits once it has finished any stop or restart.
+    for slot in app.machines {
+        if let State::Ready(machine) = slot.state {
+            machine.close();
+        }
+    }
     result
 }
 
 impl App {
-    fn run(
-        &mut self,
-        terminal: &mut ratatui::DefaultTerminal,
-        rx: &Receiver<Event>,
-    ) -> io::Result<()> {
+    fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
         while !self.quit {
             terminal.draw(|frame| view::draw(self, frame))?;
             // Uptimes and messages change without a new scan, so redraw at least every second.
@@ -105,14 +140,52 @@ impl App {
                     }
                 }
             }
-            while let Ok(event) = rx.try_recv() {
-                self.apply(event);
-            }
+            self.poll_machines();
         }
         Ok(())
     }
 
-    fn apply(&mut self, event: Event) {
+    /// Finishes connections, applies the shown machine's events, and keeps
+    /// the latest snapshot of the others for when they're shown.
+    fn poll_machines(&mut self) {
+        for index in 0..self.machines.len() {
+            let slot = &mut self.machines[index];
+            if let State::Connecting(rx) = &slot.state {
+                slot.state = match rx.try_recv() {
+                    Ok(Ok(machine)) => State::Ready(machine),
+                    Ok(Err(error)) => State::Failed(error),
+                    Err(TryRecvError::Empty) => continue,
+                    Err(TryRecvError::Disconnected) => State::Failed("Couldn't connect.".into()),
+                };
+            }
+            let State::Ready(machine) = &slot.state else {
+                continue;
+            };
+            let feeds: Vec<Feed> = std::iter::from_fn(|| machine.try_recv()).collect();
+            for feed in feeds {
+                if index == self.current {
+                    self.apply(feed);
+                } else {
+                    let slot = &mut self.machines[index];
+                    match feed {
+                        Feed::Event(Event::Hello(hello)) => slot.cores = hello.host.cores.max(1),
+                        Feed::Event(Event::Snapshot(snapshot)) => slot.snapshot = Some(snapshot),
+                        _ => {}
+                    }
+                }
+            }
+        }
+    }
+
+    fn apply(&mut self, feed: Feed) {
+        let event = match feed {
+            Feed::Event(event) => event,
+            Feed::Lost(error) => {
+                let text = format!("Lost {}: {error}. Reconnecting…", self.label());
+                self.show(text, true);
+                return;
+            }
+        };
         match event {
             Event::Hello(hello) => self.cores = hello.host.cores.max(1),
             Event::Snapshot(snapshot) => {
@@ -163,12 +236,63 @@ impl App {
     }
 
     fn send(&mut self, call: Call) {
-        let request = Request {
-            id: self.next_request,
-            call,
-        };
-        self.next_request += 1;
-        self.hub.call(request, self.events.clone());
+        if let State::Ready(machine) = &mut self.machines[self.current].state {
+            machine.call(call);
+        }
+    }
+
+    /// The shown machine's name.
+    fn label(&self) -> &str {
+        self.machines[self.current]
+            .name
+            .as_deref()
+            .unwrap_or("this machine")
+    }
+
+    /// True when there are other machines to switch to.
+    fn switcher(&self) -> bool {
+        self.machines.len() > 1
+    }
+
+    /// What the list says while the shown machine has no snapshot.
+    fn waiting(&self) -> (String, bool) {
+        match &self.machines[self.current].state {
+            State::Ready(_) => ("Scanning…".into(), false),
+            State::Failed(error) => (error.clone(), true),
+            _ => (format!("Connecting to {}…", self.label()), false),
+        }
+    }
+
+    /// Shows the next machine, connecting to it the first time.
+    fn next_machine(&mut self) {
+        if !self.switcher() {
+            return;
+        }
+        let slot = &mut self.machines[self.current];
+        slot.snapshot = self.snapshot.take();
+        slot.cores = self.cores;
+        self.current = (self.current + 1) % self.machines.len();
+        let slot = &mut self.machines[self.current];
+        self.snapshot = slot.snapshot.take();
+        self.cores = slot.cores;
+        if matches!(slot.state, State::Idle | State::Failed(_)) {
+            slot.state = match slot.name.clone() {
+                None => State::Ready(Machine::local()),
+                Some(name) => {
+                    let (tx, rx) = mpsc::channel();
+                    thread::spawn(move || {
+                        let _ = tx.send(Machine::remote(&name, Install::No));
+                    });
+                    State::Connecting(rx)
+                }
+            };
+        }
+        self.page = Page::Servers;
+        self.selected = self.servers().first().map(|s| s.port);
+        self.selected_index = 0;
+        self.list_offset = 0;
+        self.confirming_stop = None;
+        self.toast = None;
     }
 
     // ------------------------------------------------------------ input
@@ -226,6 +350,7 @@ impl App {
                     self.open_detail(port);
                 }
             }
+            KeyCode::Tab | KeyCode::Char('m') => self.next_machine(),
             KeyCode::Char('c') if !self.servers().is_empty() => self.set_cleaning(true),
             KeyCode::Char('t') => self.cpu_all = !self.cpu_all,
             _ => {
@@ -306,6 +431,7 @@ impl App {
                 }
             }
             KeyCode::Enter => self.open_url(server.port),
+            KeyCode::Char('m') => self.next_machine(),
             KeyCode::Char('i') => self.info_expanded = !self.info_expanded,
             KeyCode::Char('p') => self.processes_expanded = !self.processes_expanded,
             KeyCode::Char('?') => self.show_help(),
@@ -415,11 +541,22 @@ impl App {
         self.show(text, false);
     }
 
+    /// Opens a server, forwarding its port first when it runs on another
+    /// machine. Forwards stay open until ppm quits.
     fn open_url(&mut self, port: u16) {
-        self.open(
-            &format!("http://localhost:{port}"),
-            &format!("Opened localhost:{port}"),
-        );
+        let State::Ready(machine) = &mut self.machines[self.current].state else {
+            return;
+        };
+        match machine.url(port) {
+            Ok(url) => {
+                let done = match machine.is_local() {
+                    true => format!("Opened localhost:{port}"),
+                    false => format!("Opened {url}, forwarded from :{port}"),
+                };
+                self.open(&url, &done);
+            }
+            Err(error) => self.show(error, true),
+        }
     }
 
     fn open(&mut self, url: &str, done: &str) {

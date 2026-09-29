@@ -274,10 +274,12 @@ impl View<'_> {
     fn servers_top(&self) -> Block {
         let app = self.app;
         let mut block = Block::new();
-        block.add(self.centered(vec![span(
-            if app.cleaning { "Clean up" } else { "Servers" },
-            self.bold(),
-        )]));
+        let title = match (app.cleaning, app.switcher()) {
+            (true, _) => "Clean up".to_string(),
+            (false, true) => format!("Servers · {}", app.label()),
+            (false, false) => "Servers".to_string(),
+        };
+        block.add(self.centered(vec![span(title, self.bold())]));
         block.blank();
 
         let visible = app.visible();
@@ -421,12 +423,17 @@ impl View<'_> {
                 block.add(self.centered(vec![span("● ● ● ● ●", self.s.faint)]));
             }
             block.blank();
-            let title = if app.snapshot.is_some() {
-                "Nothing listening"
+            let (title, error) = if app.snapshot.is_some() {
+                ("Nothing listening".to_string(), false)
             } else {
-                "Scanning…"
+                app.waiting()
             };
-            block.add(self.centered(vec![span(title, self.s.text2)]));
+            let style = if error {
+                Style::new().fg(app.palette.red())
+            } else {
+                self.s.text2
+            };
+            block.add(self.centered(vec![span(title, style)]));
             block.add(self.centered(vec![span(
                 format!(
                     "Dev servers on ports {}-{} show up here.",
@@ -646,8 +653,13 @@ impl View<'_> {
                 ("esc", "Cancel"),
             ]);
         }
+        let machine: &[(&str, &str)] = if app.switcher() {
+            &[("tab", "Machine")]
+        } else {
+            &[]
+        };
         if app.servers().is_empty() {
-            return self.hints(&[("?", "Keys"), ("q", "Quit")]);
+            return self.hints(&[machine, &[("?", "Keys"), ("q", "Quit")]].concat());
         }
         let count = app
             .servers()
@@ -659,15 +671,20 @@ impl View<'_> {
         } else {
             "Clean up".into()
         };
-        self.hints(&[
-            ("⏎", "Details"),
-            ("o", "Open"),
-            ("s", "Stop"),
-            ("r", "Restart"),
-            ("c", &clean),
-            ("?", "Keys"),
-            ("q", "Quit"),
-        ])
+        self.hints(
+            &[
+                &[
+                    ("⏎", "Details"),
+                    ("o", "Open"),
+                    ("s", "Stop"),
+                    ("r", "Restart"),
+                    ("c", &clean),
+                ],
+                machine,
+                &[("?", "Keys"), ("q", "Quit")],
+            ]
+            .concat(),
+        )
     }
 
     // ------------------------------------------------------------ detail
@@ -1131,6 +1148,7 @@ impl View<'_> {
                     ("⏎", "Details"),
                     ("c", "Clean up"),
                     ("t", "CPU for servers or the whole machine"),
+                    ("tab  m", "Next machine"),
                 ],
             ),
             (
