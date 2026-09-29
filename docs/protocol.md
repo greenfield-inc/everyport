@@ -377,3 +377,4 @@ everyport serve --allow-origin https://dash.example.com --allow-origin http://lo
 ```
 
 Responses to a request from an allowed origin carry `Access-Control-Allow-Origin` with that origin, and `OPTIONS` preflight requests from it are answered without a token. Every other request still needs the token. `EventSource` can't send headers, so read `/events` with `fetch` and a stream reader.
+
