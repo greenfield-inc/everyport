@@ -118,18 +118,21 @@ pub fn is_wsl_owner(process_name: &str) -> bool {
     )
 }
 
-/// A TCP socket's local address and the processes holding it.
+/// A TCP socket's local address and the processes holding it. `None` when
+/// they are unknown.
 struct Socket {
     address: IpAddr,
     port: u16,
-    holders: Vec<u32>,
+    holders: Option<Vec<u32>>,
 }
 
 /// Counts established TCP sockets by local port, keeping the ones a listener
 /// accepted: on its port, at its address or under an unspecified one, and
 /// held by a process holding the listener or started under one. An outgoing
 /// connection can use the same port number, on another address or, under a
-/// wildcard listener, from another process. `parent` gives a process's parent.
+/// wildcard listener, from another process. A socket or listener whose
+/// holders are unknown is counted on its address alone, so a server in use
+/// never looks idle. `parent` gives a process's parent.
 fn inbound_connections(
     listening: &[Socket],
     established: impl IntoIterator<Item = Socket>,
@@ -138,32 +141,44 @@ fn inbound_connections(
     let mut counts = HashMap::new();
     for socket in established {
         let address = socket.address.to_canonical();
-        let listeners: Vec<u32> = listening
+        let listeners: Vec<&Socket> = listening
             .iter()
             .filter(|l| {
                 l.port == socket.port
                     && (l.address.is_unspecified() || l.address.to_canonical() == address)
             })
-            .flat_map(|l| l.holders.iter().copied())
             .collect();
+        let listener_pids: Option<Vec<u32>> = listeners
+            .iter()
+            .map(|l| l.holders.clone())
+            .collect::<Option<Vec<_>>>()
+            .map(|pids| pids.concat());
         let accepted = !listeners.is_empty()
-            && socket.holders.iter().any(|&holder| {
-                let mut seen = Vec::new();
-                let mut current = Some(holder);
-                while let Some(pid) = current.filter(|pid| !seen.contains(pid)) {
-                    if listeners.contains(&pid) {
-                        return true;
-                    }
-                    seen.push(pid);
-                    current = parent(pid);
-                }
-                false
-            });
+            && match (&socket.holders, listener_pids) {
+                (Some(holders), Some(roots)) => holders
+                    .iter()
+                    .any(|&holder| in_tree(holder, &roots, &mut parent)),
+                _ => true,
+            };
         if accepted {
             *counts.entry(socket.port).or_default() += 1;
         }
     }
     counts
+}
+
+/// True when `pid` is one of `roots` or descends from one.
+fn in_tree(pid: u32, roots: &[u32], parent: &mut impl FnMut(u32) -> Option<u32>) -> bool {
+    let mut seen = Vec::new();
+    let mut current = Some(pid);
+    while let Some(pid) = current.filter(|pid| !seen.contains(pid)) {
+        if roots.contains(&pid) {
+            return true;
+        }
+        seen.push(pid);
+        current = parent(pid);
+    }
+    false
 }
 
 #[cfg(target_os = "linux")]

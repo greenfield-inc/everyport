@@ -22,10 +22,6 @@ use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
 use std::thread;
 use std::time::{Duration, Instant};
 
-/// A scan asks for connections and listeners back to back, so one socket
-/// walk younger than this serves both.
-const SOCKETS_MAX_AGE: Duration = Duration::from_millis(500);
-
 /// Other users' ports change rarely, and each read starts `nettop`.
 const OTHERS_MAX_AGE: Duration = Duration::from_secs(10);
 
@@ -69,7 +65,7 @@ impl Macos {
     fn sockets(&self) -> io::Result<Sockets> {
         let mut cached = self.sockets.lock().unwrap();
         if let Some((at, sockets)) = cached.as_ref() {
-            if at.elapsed() < SOCKETS_MAX_AGE {
+            if at.elapsed() < unix::SOCKETS_MAX_AGE {
                 return Ok(sockets.clone());
             }
         }
@@ -223,7 +219,7 @@ impl Sockets {
                 let socket = || Socket {
                     address: tcp.address,
                     port: tcp.port,
-                    holders: vec![pid],
+                    holders: Some(vec![pid]),
                 };
                 match tcp.state {
                     TSI_S_LISTEN => {
@@ -237,7 +233,7 @@ impl Sockets {
                     TSI_S_ESTABLISHED => {
                         established
                             .entry(tcp.id)
-                            .and_modify(|s| s.holders.push(pid))
+                            .and_modify(|s| s.holders.get_or_insert_default().push(pid))
                             .or_insert_with(socket);
                     }
                     _ => {}

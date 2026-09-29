@@ -7,11 +7,12 @@ use super::{
     ProcInfo, ProcUsage, Socket,
 };
 use crate::protocol::ProcRef;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
+use std::time::Instant;
 
 pub struct Linux {
     /// Clock ticks per second, the unit of times in `/proc/<pid>/stat`.
@@ -22,11 +23,10 @@ pub struct Linux {
     /// Our effective uid. Only root can see which process holds another
     /// user's socket.
     uid: u32,
-    /// Processes that held listening sockets at the previous scan. They are
-    /// searched first, so a steady scan reads only their descriptors.
-    socket_owners: Mutex<Vec<u32>>,
-    /// The same for the sockets `connections` looks up.
-    connection_owners: Mutex<Vec<u32>>,
+    /// The last search for our listening sockets' processes, and when it ran.
+    /// Its processes are searched first next time, so a steady scan reads
+    /// only their descriptors.
+    listening: Mutex<Option<(Instant, Vec<Held>)>>,
     /// User names by uid, from `/etc/passwd`.
     users: Mutex<HashMap<u32, String>>,
     cpu: unix::CpuSampler,
@@ -44,8 +44,7 @@ impl Linux {
                 .unwrap_or(100),
             boot_ms: btime.unwrap_or(0) * 1000,
             uid: unsafe { libc::geteuid() },
-            socket_owners: Mutex::new(Vec::new()),
-            connection_owners: Mutex::new(Vec::new()),
+            listening: Mutex::new(None),
             users: Mutex::new(HashMap::new()),
             cpu: unix::CpuSampler::default(),
         }
@@ -86,23 +85,47 @@ impl Linux {
     }
 }
 
-impl Platform for Linux {
-    /// LISTEN rows of `/proc/net/tcp{,6}`, each mapped to the first process
-    /// found holding it.
-    fn listeners(&self) -> io::Result<Vec<Listener>> {
-        let rows: Vec<TcpRow> = tcp_rows()
+impl Linux {
+    /// Our listening sockets, each with the first process found holding it,
+    /// by the `socket:[inode]` links in `/proc/<pid>/fd`. The search stops
+    /// once every socket has one.
+    fn listening(&self) -> io::Result<Vec<Held>> {
+        let mut cached = self.listening.lock().unwrap();
+        let previous = match cached.as_ref() {
+            Some((at, found)) if at.elapsed() < unix::SOCKETS_MAX_AGE => return Ok(found.clone()),
+            Some((_, found)) => found.iter().map(|(_, pid)| *pid).collect(),
+            None => Vec::new(),
+        };
+        let mut unowned: HashMap<u64, TcpRow> = tcp_rows()
             .into_iter()
             .filter(|row| row.state == TCP_LISTEN && self.can_inspect(row))
+            .map(|row| (row.inode, row))
             .collect();
-        let holders = holders(&self.socket_owners, rows.iter().map(|row| row.inode))?;
-        Ok(rows
+        let mut found = Vec::new();
+        for pid in previous.into_iter().chain(pids()?) {
+            if unowned.is_empty() {
+                break;
+            }
+            for inode in socket_inodes(pid).unwrap_or_default() {
+                if let Some(row) = unowned.remove(&inode) {
+                    found.push((row, pid));
+                }
+            }
+        }
+        *cached = Some((Instant::now(), found.clone()));
+        Ok(found)
+    }
+}
+
+impl Platform for Linux {
+    fn listeners(&self) -> io::Result<Vec<Listener>> {
+        Ok(self
+            .listening()?
             .into_iter()
-            .filter_map(|row| {
-                Some(Listener {
-                    port: row.port,
-                    pid: *holders.get(&row.inode)?.first()?,
-                    address: row.address.to_string(),
-                })
+            .map(|(row, pid)| Listener {
+                port: row.port,
+                pid,
+                address: row.address.to_string(),
             })
             .collect())
     }
@@ -123,27 +146,61 @@ impl Platform for Linux {
             .collect())
     }
 
-    /// Only processes we may inspect have known holders, so only their
-    /// connections are counted, as with their listeners.
+    /// Connections are looked for only in the listeners' processes and the
+    /// processes they started. When one of those can't be read, a socket not
+    /// found is unknown rather than someone else's.
     fn connections(&self) -> Option<HashMap<u16, u32>> {
-        let rows: Vec<TcpRow> = tcp_rows()
+        // Read before the descriptors, so a connection that closes in
+        // between isn't looked for.
+        let established: Vec<TcpRow> = tcp_rows()
             .into_iter()
-            .filter(|row| self.can_inspect(row))
+            .filter(|row| row.state == TCP_ESTABLISHED && self.can_inspect(row))
             .collect();
-        let listening: Vec<&TcpRow> = rows.iter().filter(|r| r.state == TCP_LISTEN).collect();
-        let established: Vec<&TcpRow> = rows
-            .iter()
-            .filter(|r| r.state == TCP_ESTABLISHED && listening.iter().any(|l| l.port == r.port))
+        let listening = self.listening().ok()?;
+        let mut tree: Vec<u32> = listening.iter().map(|(_, pid)| *pid).collect();
+        tree.sort_unstable();
+        tree.dedup();
+        let mut complete = true;
+        let mut next = 0;
+        while let Some(&pid) = tree.get(next) {
+            next += 1;
+            // Under init, as root with socket activation, the tree would be
+            // every process.
+            let Some(children) = (pid != 1).then(|| children(pid)).flatten() else {
+                complete = false;
+                continue;
+            };
+            for child in children {
+                if !tree.contains(&child) {
+                    tree.push(child);
+                }
+            }
+        }
+        let mut holders: HashMap<u64, Vec<u32>> = HashMap::new();
+        for &pid in &tree {
+            match socket_inodes(pid) {
+                Some(inodes) => inodes
+                    .into_iter()
+                    .for_each(|inode| holders.entry(inode).or_default().push(pid)),
+                None => complete = false,
+            }
+        }
+        let listening: Vec<Socket> = listening
+            .into_iter()
+            .map(|(row, pid)| Socket {
+                address: row.address,
+                port: row.port,
+                holders: Some(vec![pid]),
+            })
             .collect();
-        let inodes = listening.iter().chain(&established).map(|row| row.inode);
-        let mut holders = holders(&self.connection_owners, inodes).ok()?;
-        let mut socket = |row: &TcpRow| Socket {
+        // Inode 0 is a connection still waiting in the listener's queue.
+        let established = established.into_iter().map(|row| Socket {
             address: row.address,
             port: row.port,
-            holders: holders.remove(&row.inode).unwrap_or_default(),
-        };
-        let listening: Vec<Socket> = listening.into_iter().map(&mut socket).collect();
-        let established: Vec<Socket> = established.into_iter().map(&mut socket).collect();
+            holders: holders
+                .remove(&row.inode)
+                .or_else(|| (complete && row.inode != 0).then(Vec::new)),
+        });
         let parent = |pid| self.proc_info(pid)?.parent;
         Some(inbound_connections(&listening, established, parent))
     }
@@ -244,37 +301,29 @@ fn socket_inode(link: &std::path::Path) -> Option<u64> {
         .ok()
 }
 
-/// The processes holding each socket in `inodes`, by the `socket:[inode]`
-/// links in `/proc/<pid>/fd`. The processes in `recent` are searched in full
-/// first, the rest only until every socket has a holder. `recent` becomes
-/// the processes that held any, so a steady scan reads only theirs.
-fn holders(
-    recent: &Mutex<Vec<u32>>,
-    inodes: impl IntoIterator<Item = u64>,
-) -> io::Result<HashMap<u64, Vec<u32>>> {
-    let inodes: HashSet<u64> = inodes.into_iter().filter(|&inode| inode != 0).collect();
-    let mut recent = recent.lock().unwrap();
-    let searched_first = recent.clone();
-    let rest = pids()?.filter(|pid| !searched_first.contains(pid));
-    let mut found: HashMap<u64, Vec<u32>> = HashMap::new();
-    for (i, pid) in searched_first.iter().copied().chain(rest).enumerate() {
-        if i >= searched_first.len() && found.len() == inodes.len() {
-            break;
-        }
-        let Ok(fds) = fs::read_dir(format!("/proc/{pid}/fd")) else {
-            continue;
-        };
-        for fd in fds.flatten() {
-            let inode = fs::read_link(fd.path()).ok().and_then(|l| socket_inode(&l));
-            if let Some(inode) = inode.filter(|inode| inodes.contains(inode)) {
-                found.entry(inode).or_default().push(pid);
-            }
-        }
+/// The inodes of a process's sockets, or `None` when its descriptors can't
+/// be read.
+fn socket_inodes(pid: u32) -> Option<Vec<u64>> {
+    let fds = fs::read_dir(format!("/proc/{pid}/fd")).ok()?;
+    Some(
+        fds.flatten()
+            .filter_map(|fd| socket_inode(&fs::read_link(fd.path()).ok()?))
+            .collect(),
+    )
+}
+
+/// The children of every thread of a process, or `None` when they can't be
+/// read.
+fn children(pid: u32) -> Option<Vec<u32>> {
+    let mut children = Vec::new();
+    for task in fs::read_dir(format!("/proc/{pid}/task")).ok()?.flatten() {
+        let list = fs::read_to_string(task.path().join("children")).ok()?;
+        children.extend(
+            list.split_whitespace()
+                .filter_map(|c| c.parse::<u32>().ok()),
+        );
     }
-    *recent = found.values().flatten().copied().collect();
-    recent.sort_unstable();
-    recent.dedup();
-    Ok(found)
+    Some(children)
 }
 
 /// `st` values in `/proc/net/tcp`, from the kernel's TCP state enum.
@@ -296,6 +345,10 @@ fn tcp_rows() -> Vec<TcpRow> {
         .collect()
 }
 
+/// A socket and the first process found holding it.
+type Held = (TcpRow, u32);
+
+#[derive(Clone)]
 struct TcpRow {
     state: u8,
     address: IpAddr,

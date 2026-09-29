@@ -191,7 +191,7 @@ impl Platform for Windows {
             let socket = Socket {
                 address,
                 port: port(local_port),
-                holders: vec![pid],
+                holders: Some(vec![pid]),
             };
             if state == MIB_TCP_STATE_LISTEN.0 as u32 {
                 listening.push(socket);
@@ -200,19 +200,24 @@ impl Platform for Windows {
             }
         }
         // Most connections belong to the listener itself, so the process
-        // table is read only for the rest.
-        let mut parents: Option<HashMap<u32, Option<u32>>> = None;
+        // table is read only for the rest. Without it, which process a
+        // connection belongs to is unknown.
+        let mut parents: Option<io::Result<HashMap<u32, Option<u32>>>> = None;
         let parent = |pid| {
             let parents = parents.get_or_insert_with(|| {
-                let processes = self.processes().unwrap_or_default();
-                processes
+                let processes = self.processes()?;
+                Ok(processes
                     .into_iter()
                     .map(|p| (p.proc.pid, p.parent))
-                    .collect()
+                    .collect())
             });
-            parents.get(&pid).copied().flatten()
+            parents.as_ref().ok()?.get(&pid).copied().flatten()
         };
-        Some(inbound_connections(&listening, established, parent))
+        let counts = inbound_connections(&listening, established, parent);
+        match parents {
+            Some(Err(_)) => None,
+            _ => Some(counts),
+        }
     }
 
     fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
