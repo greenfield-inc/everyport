@@ -1,11 +1,39 @@
-//! Windows-only window setup.
+//! Windows-only window and tray setup.
 
 use tauri::WebviewWindow;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
-use windows::core::Interface;
+use windows::core::{Interface, BOOL};
 use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
 };
+use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi};
+use windows::Win32::UI::WindowsAndMessaging::{
+    SystemParametersInfoW, SM_CXSMICON, SPI_GETCLIENTAREAANIMATION,
+    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+};
+
+/// The notification area's icon size in pixels: 16 at 100% scaling, 32 at 200%.
+pub fn tray_icon_size() -> usize {
+    // SAFETY: plain queries that take and return integers.
+    let size = unsafe { GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()) };
+    size.max(16) as usize
+}
+
+/// Whether "Animation effects" is on, the switch Windows' reduce-motion
+/// setting turns off.
+pub fn animations_enabled() -> bool {
+    let mut enabled = BOOL(1);
+    // SAFETY: SPI_GETCLIENTAREAANIMATION writes one BOOL to the pointer passed.
+    let _ = unsafe {
+        SystemParametersInfoW(
+            SPI_GETCLIENTAREAANIMATION,
+            0,
+            Some(&mut enabled as *mut BOOL as *mut _),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    enabled.as_bool()
+}
 
 /// Asks Windows 11 for rounded corners. Windows 10 ignores it.
 pub fn round_corners(window: &WebviewWindow) {
