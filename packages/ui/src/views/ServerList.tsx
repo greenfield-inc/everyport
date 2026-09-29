@@ -1,7 +1,7 @@
 import type { OtherPort, Server } from "@everyport/protocol";
 import { useEffect, useRef, useState } from "react";
 import { Sparkline } from "../charts.tsx";
-import { Colon, Grow, Header, ProtectedBadge, ProtectedConfirm, useLeaving, useTween } from "../components.tsx";
+import { Grow, Header, ProtectedBadge, ProtectedConfirm, StatusSlot, useLeaving, useTween } from "../components.tsx";
 import { confirmOf, errorOf, type Pending, type ViewContext } from "../context.ts";
 import { memory, memoryParts, percent, total, totalParts } from "../format.ts";
 import { AgentIcon, BranchIcon, BroomIcon, Chevron, GearIcon, Socket, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
@@ -238,7 +238,7 @@ function Row({
       className={`everyport:flex everyport:items-center everyport:rounded-[9px] everyport:px-2.5 everyport:py-[9px] everyport:transition-opacity everyport:duration-100 ${active ? "everyport:bg-accent" : ""}`}
       style={{ opacity }}
     >
-      <Colon status={server.status} color={ctx.colorOf(server.port)} />
+      <StatusSlot status={server.status} color={ctx.colorOf(server.port)} />
       <span className="everyport:w-[46px] everyport:shrink-0 everyport:font-mono everyport:text-13 everyport:font-medium everyport:text-fg">{server.port}</span>
       {confirm ? (
         <ProtectedConfirm ctx={ctx} server={server} action={confirm} />

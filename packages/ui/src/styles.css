@@ -287,6 +287,17 @@ html[data-vibrancy] .everyport-root[data-appearance="dark"] {
   }
 }
 
+/* A row's status slot on attention: the socket's breathe, as opacity. */
+.everyport-breathe {
+  animation: everyport-slot-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes everyport-slot-breathe {
+  50% {
+    opacity: 0.6;
+  }
+}
+
 html[data-hidden] .everyport-root *,
 html[data-hidden] .everyport-root {
   animation-play-state: paused;

@@ -1,7 +1,7 @@
 import type { Server } from "@everyport/protocol";
 import { type ReactNode, useState } from "react";
 import { CpuChart, MemoryChart, sampleNear } from "../charts.tsx";
-import { Colon, Header, Menu, type MenuItem, ProtectedBadge, ProtectedConfirm } from "../components.tsx";
+import { Header, Menu, type MenuItem, ProtectedBadge, ProtectedConfirm, StatusSlot } from "../components.tsx";
 import { confirmOf, copy, errorOf, type ViewContext } from "../context.ts";
 import { clock, clockSeconds, duration, memory, percent, shortPath, started } from "../format.ts";
 import { AgentIcon, Chevron, OpenIcon, RestartIcon, VercelIcon } from "../icons.tsx";
@@ -38,7 +38,7 @@ function DetailHeader({ ctx, server, onBack }: Props) {
       <Header title={server.project.name} onBack={onBack} />
       <div className="everyport:flex everyport:items-center everyport:justify-between everyport:gap-1.5">
         <div className="everyport:flex everyport:items-center everyport:gap-1.5">
-          <Colon status={server.status} color={ctx.colorOf(server.port)} large />
+          <StatusSlot status={server.status} color={ctx.colorOf(server.port)} large />
           <span className="selectable everyport:font-mono everyport:text-28 everyport:font-medium everyport:text-fg">{server.port}</span>
         </div>
         <div className="everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-2.5">
