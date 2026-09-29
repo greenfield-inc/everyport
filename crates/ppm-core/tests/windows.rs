@@ -167,7 +167,9 @@ fn environment_is_the_whole_launch_environment() {
     let mut environment = platform
         .environment(server.0.id())
         .expect("own child is readable");
+    // Without the hidden `=D:` and `=ExitCode` entries Windows keeps per shell.
     let mut launched: Vec<(String, String)> = std::env::vars()
+        .filter(|(key, _)| !key.starts_with('='))
         .chain([("PPM_TEST_MARKER".to_string(), "found-me".to_string())])
         .collect();
     environment.sort();
