@@ -100,7 +100,7 @@ The full state. It's sent after `hello`, after every scan where something other 
           "preview_url": "https://port-process-manager-git-menubar-port-monitor.vercel.app"
         }
       },
-      "workspace": { "kind": "conductor", "name": "providence" },
+      "workspace": { "kind": "conductor", "name": "providence", "open_url": null },
       "agent": {
         "kind": "claude_code",
         "id": "68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c",
@@ -151,7 +151,7 @@ The full state. It's sent after `hello`, after every scan where something other 
 | `command`, `launch_dir` | The root's command line and the folder it started in, or `null`. `restart` runs `command` in `launch_dir`. |
 | `started_at` | When the root process started, or `null` |
 | `project` | `name` (from `package.json`, the repo folder or the folder) is always set. `root`, `framework`, `branch`, `worktree`, `github` (`owner/repo`) and `vercel` are `null` when unknown. |
-| `workspace` | The Conductor workspace, Pane worktree or git worktree the server runs in, or `null`. `kind` is `conductor`, `pane` or `git_worktree`. |
+| `workspace` | The Conductor workspace, Pane worktree or git worktree the server runs in, or `null`. `kind` is `conductor`, `pane` or `git_worktree`. `open_url` opens it in its app, such as `pane://open?pane=<id>&panel=<id>`, or is `null`. |
 | `agent` | The Claude Code or Codex session that started the server, or `null`. `kind` is `claude_code` or `codex`. `resume_command` resumes it in `directory`. |
 | `processes` | The whole tree, depth first and root first. `depth` is 0 for the root. |
 | `memory`, `cpu_percent` | Sums over `processes` |
