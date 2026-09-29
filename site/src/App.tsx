@@ -112,17 +112,6 @@ export function App() {
   const [picked, setPicked] = useState(false);
   const desk = useMedia("(min-width: 900px) and (min-aspect-ratio: 1/1)");
 
-  // The background grid moves a little slower than the page.
-  useEffect(() => {
-    let frame = 0;
-    const onScroll = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => document.documentElement.style.setProperty("--scroll", String(Math.round(scrollY))));
-    };
-    addEventListener("scroll", onScroll, { passive: true });
-    return () => removeEventListener("scroll", onScroll);
-  }, []);
-
   const changeOs = (next: Os) => {
     const nextMachines = demoMachines(next);
     setOs(next);
