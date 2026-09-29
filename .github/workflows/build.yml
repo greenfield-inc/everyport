@@ -106,7 +106,8 @@ jobs:
       - name: Build the app
         shell: bash
         env:
-          SIGN: ${{ inputs.sign }}
+          # Not SIGN: the AppImage plugin gpg-signs whenever SIGN is set.
+          PPM_SIGN: ${{ inputs.sign }}
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ inputs.sign && secrets.APPLE_ID || '' }}
@@ -114,7 +115,7 @@ jobs:
           APPLE_PASSWORD: ${{ inputs.sign && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
         run: |
           args=(--target ${{ matrix.target }} --bundles ${{ matrix.bundles }})
-          if [ "$SIGN" = true ]; then
+          if [ "$PPM_SIGN" = true ]; then
             if [ "$RUNNER_OS" = macOS ]; then
               for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_PASSWORD; do
                 if [ -z "${!name}" ]; then
