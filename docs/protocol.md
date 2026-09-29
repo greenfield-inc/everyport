@@ -216,11 +216,11 @@ Stop a server's process tree, deepest processes first. `ppm` asks each process t
 { "id": 2, "method": "stop", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "force": false } }
 ```
 
-The result arrives once the tree is gone, which can take a few seconds.
+The result arrives as soon as the processes are asked to quit. The server leaves the snapshot once its tree is gone.
 
 ### restart
 
-Stop the server, then run its `command` again in its `launch_dir`, detached from `ppm`. `ppm` waits up to 5 s for the old server to release `port`. The result arrives once the new process has started.
+Stop the server, then run its `command` again in its `launch_dir`, detached from `ppm`. The result arrives as soon as the old tree is asked to quit. Once that tree is gone and `port` is free, `ppm` starts the command, and the new server shows up in a later snapshot.
 
 ```json
 { "id": 3, "method": "restart", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 } } }
