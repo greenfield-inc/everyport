@@ -28,7 +28,8 @@ use windows::Win32::Foundation::{
 };
 use windows::Win32::NetworkManagement::IpHelper::{
     GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID, MIB_TCPROW_OWNER_PID,
-    MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
+    MIB_TCPTABLE_OWNER_PID, MIB_TCP_STATE_ESTAB, TCP_TABLE_CLASS, TCP_TABLE_OWNER_PID_CONNECTIONS,
+    TCP_TABLE_OWNER_PID_LISTENER,
 };
 use windows::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6};
 use windows::Win32::Security::{
@@ -167,6 +168,28 @@ impl Platform for Windows {
             .collect())
     }
 
+    fn connections(&self) -> Option<HashMap<u16, u32>> {
+        let class = TCP_TABLE_OWNER_PID_CONNECTIONS;
+        let v4 = tcp_table::<MIB_TCPROW_OWNER_PID>(AF_INET, class).ok()?;
+        let v6 = tcp_table::<MIB_TCP6ROW_OWNER_PID>(AF_INET6, class).ok()?;
+        let established = v4
+            .into_iter()
+            .map(|row| (row.dwState, row.dwLocalPort))
+            .chain(v6.into_iter().map(|row| (row.dwState, row.dwLocalPort)))
+            .filter(|&(state, _)| state == MIB_TCP_STATE_ESTAB.0 as u32);
+        let mut counts = HashMap::new();
+        for (_, local_port) in established {
+            *counts.entry(port(local_port)).or_default() += 1;
+        }
+        Some(counts)
+    }
+
+    fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
+        let process = Process::open_readable(pid)?;
+        let block = process.env_block(process.parameters()?)?;
+        Some(env_pairs(&block).collect())
+    }
+
     fn processes(&self) -> io::Result<Vec<ProcInfo>> {
         let snapshot = unsafe { Owned::new(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)?) };
         let mut entry = PROCESSENTRY32W {
@@ -220,7 +243,10 @@ impl Platform for Windows {
                 .map(|c| split_args(&c))
                 .unwrap_or_default(),
             env: match parameters {
-                Some(p) if !env_keys.is_empty() => process.env(p, env_keys).unwrap_or_default(),
+                Some(p) if !env_keys.is_empty() => process
+                    .env_block(p)
+                    .map(|block| env_vars(&block, env_keys))
+                    .unwrap_or_default(),
                 _ => Vec::new(),
             },
         })
@@ -315,14 +341,14 @@ impl Platform for Windows {
 
 /// Every listening TCP socket, of every user.
 fn all_listeners() -> io::Result<Vec<Listener>> {
-    let v4 = tcp_listeners::<MIB_TCPROW_OWNER_PID>(AF_INET)?
+    let v4 = tcp_table::<MIB_TCPROW_OWNER_PID>(AF_INET, TCP_TABLE_OWNER_PID_LISTENER)?
         .into_iter()
         .map(|row| Listener {
             port: port(row.dwLocalPort),
             pid: row.dwOwningPid,
             address: Ipv4Addr::from(row.dwLocalAddr.to_ne_bytes()).to_string(),
         });
-    let v6 = tcp_listeners::<MIB_TCP6ROW_OWNER_PID>(AF_INET6)?
+    let v6 = tcp_table::<MIB_TCP6ROW_OWNER_PID>(AF_INET6, TCP_TABLE_OWNER_PID_LISTENER)?
         .into_iter()
         .map(|row| Listener {
             port: port(row.dwLocalPort),
@@ -390,8 +416,8 @@ const _: () = assert!(
         && offset_of!(MIB_TCP6TABLE_OWNER_PID, table) == 4
 );
 
-/// Rows of the listening TCP table for one address family.
-fn tcp_listeners<Row: Copy>(family: ADDRESS_FAMILY) -> io::Result<Vec<Row>> {
+/// Rows of one owner-pid TCP table for one address family.
+fn tcp_table<Row: Copy>(family: ADDRESS_FAMILY, class: TCP_TABLE_CLASS) -> io::Result<Vec<Row>> {
     let mut buf: Vec<u32> = Vec::new();
     let mut size = 0u32;
     loop {
@@ -401,7 +427,7 @@ fn tcp_listeners<Row: Copy>(family: ADDRESS_FAMILY) -> io::Result<Vec<Row>> {
                 &mut size,
                 false,
                 family.0.into(),
-                TCP_TABLE_OWNER_PID_LISTENER,
+                class,
                 0,
             )
         };
@@ -507,11 +533,11 @@ impl Process {
         })
     }
 
-    fn env(&self, parameters: usize, keys: &[&str]) -> Option<Vec<(String, String)>> {
+    /// The `KEY=value\0...\0\0` environment block.
+    fn env_block(&self, parameters: usize) -> Option<Vec<u16>> {
         let block: usize = self.read(parameters + ENVIRONMENT)?;
         let size: usize = self.read(parameters + ENVIRONMENT_SIZE)?;
-        let block = self.read_wide(block, size.min(MAX_ENVIRONMENT) / 2)?;
-        Some(env_vars(&block, keys))
+        self.read_wide(block, size.min(MAX_ENVIRONMENT) / 2)
     }
 
     fn read<T: Copy>(&self, address: usize) -> Option<T> {
@@ -542,17 +568,25 @@ impl Process {
     }
 }
 
-/// The requested variables from a `KEY=value\0...\0\0` block. Windows
-/// variable names ignore case, so `keys` match case-insensitively.
-fn env_vars(block: &[u16], keys: &[&str]) -> Vec<(String, String)> {
+/// Every variable in an environment block, without the hidden `=C:=C:\dir`
+/// entries Windows keeps each drive's folder in.
+fn env_pairs(block: &[u16]) -> impl Iterator<Item = (String, String)> + '_ {
     block
         .split(|&c| c == 0)
         .map(String::from_utf16_lossy)
-        // Per-drive folders are stored as hidden `=C:=C:\dir` entries.
         .filter_map(|entry| {
-            let at = entry.get(1..)?.find('=')? + 1;
-            let key = keys.iter().find(|k| k.eq_ignore_ascii_case(&entry[..at]))?;
-            Some((key.to_string(), entry[at + 1..].to_string()))
+            let (key, value) = entry.split_once('=')?;
+            (!key.is_empty()).then(|| (key.to_string(), value.to_string()))
+        })
+}
+
+/// The requested variables. Windows variable names ignore case, so `keys`
+/// match case-insensitively.
+fn env_vars(block: &[u16], keys: &[&str]) -> Vec<(String, String)> {
+    env_pairs(block)
+        .filter_map(|(name, value)| {
+            let key = keys.iter().find(|k| k.eq_ignore_ascii_case(&name))?;
+            Some((key.to_string(), value))
         })
         .collect()
 }

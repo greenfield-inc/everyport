@@ -3,7 +3,7 @@
 
 use ppm_core::platform::{native, Listener, Platform};
 use ppm_core::protocol::ProcRef;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
@@ -156,4 +156,36 @@ fn a_service_port_is_another_users_with_its_account() {
         .find(|p| Some(p.proc.pid) == rpc.pid)
         .map(|p| p.name);
     assert_eq!(name.as_deref(), Some("svchost.exe"));
+}
+
+#[test]
+fn environment_is_the_whole_launch_environment() {
+    let platform = native();
+    let (server, port) = start_server();
+    wait_for_listener(&*platform, port);
+
+    let mut environment = platform
+        .environment(server.0.id())
+        .expect("own child is readable");
+    let mut launched: Vec<(String, String)> = std::env::vars()
+        .chain([("PPM_TEST_MARKER".to_string(), "found-me".to_string())])
+        .collect();
+    environment.sort();
+    launched.sort();
+    assert_eq!(environment, launched);
+}
+
+#[test]
+fn connections_count_accepted_sockets_by_local_port() {
+    let server = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = server.local_addr().unwrap().port();
+    let clients: Vec<TcpStream> = (0..2)
+        .map(|_| TcpStream::connect(("127.0.0.1", port)).unwrap())
+        .collect();
+    let accepted: Vec<TcpStream> = (0..2).map(|_| server.accept().unwrap().0).collect();
+
+    let counts = native().connections().expect("connections are known");
+    drop((clients, accepted));
+
+    assert_eq!(counts.get(&port), Some(&2));
 }
