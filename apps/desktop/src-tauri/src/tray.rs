@@ -212,8 +212,8 @@ fn redraw(app: &AppHandle, pulse: bool) {
     let _ = tray.set_tooltip(Some(label));
 }
 
-/// Windows' "Animation effects" switch. Linux has no single reduce-motion
-/// setting to read, so the badge there doesn't pulse.
+/// Windows' "Animation effects" switch. Linux desktops each keep their own
+/// reduce-motion setting, so the badge there doesn't pulse.
 fn animations_enabled() -> bool {
     #[cfg(windows)]
     return crate::windows::animations_enabled();
