@@ -2,6 +2,7 @@
 //! `wsl.exe -d <distro> --exec`, and ports Windows sees through WSL's relay
 //! show once, under their distro.
 
+use ppm_core::platform::is_wsl_owner;
 use ppm_core::protocol::Snapshot;
 
 /// The command prefix for a distro. `wsl.exe` runs directly, never through
@@ -50,17 +51,21 @@ fn parse_list(stdout: &[u8]) -> Vec<String> {
         .collect()
 }
 
-/// Removes the servers from a Windows snapshot that a WSL distro also
-/// reports, so each shows once, under its distro with its Linux process tree.
+/// Removes the servers from a Windows snapshot that WSL relays for a distro,
+/// so each shows once, under its distro with its Linux process tree.
 ///
-/// Matches by port. On Windows the listener is `wslrelay.exe` (NAT
-/// networking) or, with mirrored networking, possibly a `svchost` that no name
-/// check can tell apart, so the port is what ties the two together.
+/// A Windows server goes when a distro reports its port and its owner is a
+/// WSL process, or `svchost`, which can own the port in mirrored networking.
+/// A Windows program that shares a port with a distro stays.
 pub fn dedupe(windows: &mut Snapshot, distros: &[&Snapshot]) {
     windows.servers.retain(|server| {
-        !distros
-            .iter()
-            .any(|d| d.servers.iter().any(|s| s.port == server.port))
+        let name = server.process_name.to_ascii_lowercase();
+        let relayed =
+            is_wsl_owner(&name) || name.strip_suffix(".exe").unwrap_or(&name) == "svchost";
+        !relayed
+            || !distros
+                .iter()
+                .any(|d| d.servers.iter().any(|s| s.port == server.port))
     });
 }
 
@@ -86,10 +91,28 @@ mod tests {
     }
 
     #[test]
-    fn a_port_a_distro_serves_shows_only_under_the_distro() {
+    fn a_relayed_port_shows_only_under_its_distro() {
+        // Windows sees Ubuntu's :3000 through wslrelay.exe and :5173 through
+        // svchost (mirrored networking). Its own node.exe on :3001 shares a
+        // port with Ubuntu, and :6006 is relayed for no connected distro.
         let mut windows = fixture();
+        for (port, owner) in [
+            (3000, "wslrelay.exe"),
+            (3001, "node.exe"),
+            (5173, "svchost.exe"),
+            (6006, "wslrelay.exe"),
+        ] {
+            windows
+                .servers
+                .iter_mut()
+                .find(|s| s.port == port)
+                .unwrap()
+                .process_name = owner.into();
+        }
         let mut ubuntu = fixture();
-        ubuntu.servers.retain(|s| s.port == 3000);
+        ubuntu
+            .servers
+            .retain(|s| [3000, 3001, 5173].contains(&s.port));
         let empty = Snapshot {
             servers: Vec::new(),
             ..fixture()
@@ -97,6 +120,6 @@ mod tests {
 
         dedupe(&mut windows, &[&empty, &ubuntu]);
         let left: Vec<u16> = windows.servers.iter().map(|s| s.port).collect();
-        assert_eq!(left, [3001, 5173, 6006, 8000]);
+        assert_eq!(left, [3001, 6006, 8000]);
     }
 }
