@@ -1,6 +1,6 @@
 import type { Alert, Server } from "@ppm/protocol";
 import { total } from "../format.ts";
-import { DotGrid } from "../icons.tsx";
+import { Socket } from "../icons.tsx";
 import { DEFAULT_ALERT_MEMORY, growth, historySpan, reasonText } from "../model.ts";
 import { type ThemeProps, Themed } from "../theme.tsx";
 
@@ -55,7 +55,7 @@ export function NotificationCard({ server, alert, alertMemory, onDetails, onStop
       >
         <div className="ppm:flex ppm:items-start ppm:gap-2.5">
           <span className="ppm:flex ppm:size-[34px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[9px] ppm:bg-[#15171D] ppm:text-white ppm:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
-            <DotGrid size={24} />
+            <Socket size={24} state="running" />
           </span>
           <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px">
             <div className="ppm:flex ppm:items-baseline ppm:justify-between ppm:gap-2">

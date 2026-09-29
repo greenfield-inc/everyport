@@ -14,7 +14,7 @@ mod windows;
 
 use std::sync::Mutex;
 
-use tauri::{AppHandle, LogicalSize, WebviewWindow};
+use tauri::{AppHandle, LogicalSize, Manager, WebviewWindow};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -39,6 +39,11 @@ pub fn run() {
             settings::setup(handle);
             machines::start(handle);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::ThemeChanged(theme) = event {
+                tray::set_theme(window.app_handle(), *theme);
+            }
         })
         .invoke_handler(tauri::generate_handler![
             fit_window,

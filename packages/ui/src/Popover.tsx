@@ -1,6 +1,7 @@
 import type { Machine, PpmClient, Server, Snapshot } from "@ppm/protocol";
 import { type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Header } from "./components.tsx";
+import { Socket } from "./icons.tsx";
 import { confirmOf, useViewContext, type ViewContext } from "./context.ts";
 import { preselected } from "./model.ts";
 import { type ThemeProps, Themed } from "./theme.tsx";
@@ -52,7 +53,7 @@ export function Popover({ client, alertMemory, initialServer, onReady, theme, ap
         ) : (
           <div className="ppm:flex ppm:flex-col">
             <div className="ppm:px-4 ppm:pt-3 ppm:pb-4">
-              <Header title="Servers" />
+              <Header title="Servers" mark={<Socket size={14} />} />
             </div>
             <div className="ppm:hairline-t">{machine ? <MachineStatus machine={machine} client={client} /> : null}</div>
           </div>

@@ -211,7 +211,7 @@ describe("protected servers", () => {
 describe("styles", () => {
   // Tailwind utilities only apply with the ppm: prefix. The rest are the
   // package's own classes from styles.css.
-  const OWN = new Set(["ppm-root", "ppm-panel", "ppm-view", "ppm-grow", "ppm-scroll", "ppm-spin", "selectable"]);
+  const OWN = new Set(["ppm-root", "ppm-panel", "ppm-view", "ppm-grow", "ppm-scroll", "ppm-spin", "ppm-socket", "ppm-socket-slot", "selectable"]);
   const unstyled = () =>
     [...document.querySelectorAll("[class]")].flatMap((element) =>
       [...element.classList].filter((name) => !name.startsWith("ppm:") && !OWN.has(name)),

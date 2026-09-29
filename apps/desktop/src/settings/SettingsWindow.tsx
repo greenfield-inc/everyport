@@ -1,4 +1,4 @@
-import { DotGrid, Themed } from "@ppm/ui";
+import { Socket, Themed } from "@ppm/ui";
 import { useEffect, useState } from "react";
 import { CleanUpPane } from "./CleanUpPane";
 import { GeneralPane } from "./GeneralPane";
@@ -36,7 +36,7 @@ export function SettingsWindow() {
             aria-current={title === pane ? "page" : undefined}
             onClick={() => setPane(title)}
           >
-            <DotGrid size={14} />
+            <Socket size={14} />
             {title}
           </button>
         ))}

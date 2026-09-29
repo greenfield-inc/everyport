@@ -48,7 +48,7 @@ Use the theme's `font-sans` for text. Doozy's app font is Sora. Numbers use the 
 
 ## What's ours
 
-Motion (intent brief, item 13), the app icon, and the tray icon colors (the dot grid stays; the attention color is the theme's amber). Don't reuse the WhatThePort name, the colon logo, or the tomjohn.design sample data.
+Motion (intent brief, item 13), the app icon, and the tray icon colors (the socket mark from [brand/](../brand/README.md); the attention color is the theme's amber). Don't reuse the WhatThePort name, the colon logo, or the tomjohn.design sample data.
 
 ## Verifying a view
 

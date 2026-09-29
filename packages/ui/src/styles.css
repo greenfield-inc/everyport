@@ -250,6 +250,43 @@ html[data-vibrancy] .ppm-root[data-appearance="dark"] {
   animation: ppm-spin 900ms linear infinite;
 }
 
+/* The socket mark (brand/README.md): plug in, breathe on attention, unplug, seat on hover. */
+.ppm-socket {
+  transition: transform 160ms ease-out;
+}
+
+.ppm-socket:hover {
+  transform: translateY(-1px);
+}
+
+/* Changing to idle fades the lit slot out: the unplug. */
+.ppm-socket-slot {
+  fill: color-mix(in oklab, currentColor 35%, transparent);
+  transition: fill 400ms ease-in;
+}
+
+.ppm-socket[data-state="running"] .ppm-socket-slot {
+  fill: light-dark(#2f9a5d, #7fd89d);
+  animation: ppm-plug-in 400ms ease-out;
+}
+
+.ppm-socket[data-state="attention"] .ppm-socket-slot {
+  fill: var(--ppm-warn);
+  animation: ppm-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes ppm-plug-in {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+}
+
+@keyframes ppm-breathe {
+  50% {
+    fill-opacity: 0.6;
+  }
+}
+
 html[data-hidden] .ppm-root *,
 html[data-hidden] .ppm-root {
   animation-play-state: paused;
