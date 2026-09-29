@@ -90,6 +90,11 @@ export const agentName = { claude_code: "Claude Code", codex: "Codex" } as const
 /** "claude --resume <id>" shows as "claude --resume". */
 export const commandHint = (command: string) => command.split(/\s+/).slice(0, 2).join(" ");
 
+/** A stop or restart that asks first when the server is protected. */
+export type Action = "stop" | "force stop" | "restart";
+
+export const actionLabel: Record<Action, string> = { stop: "Stop", "force stop": "Force stop", restart: "Restart" };
+
 /** "postgres :5432 and redis-server :6379 are protected" */
 export function protectedNote(servers: Server[]): string | null {
   if (!servers.length) return null;

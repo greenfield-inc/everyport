@@ -42,6 +42,19 @@ const VIEWS = [
     query: "",
     steps: (page) => page.getByRole("button", { name: /Other ports/ }).click(),
   },
+  {
+    name: "07-protected-stop",
+    query: "scenario=protected",
+    steps: async (page) => {
+      await page.locator('[data-port="5432"]').hover();
+      await page.locator('[data-port="5432"] button[aria-label="Stop, protected"]').click();
+    },
+  },
+  {
+    name: "08-protected-detail",
+    query: "scenario=protected&port=5432",
+    steps: (page) => page.getByRole("button", { name: "Stop, protected" }).click(),
+  },
 ];
 
 const server = await createServer({ configFile: `${root}vite.config.ts`, server: { port: 0 }, logLevel: "error" });

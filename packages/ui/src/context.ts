@@ -1,9 +1,12 @@
 import type { Machine, PpmClient, Server, Snapshot } from "@ppm/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_ALERT_MEMORY } from "./model.ts";
+import { type Action, DEFAULT_ALERT_MEMORY } from "./model.ts";
 
-/** A request in flight for a port, or the error it came back with. */
-export type Pending = "stopping" | "restarting" | { error: string };
+/**
+ * A request in flight for a port, the error it came back with, or a stop or
+ * restart of a protected server waiting for the user to confirm it.
+ */
+export type Pending = "stopping" | "restarting" | { error: string } | { confirm: Action };
 
 /** Everything a view needs about one machine, and the actions on its servers. */
 export type ViewContext = {
@@ -17,8 +20,14 @@ export type ViewContext = {
   colorOf: (port: number) => string;
   pending: ReadonlyMap<number, Pending>;
   open: (server: Server) => void;
-  stop: (server: Server, force?: boolean) => void;
-  restart: (server: Server) => void;
+  /**
+   * Stop and restart ask first for a protected server; asking again, or
+   * `confirm`, goes ahead. They return false while waiting for that answer.
+   */
+  stop: (server: Server, force?: boolean) => boolean;
+  restart: (server: Server) => boolean;
+  confirm: (server: Server) => void;
+  cancel: (server: Server) => void;
   /** Runs a host action for a server, such as revealing its folder, and shows its error on the server. */
   act: (server: Server, action: () => Promise<void> | void) => void;
 };
@@ -81,8 +90,29 @@ export function useViewContext(client: PpmClient, machine: Machine & { snapshot:
     [settle],
   );
 
-  return useMemo(
-    () => ({
+  return useMemo(() => {
+    const confirming = (server: Server) => confirmOf(pending.get(server.port));
+    /** Holds a protected server's action until confirmed; true when it may go ahead. */
+    const allowed = (server: Server, action: Action, confirmed: boolean) => {
+      if (!server.protected || confirmed || confirming(server) === action) return true;
+      settle(server.port, { confirm: action });
+      return false;
+    };
+    const stop = (server: Server, force = false, confirmed = false) => {
+      if (!allowed(server, force ? "force stop" : "stop", confirmed)) return false;
+      settle(server.port, "stopping");
+      const params = { port: server.port, root: server.root, force, confirm_protected: server.protected };
+      client.call(machineId, { method: "stop", params }).catch(fail(server.port));
+      return true;
+    };
+    const restart = (server: Server, confirmed = false) => {
+      if (!allowed(server, "restart", confirmed)) return false;
+      settle(server.port, "restarting");
+      const params = { port: server.port, root: server.root, confirm_protected: server.protected };
+      client.call(machineId, { method: "restart", params }).then(() => settle(server.port, null), fail(server.port));
+      return true;
+    };
+    return {
       client,
       machineId,
       snapshot,
@@ -94,19 +124,24 @@ export function useViewContext(client: PpmClient, machine: Machine & { snapshot:
       act: (server, action) => {
         new Promise<void>((resolve) => resolve(action())).catch(fail(server.port));
       },
-      stop: (server, force = false) => {
-        settle(server.port, "stopping");
-        client.call(machineId, { method: "stop", params: { port: server.port, root: server.root, force } }).catch(fail(server.port));
+      stop: (server, force) => stop(server, force),
+      restart: (server) => restart(server),
+      confirm: (server) => {
+        const action = confirming(server);
+        if (action === "restart") restart(server, true);
+        else if (action) stop(server, action === "force stop", true);
       },
-      restart: (server) => {
-        settle(server.port, "restarting");
-        client
-          .call(machineId, { method: "restart", params: { port: server.port, root: server.root } })
-          .then(() => settle(server.port, null), fail(server.port));
+      cancel: (server) => {
+        if (confirming(server)) settle(server.port, null);
       },
-    }),
-    [client, machineId, snapshot, alertMemory, colorOf, pending, settle, fail],
-  );
+    };
+  }, [client, machineId, snapshot, alertMemory, colorOf, pending, settle, fail]);
 }
+
+/** The action a pending confirm is for, if any. */
+export const confirmOf = (pending: Pending | undefined) => (typeof pending === "object" && "confirm" in pending ? pending.confirm : null);
+
+/** The error a request came back with, if any. */
+export const errorOf = (pending: Pending | undefined) => (typeof pending === "object" && "error" in pending ? pending.error : null);
 
 export const copy = (text: string) => void navigator.clipboard?.writeText(text);

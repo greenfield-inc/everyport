@@ -1,7 +1,7 @@
 import type { Machine, PpmClient, Server, Snapshot } from "@ppm/protocol";
 import { type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Header } from "./components.tsx";
-import { useViewContext, type ViewContext } from "./context.ts";
+import { confirmOf, useViewContext, type ViewContext } from "./context.ts";
 import { preselected } from "./model.ts";
 import { type ThemeProps, Themed } from "./theme.tsx";
 import { CleanUp, cleanUpCandidates } from "./views/CleanUp.tsx";
@@ -177,8 +177,7 @@ function keyHandler({
         ctx.open(target);
       } else if (key === "backspace") {
         handled();
-        ctx.stop(target);
-        if (route.view === "detail") back();
+        if (ctx.stop(target) && route.view === "detail") back();
       } else if (key === "r") {
         handled();
         ctx.restart(target);
@@ -186,7 +185,10 @@ function keyHandler({
       return;
     }
 
-    if (route.view !== "list" && (event.key === "Escape" || event.key === "ArrowLeft")) {
+    if (event.key === "Escape" && target && confirmOf(ctx.pending.get(target.port))) {
+      handled();
+      ctx.cancel(target);
+    } else if (route.view !== "list" && (event.key === "Escape" || event.key === "ArrowLeft")) {
       handled();
       back();
     } else if (route.view !== "detail" && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
