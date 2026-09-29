@@ -19,7 +19,7 @@ use ppm_client::{Client, Connection, Update};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::{notify, popover, settings, tray};
+use crate::{notify, popover, settings, tray, updates};
 
 pub const LOCAL: &str = "local";
 const SNOOZE: Duration = Duration::from_secs(3600);
@@ -112,6 +112,8 @@ pub struct Machines {
     snoozed: HashMap<(String, u16), Instant>,
     /// `machines.toml`'s modification time when the list was last read.
     read_at: Option<SystemTime>,
+    /// What the popover's page has, so updates carry only what changed.
+    sent: updates::Sent,
 }
 
 fn machines(app: &AppHandle) -> std::sync::MutexGuard<'_, Machines> {
@@ -139,6 +141,7 @@ pub fn start(app: &AppHandle) {
         entries: vec![Entry::new(LOCAL, "This computer", None, None)],
         snoozed: HashMap::new(),
         read_at: None,
+        sent: updates::Sent::default(),
     }));
     let run = begin(app, LOCAL).expect("this computer is always listed");
     connect(app, LOCAL, run, Connection::Sidecar { path });
@@ -653,12 +656,18 @@ pub fn publish(app: &AppHandle) {
     if !(settings || popover) {
         return;
     }
-    let list = list(app);
     if popover {
-        let _ = app.emit_to(popover::LABEL, "machines", &list);
+        // Emitted under the lock, so the page gets updates in the order they're made.
+        let mut all = machines(app);
+        let Machines { entries, sent, .. } = &mut *all;
+        let update = sent.update(entries.iter().map(|e| &e.machine));
+        match app.emit_to(popover::LABEL, "machines", &update.payload) {
+            Ok(()) => sent.delivered(update),
+            Err(error) => eprintln!("machines update: {error}"),
+        }
     }
     if settings {
-        let _ = app.emit_to(settings::LABEL, "machines", &list);
+        let _ = app.emit_to(settings::LABEL, "machines", &list(app));
     }
 }
 
@@ -815,6 +824,15 @@ pub fn pick(app: &AppHandle, machine_id: &str) -> Result<(), String> {
 #[tauri::command]
 pub fn machines_list(app: AppHandle) -> Vec<Machine> {
     list(&app)
+}
+
+/// Every machine in full, for the popover to start over from. Its next
+/// update then sends every server in full too.
+#[tauri::command]
+pub fn machines_sync(app: AppHandle) -> updates::Base {
+    let mut all = machines(&app);
+    let list = all.entries.iter().map(|e| e.machine.clone()).collect();
+    all.sent.base(list)
 }
 
 #[tauri::command]

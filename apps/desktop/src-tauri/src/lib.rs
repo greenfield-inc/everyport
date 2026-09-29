@@ -8,6 +8,7 @@ mod placement;
 mod popover;
 mod settings;
 mod tray;
+mod updates;
 #[cfg(windows)]
 mod windows;
 
@@ -46,6 +47,7 @@ pub fn run() {
             popover::hide_popover,
             popover::has_vibrancy,
             machines::machines_list,
+            machines::machines_sync,
             machines::call_machine,
             machines::connect_machine,
             machines::install_ppm,

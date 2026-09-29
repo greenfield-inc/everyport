@@ -9,7 +9,9 @@
     "build": "tauri build",
     "build:web": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test": "vitest run",
+    "bench": "node perf/bench.mjs"
   },
   "dependencies": {
     "@ppm/protocol": "workspace:*",
@@ -25,8 +27,10 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "playwright-core": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
-    "vite": "^8.0.16"
+    "vite": "^8.0.16",
+    "vitest": "^5.0.2"
   }
 }
