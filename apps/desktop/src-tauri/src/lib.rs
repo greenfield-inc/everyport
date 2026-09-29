@@ -8,6 +8,7 @@ mod placement;
 mod popover;
 mod settings;
 mod tray;
+mod updates;
 #[cfg(windows)]
 mod windows;
 

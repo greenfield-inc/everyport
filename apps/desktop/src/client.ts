@@ -1,27 +1,33 @@
 import type { AgentSession, Call, Machine, PpmClient } from "@ppm/protocol";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { merge } from "./updates";
 
 /**
  * PpmClient over the app's Rust side, which runs `ppm stdio` through the
- * sidecar and sends every machine's state as a `machines` event.
+ * sidecar and sends every machine's state as `machines` updates.
  */
 export class TauriPpmClient implements PpmClient {
   #machines: Machine[] = [];
   #listeners = new Set<(machines: Machine[]) => void>();
-  #live = false;
+  #resyncing = false;
 
   constructor() {
-    void listen<Machine[]>("machines", (event) => {
-      this.#live = true;
-      this.#set(event.payload);
-    });
-    void invoke<Machine[]>("machines_list").then((machines) => {
-      if (!this.#live) this.#set(machines);
-    });
+    void listen<Machine[]>("machines", (event) => this.#apply(event.payload));
+    this.#resync();
   }
 
-  #set(machines: Machine[]) {
+  /** Gets every machine in full, after which updates.rs sends every server in full once. */
+  #resync() {
+    if (this.#resyncing) return;
+    this.#resyncing = true;
+    void invoke<Machine[]>("machines_list")
+      .then((machines) => this.#apply(machines))
+      .finally(() => (this.#resyncing = false));
+  }
+
+  #apply(update: Machine[]) {
+    const machines = merge(this.#machines, update, () => this.#resync());
     this.#machines = machines;
     for (const listener of this.#listeners) listener(machines);
   }
