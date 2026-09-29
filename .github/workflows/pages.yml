@@ -1,14 +1,7 @@
 name: Pages
+# Off: the site moved to Vercel (site/README.md). GitHub Pages keeps serving its
+# last build until everyport.dev points at Vercel, then this file is removed.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - "packages/ui/**"
-      - "packages/protocol/**"
-      - "pnpm-lock.yaml"
-      - "scripts/install-app.*"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 concurrency:
   group: pages
