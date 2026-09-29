@@ -33,7 +33,7 @@
 <pre><code>irm https://everyport.dev/install.ps1 | iex</code></pre>
 
 <sub>Other ways</sub><br />
-<a href="https://github.com/greenfield-inc/everyport/releases/latest">Download from Releases</a> · <code>brew install --cask greenfield-inc/tap/everyport</code> · <code>winget install Dcouple.Everyport</code>
+<a href="https://github.com/greenfield-inc/everyport/releases/latest">Download from Releases</a> · <code>brew install --cask greenfield-inc/tap/everyport</code>
 
 <sub>CLI only: servers, VMs, containers</sub><br />
 <pre><code>curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh | sh</code></pre>
@@ -131,7 +131,7 @@ Or install it another way:
 | Platform | Install |
 |---|---|
 | macOS 13+ | `brew install --cask greenfield-inc/tap/everyport`, or the `.dmg` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) |
-| Windows 10/11 | `winget install Dcouple.Everyport`, or the `.msi` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) |
+| Windows 10/11 | The `.msi` or `-setup.exe` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) |
 | Linux (x86_64) | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) |
 
 macOS builds are signed and notarized. Windows builds are not signed yet, so SmartScreen asks you to confirm when you install the .msi by hand; the one-command install doesn't trigger it.
@@ -147,9 +147,7 @@ Use the CLI on servers, VMs and containers, or if you prefer the terminal. It's 
 ```bash
 curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh | sh
 brew install greenfield-inc/tap/everyport
-npx everyport          # or: npm i -g everyport
-uvx everyport          # or: pipx install everyport
-cargo install everyport
+npx everyport          # or: npm i -g everyport; npm has 0.1.0 for now
 ```
 
 On Windows, use PowerShell instead of the install script:
@@ -158,7 +156,7 @@ On Windows, use PowerShell instead of the install script:
 irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
 ```
 
-The install scripts and the npm and PyPI packages download the release binary for your platform and check its SHA-256 checksum. `cargo install` builds it from source.
+The install scripts and the npm package download the release binary for your platform and check its SHA-256 checksum. The PyPI (`uvx`, `pipx`) and crates.io (`cargo install`) packages are placeholders until a release publishes there.
 
 ## Quick start
 
@@ -284,12 +282,14 @@ See [AGENTS.md](AGENTS.md) for the repo layout and checks.
 ## Documentation
 
 - [Website](https://everyport.dev): try the popover and the terminal UI in your browser
+- [Docs](https://everyport.dev/docs): the pages below, with search
 - [Getting started](docs/getting-started.md)
 - [Remote machines](docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, `everyport serve` and Tailscale
 - [Settings and clean up](docs/settings.md)
 - [CLI reference](docs/cli.md)
-- [Troubleshooting](docs/troubleshooting.md): `everyport doctor`, the Linux tray and blank windows
+- [Troubleshooting](docs/troubleshooting.md): `everyport doctor`, Windows installs and SmartScreen, the Linux tray and blank windows
 - [The Everyport protocol](docs/protocol.md)
+- [FAQ](docs/faq.md)
 
 For coding agents, [llms.txt](llms.txt) links every page.
 

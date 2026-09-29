@@ -4,27 +4,34 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "predev": "node scripts/docs.mjs",
+    "dev": "next dev --port 5198",
+    "prebuild": "node scripts/docs.mjs",
+    "build": "next build",
+    "postbuild": "pagefind --site .next/server/app --output-path public/_pagefind",
+    "start": "next start --port 5198",
+    "pretypecheck": "node scripts/docs.mjs",
     "typecheck": "tsc --noEmit",
     "og": "node scripts/og.mjs"
   },
   "dependencies": {
     "@everyport/protocol": "workspace:*",
     "@everyport/ui": "workspace:*",
+    "next": "16.1.6",
+    "nextra": "^4.6.1",
+    "nextra-theme-docs": "^4.6.1",
+    "pagefind": "^1.4.0",
     "react": "^19.1.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
-    "@tailwindcss/vite": "^4.3.3",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/mdx": "^2.0.14",
     "@types/node": "^26.6.3",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6.1.1",
     "playwright-core": "^1.63.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "~6.0.3",
-    "vite": "^8.3.1"
+    "typescript": "~6.0.3"
   }
 }

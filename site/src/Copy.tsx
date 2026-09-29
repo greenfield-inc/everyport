@@ -1,22 +1,23 @@
 import type { Os } from "@everyport/protocol";
 import { useEffect, useRef, useState } from "react";
 import { usePill } from "./pill.ts";
-import { OS_NAMES, RELEASES, REPO, type SectionId } from "./sections.ts";
+import { OS_NAMES, type SectionId } from "./sections.ts";
+import { RELEASES, REPO, SITE_URL, VERSION } from "./site.ts";
 
-const RAW = "https://github.com/greenfield-inc/everyport/releases/latest/download";
+const RAW = `${RELEASES}/download`;
 
 /** The one-line app install, served from the site root. */
 const APP_COMMAND: Record<Os, string> = {
-  macos: `curl -fsSL ${__SITE_URL__}install.sh | sh`,
-  windows: `irm ${__SITE_URL__}install.ps1 | iex`,
-  linux: `curl -fsSL ${__SITE_URL__}install.sh | sh`,
+  macos: `curl -fsSL ${SITE_URL}install.sh | sh`,
+  windows: `irm ${SITE_URL}install.ps1 | iex`,
+  linux: `curl -fsSL ${SITE_URL}install.sh | sh`,
 };
 
 /** CLI-only installs from the README. */
 const CLI_COMMANDS: Record<Os, string[]> = {
   macos: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/everyport"],
-  windows: [`irm ${RAW}/install.ps1 | iex`, "npx everyport"],
-  linux: [`curl -fsSL ${RAW}/install.sh | sh`, "npx everyport"],
+  windows: [`irm ${RAW}/install.ps1 | iex`],
+  linux: [`curl -fsSL ${RAW}/install.sh | sh`],
 };
 
 type Download = { id: string; os: Os; label: string; detail: string; arch: "aarch64" | "x86_64"; ext: string };
@@ -31,7 +32,7 @@ const DOWNLOADS: Download[] = [
   { id: "rpm", os: "linux", label: "Linux", detail: ".rpm", arch: "x86_64", ext: "rpm" },
 ];
 
-const href = ({ arch, ext }: Download) => `${RAW}/everyport-${__EVERYPORT_VERSION__}-${arch}.${ext}`;
+const href = ({ arch, ext }: Download) => `${RAW}/everyport-${VERSION}-${arch}.${ext}`;
 
 /**
  * Apple Silicon unless the browser says Intel. Chromium tells through
@@ -120,7 +121,7 @@ function Install({ os, onOs }: { os: Os; onOs: (os: Os) => void }) {
         <a href={RELEASES}>All releases</a>
       </p>
       <p className="install-label">
-        CLI only · also npm, PyPI and cargo, <a href={`${REPO}#cli-only`}>see all</a>
+        CLI only · also npm, <a href={`${REPO}#cli-only`}>see all</a>
       </p>
       {CLI_COMMANDS[os].map((text) => (
         <Command key={text} text={text} />
