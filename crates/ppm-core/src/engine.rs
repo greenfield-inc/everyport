@@ -101,10 +101,7 @@ impl Engine {
             let Some(listener) = table.get(pid).filter(|_| pid != own_pid) else {
                 continue;
             };
-            let root = table.root(listener, |p| {
-                let details = self.details(p);
-                tree::is_agent(p, details.as_deref())
-            });
+            let root = self.climb(&table, listener);
             let connections = connections
                 .as_ref()
                 .map(|counts| counts.get(&port).copied().unwrap_or(0));
@@ -303,7 +300,9 @@ impl Engine {
             last_active: now,
         });
         // Unknown connections could hide a server in use, so it stays active.
-        if cpu_percent >= ACTIVE_CPU_PERCENT || seen.connections != Some(0) {
+        // Activity counts the whole tree, even processes a lower port counts.
+        let busy = processes.iter().map(|p| p.cpu_percent).sum::<f32>() >= ACTIVE_CPU_PERCENT;
+        if busy || seen.connections != Some(0) {
             tracked.last_active = now;
         }
         match tracked.history.last_mut() {
@@ -324,7 +323,7 @@ impl Engine {
         let history = tracked.history.clone();
         let last_active = tracked.last_active;
 
-        let launcher = self.launcher(&members);
+        let launcher = self.launcher(table, listener, root);
         let launch_dir = self.details(launcher).and_then(|d| d.cwd.clone());
         let command = root_details.map(|d| command::pretty(&d.args, &root.name));
         let (workspace, agent) = self.links(table, listener, root, cwd.as_deref());
@@ -379,14 +378,41 @@ impl Engine {
         of(self.details(listener)).or_else(|| of(self.details(root)))
     }
 
-    /// Restart runs from the highest process whose argv wasn't overwritten by
-    /// a title, such as the `sh -c "next dev -p 3000"` that npm spawns.
-    fn launcher<'a>(&mut self, members: &[(&'a ProcInfo, u32)]) -> &'a ProcInfo {
-        let intact = members.iter().find(|(p, _)| {
+    /// The command the user ran to start `listener`. See `Table::root`.
+    fn climb<'a>(&mut self, table: &'a Table, listener: &'a ProcInfo) -> &'a ProcInfo {
+        table.root(listener, |p| {
+            let details = self.details(p);
+            tree::is_agent(p, details.as_deref())
+        })
+    }
+
+    /// Restart runs the highest process between the listener and the
+    /// command the user ran whose argv wasn't overwritten by a title, such as
+    /// the `sh -c "next dev -p 3000"` that npm spawns. For a server whose
+    /// `root` is its listener because it shares that command, the search
+    /// stops below the command, so a restart reruns this server only.
+    fn launcher<'a>(
+        &mut self,
+        table: &'a Table,
+        listener: &'a ProcInfo,
+        root: &'a ProcInfo,
+    ) -> &'a ProcInfo {
+        let top = self.climb(table, listener);
+        let mut path = vec![listener];
+        while let Some(parent) = table.parent(path[path.len() - 1]) {
+            if path[path.len() - 1].proc == top.proc
+                || (parent.proc == top.proc && top.proc != root.proc)
+            {
+                break;
+            }
+            path.push(parent);
+        }
+        let highest = path[path.len() - 1];
+        let intact = path.into_iter().rev().find(|p| {
             self.details(p)
                 .is_some_and(|d| command::has_intact_args(&d.args))
         });
-        intact.unwrap_or(&members[0]).0
+        intact.unwrap_or(highest)
     }
 
     /// Memory and CPU for one process. CPU is the CPU time used since the

@@ -338,6 +338,33 @@ fn a_process_on_several_ports_counts_its_memory_once() {
     assert_eq!(snapshot.system.memory_other_apps, (10 * 1024 - 13) * MB);
 }
 
+/// The process's CPU counts on :17721, but it keeps :17740 active too, so
+/// Clean up never calls a busy process idle.
+#[test]
+fn a_busy_process_keeps_all_its_ports_active() {
+    let fake = Fake::new();
+    fake.run(10, 1, "ssh", &["ssh.sock [mux]"], project_dir(), HOUR);
+    fake.listen(17721, 10, "127.0.0.1");
+    fake.listen(17740, 10, "127.0.0.1");
+    let mut engine = fake.engine();
+    engine.scan();
+
+    fake.advance(5 * HOUR);
+    engine.scan();
+    // 1 s of CPU over the next 2 s.
+    fake.advance(2000);
+    fake.set_usage(10, 0, 1_000_000_000);
+    let (snapshot, _) = engine.scan();
+
+    let rows: Vec<(u16, f32, u64)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.cpu_percent, s.last_active))
+        .collect();
+    let now = T0 + 5 * HOUR + 2000;
+    assert_eq!(rows, [(17721, 50.0, now), (17740, 0.0, now)]);
+}
+
 #[test]
 fn other_users_ports_show_once_each_with_owner_and_process_name() {
     let fake = Fake::new();
@@ -1088,6 +1115,47 @@ fn restart_reruns_the_launch_command_with_its_environment() {
     }
     std::thread::sleep(std::time::Duration::from_millis(100));
     assert_eq!(std::fs::read_to_string(&output).unwrap(), "hello");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// `npm run dev` runs Next.js and Redis. Restarting :3000 reruns only
+/// `sh -c "next dev"`, never Turbopack's worker or the shared `npm run dev`.
+#[test]
+fn restart_of_a_server_sharing_its_launcher_reruns_only_that_server() {
+    let dir = std::env::temp_dir().join(format!("ppm-restart-shared-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let dir_str = dir.to_str().unwrap();
+    let fake = Fake::new();
+    fake.run(200, 1, "node", &["npm run dev"], dir_str, HOUR);
+    let script = "printf next > restarted.txt";
+    fake.run(210, 200, "sh", &["sh", "-c", script], dir_str, HOUR);
+    fake.run(220, 210, "node", &["next-server (v15.1.0)"], dir_str, HOUR);
+    let turbopack = ["/usr/local/bin/node", "/app/node_modules/.bin/turbopack"];
+    fake.run(230, 220, "node", &turbopack, dir_str, HOUR);
+    fake.run(240, 200, "redis-server", &["redis-server"], dir_str, HOUR);
+    fake.listen(3000, 220, "127.0.0.1");
+    fake.listen(6379, 240, "127.0.0.1");
+
+    let mut engine = fake.engine();
+    let (snapshot, _) = engine.scan();
+    assert_eq!(snapshot.servers[0].root, fake.proc_ref(220));
+    let restart = Call::Restart {
+        port: 3000,
+        root: fake.proc_ref(220),
+        confirm_protected: false,
+    };
+    assert_eq!(engine.call(&restart), Ok(()));
+    engine.scan();
+    assert!(!engine.pending());
+
+    assert_eq!(fake.world().signals, [(230, false), (220, false)]);
+    let output = dir.join("restarted.txt");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !output.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    assert_eq!(std::fs::read_to_string(&output).unwrap(), "next");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

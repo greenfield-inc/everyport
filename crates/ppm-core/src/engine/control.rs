@@ -62,23 +62,23 @@ impl Engine {
     ) -> Result<(), String> {
         let table = self.table()?;
         let root_info = table.live(root).ok_or_else(|| gone(root))?;
-        let members = table.tree(root_info);
-        let launcher = self.launcher(&members);
-        let details = self.details(launcher);
-        let command = details
-            .as_ref()
-            .and_then(|d| command::shell_command(&d.args))
-            .ok_or_else(|| format!("can't read the command that started :{port}"))?;
         let listener = self
             .platform
             .listeners()
             .unwrap_or_default()
             .into_iter()
             .find(|l| l.port == port)
-            .and_then(|l| table.get(l.pid));
+            .and_then(|l| table.get(l.pid))
+            .unwrap_or(root_info);
+        let launcher = self.launcher(&table, listener, root_info);
+        let details = self.details(launcher);
+        let command = details
+            .as_ref()
+            .and_then(|d| command::shell_command(&d.args))
+            .ok_or_else(|| format!("can't read the command that started :{port}"))?;
         let dir = details
             .and_then(|d| d.cwd.clone())
-            .or_else(|| self.cwd(listener.unwrap_or(root_info), root_info))
+            .or_else(|| self.cwd(listener, root_info))
             .filter(|dir| Path::new(dir).is_dir())
             .ok_or_else(|| format!("the folder :{port} started from is gone"))?;
         let environment = self
