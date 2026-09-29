@@ -7,3 +7,4 @@ target.noindex/
 .env*
 !.env.example
 apps/desktop/src-tauri/gen/
+worktrees/
