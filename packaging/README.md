@@ -10,6 +10,7 @@ Files that package and publish `ppm` and the desktop app.
 | `homebrew/port-process-manager.rb` | Cask for the same tap |
 | `winget/` | winget manifests for `Greenfield.PortProcessManager` |
 | `../scripts/install.sh`, `../scripts/install.ps1` | CLI install scripts, attached to each release |
+| `../scripts/install-app.sh`, `../scripts/install-app.ps1` | Desktop app and CLI install scripts, attached to each release and served by the site as `/install.sh` and `/install.ps1` |
 
 The Homebrew and winget files are templates. `scripts/dist.sh` fills in `@VERSION@` and each `@SHA256:<release file>@` from the release's `SHA256SUMS`, and packs that `SHA256SUMS` into the npm and PyPI packages.
 
@@ -22,7 +23,8 @@ The version lives only in `Cargo.toml` (`workspace.package`). The desktop app re
 | `ppm-<target>` (`.exe` on Windows) | `cargo build` or `cargo zigbuild` for `x86_64` and `aarch64` on `apple-darwin`, `unknown-linux-musl` and `pc-windows-msvc` |
 | `port-process-manager-<version>-<arch>.dmg` | Tauri, `aarch64` and `x86_64` |
 | `port-process-manager-<version>-x86_64.{msi,deb,rpm,AppImage}` | Tauri |
-| `install.sh`, `install.ps1` | `scripts/` |
+| `port-process-manager-<version>-x86_64-setup.exe` | Tauri's NSIS installer, per user. `install-app.ps1` uses it because the `.msi` installs per machine and needs admin. |
+| `install.sh`, `install.ps1`, `install-app.sh`, `install-app.ps1` | `scripts/` |
 | `SHA256SUMS` | every file above |
 
 ## Workflows
