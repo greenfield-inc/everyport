@@ -20,6 +20,8 @@ use tree::Table;
 
 /// How far back `Server.history` reaches.
 const HISTORY_MS: u64 = 10 * 60 * 1000;
+/// One history sample per 10 s: the latest memory and the peak CPU.
+const SAMPLE_MS: u64 = 10 * 1000;
 /// Leak growth counts only once history spans this long.
 const LEAK_MIN_SPAN_MS: u64 = 2 * 60 * 1000;
 /// A server with no connections and less CPU than this is idle.
@@ -160,7 +162,7 @@ impl Engine {
         let in_app = [&listener_details, &root_details].into_iter().any(|d| {
             d.as_ref()
                 .and_then(|d| d.args.first())
-                .is_some_and(|exe| exe.contains(".app/Contents/"))
+                .is_some_and(|exe| is_app_helper(exe))
         });
         let cwd = self.cwd(listener, root);
         if in_app || cwd.as_deref() == Some("/") {
@@ -195,11 +197,18 @@ impl Engine {
         if cpu_percent >= ACTIVE_CPU_PERCENT || seen.connections > 0 {
             tracked.last_active = now;
         }
-        tracked.history.push(Sample {
-            at: now,
-            memory,
-            cpu_percent,
-        });
+        match tracked.history.last_mut() {
+            Some(last) if last.at / SAMPLE_MS == now / SAMPLE_MS => {
+                last.at = now;
+                last.memory = memory;
+                last.cpu_percent = last.cpu_percent.max(cpu_percent);
+            }
+            _ => tracked.history.push(Sample {
+                at: now,
+                memory,
+                cpu_percent,
+            }),
+        }
         tracked
             .history
             .retain(|s| now.saturating_sub(s.at) <= HISTORY_MS);
@@ -332,6 +341,13 @@ struct Seen<'a> {
     listener: &'a ProcInfo,
     addresses: Vec<String>,
     connections: u32,
+}
+
+/// Inside an app bundle. Framework Python also runs from a `Python.app`, but
+/// one inside `Python.framework`, and is not an app.
+fn is_app_helper(exe: &str) -> bool {
+    exe.find(".app/Contents/")
+        .is_some_and(|i| !exe[..i].contains(".framework/"))
 }
 
 /// For processes whose folder can't be read, such as another user's.

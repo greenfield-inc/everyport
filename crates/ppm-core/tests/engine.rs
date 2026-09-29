@@ -273,7 +273,7 @@ fn a_reused_parent_pid_is_not_an_ancestor() {
 }
 
 #[test]
-fn skips_ports_outside_the_range_apps_and_system_daemons() {
+fn skips_ports_outside_the_range_app_helpers_and_system_daemons() {
     let fake = Fake::new();
     let dir = project_dir();
     fake.run(
@@ -290,14 +290,10 @@ fn skips_ports_outside_the_range_apps_and_system_daemons() {
     fake.listen(44950, 11, "127.0.0.1");
     fake.run(12, 1, "rapportd", &["/usr/libexec/rapportd"], "/", HOUR);
     fake.listen(49152, 12, "0.0.0.0");
-    fake.run(
-        13,
-        1,
-        "python3",
-        &["python3", "-m", "http.server", "8000"],
-        dir,
-        HOUR,
-    );
+    // Homebrew and python.org Python run from inside Python.app.
+    let python = "/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/\
+                  Versions/3.14/Resources/Python.app/Contents/MacOS/Python";
+    fake.run(13, 1, "Python", &[python, "-m", "http.server"], dir, HOUR);
     fake.listen(8000, 13, "0.0.0.0");
 
     let (snapshot, _) = fake.engine().scan();
@@ -322,24 +318,30 @@ fn cpu_is_cpu_time_over_wall_time_between_scans() {
     assert_eq!(server.processes[2].cpu_percent, 50.0);
     assert_eq!(server.processes[3].cpu_percent, 25.0);
     assert_eq!(server.cpu_percent, 75.0);
-    assert_eq!(server.history.len(), 2);
-    assert_eq!(server.history[1].cpu_percent, 75.0);
 }
 
 #[test]
-fn history_covers_ten_minutes() {
+fn history_keeps_one_sample_per_10_seconds_for_10_minutes() {
     let fake = Fake::new();
     next_dev(&fake);
     let mut engine = fake.engine();
-    for _ in 0..12 {
-        engine.scan();
-        fake.advance(60_000);
+    let mut last = None;
+    // Every 2 s for 11 minutes, with 1 s of CPU in the 2 s before 10:00.
+    for second in (0..=660).step_by(2) {
+        let cpu_time = if second >= 600 { 1_000_000_000 } else { 0 };
+        fake.set_usage(220, 0, cpu_time);
+        last = Some(engine.scan().0);
+        fake.advance(2000);
     }
-    let (snapshot, _) = engine.scan();
+    let snapshot = last.unwrap();
     let history = &only_server(&snapshot).history;
 
-    assert_eq!(history.len(), 11);
-    assert_eq!(history[10].at - history[0].at, 600_000);
+    // The 10 s samples ending 0:68 through 11:00; 0:58 is over 10 minutes old.
+    assert_eq!(history.len(), 61);
+    assert_eq!(history[0].at, T0 + 68_000);
+    assert_eq!(history[60].at, T0 + 660_000);
+    let spike = history.iter().find(|s| s.at == T0 + 608_000).unwrap();
+    assert_eq!(spike.cpu_percent, 50.0);
 }
 
 #[test]
