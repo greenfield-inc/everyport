@@ -8,7 +8,7 @@ mod control;
 mod tree;
 
 use crate::links;
-use crate::platform::{Platform, ProcDetails, ProcInfo};
+use crate::platform::{Listener, Platform, ProcDetails, ProcInfo};
 use crate::protocol::{
     AgentSession, Alert, AlertKind, AutoKill, Call, CleanUpReason, Config, HostInfo, OtherPort,
     ProcRef, Project, Sample, Server, ServerProcess, ServerStatus, Snapshot, SystemStats,
@@ -89,14 +89,7 @@ impl Engine {
         let mut ports: BTreeMap<u16, (u32, Vec<String>)> = BTreeMap::new();
         let listeners = self.platform.listeners().unwrap_or_default();
         self.advance(&table, &listeners, now);
-        // A launcher that runs several listening processes, such as a script
-        // starting a proxy and an API, gives each server its own process.
-        // Ports outside the range count, so a server never takes one along.
-        let mut launched: HashMap<ProcRef, HashSet<ProcRef>> = HashMap::new();
-        for info in listeners.iter().filter_map(|l| table.get(l.pid)) {
-            let top = self.climb(&table, info);
-            launched.entry(top.proc).or_default().insert(info.proc);
-        }
+        let roots = self.roots(&table, &listeners);
         for l in listeners.into_iter().filter(|l| range.contains(&l.port)) {
             let (pid, addresses) = ports.entry(l.port).or_insert((l.pid, Vec::new()));
             if *pid == l.pid && !addresses.contains(&l.address) {
@@ -109,11 +102,7 @@ impl Engine {
             let Some(listener) = table.get(pid).filter(|_| pid != own_pid) else {
                 continue;
             };
-            let top = self.climb(&table, listener);
-            let root = match launched[&top.proc].len() {
-                1 => top,
-                _ => listener,
-            };
+            let root = roots[&listener.proc];
             let connections = connections
                 .as_ref()
                 .map(|counts| counts.get(&port).copied().unwrap_or(0));
@@ -383,33 +372,65 @@ impl Engine {
         })
     }
 
-    /// Restart runs the highest process between the listener and the
-    /// command the user ran whose argv wasn't overwritten by a title, such as
-    /// the `sh -c "next dev -p 3000"` that npm spawns. For a server whose
-    /// `root` is its listener because it shares that command, the search
-    /// stops below the command, so a restart reruns this server only.
+    /// Each listening process's root. It's the command the user ran, unless
+    /// that command runs several listening processes, such as `concurrently`
+    /// starting an API and Vite. Then each root is the highest process below
+    /// where their trees meet, so Stop and Restart cover one server only.
+    /// Ports outside the range count, so a server never takes one along.
+    fn roots<'a>(
+        &mut self,
+        table: &'a Table,
+        listeners: &[Listener],
+    ) -> HashMap<ProcRef, &'a ProcInfo> {
+        // Per command the user ran, the path down to each listener.
+        let mut groups: HashMap<ProcRef, Vec<Vec<&ProcInfo>>> = HashMap::new();
+        let mut listening = HashSet::new();
+        for info in listeners.iter().filter_map(|l| table.get(l.pid)) {
+            if listening.insert(info.proc) {
+                let top = self.climb(table, info);
+                let mut path = path_up(table, info, top);
+                path.reverse();
+                groups.entry(top.proc).or_default().push(path);
+            }
+        }
+        let mut roots = HashMap::new();
+        for paths in groups.values() {
+            let first = &paths[0];
+            let meet = (0..first.len())
+                .take_while(|&i| {
+                    paths
+                        .iter()
+                        .all(|p| p.get(i).map(|x| x.proc) == Some(first[i].proc))
+                })
+                .count();
+            for path in paths {
+                let listener = path[path.len() - 1];
+                let root = match paths.len() {
+                    1 => path[0],
+                    // A listener where the trees meet is its own root.
+                    _ => path.get(meet).copied().unwrap_or(listener),
+                };
+                roots.insert(listener.proc, root);
+            }
+        }
+        roots
+    }
+
+    /// Restart runs the highest process from the root down to the listener
+    /// whose argv wasn't overwritten by a title, such as the
+    /// `sh -c "next dev -p 3000"` that npm spawns.
     fn launcher<'a>(
         &mut self,
         table: &'a Table,
         listener: &'a ProcInfo,
         root: &'a ProcInfo,
     ) -> &'a ProcInfo {
-        let top = self.climb(table, listener);
-        let mut path = vec![listener];
-        while let Some(parent) = table.parent(path[path.len() - 1]) {
-            if path[path.len() - 1].proc == top.proc
-                || (parent.proc == top.proc && top.proc != root.proc)
-            {
-                break;
-            }
-            path.push(parent);
-        }
-        let highest = path[path.len() - 1];
-        let intact = path.into_iter().rev().find(|p| {
+        let path = path_up(table, listener, root);
+        let intact = path.iter().rev().find(|p| {
             self.details(p)
                 .is_some_and(|d| command::has_intact_args(&d.args))
         });
-        intact.unwrap_or(highest)
+        intact.copied().unwrap_or(root)
     }
 
     /// Memory and CPU for one process. CPU is the CPU time used since the
@@ -471,6 +492,18 @@ impl Engine {
             .map(|p| self.details(p).map(|d| (*d).clone()).unwrap_or_default())
             .collect()
     }
+}
+
+/// `from` and its ancestors up to `to`, nearest first.
+fn path_up<'a>(table: &'a Table, from: &'a ProcInfo, to: &ProcInfo) -> Vec<&'a ProcInfo> {
+    let mut path = vec![from];
+    while path[path.len() - 1].proc != to.proc {
+        match table.parent(path[path.len() - 1]) {
+            Some(parent) => path.push(parent),
+            None => break,
+        }
+    }
+    path
 }
 
 /// The first process of a tree on the protected list.

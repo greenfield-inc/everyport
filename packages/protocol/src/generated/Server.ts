@@ -18,7 +18,8 @@ export type Server = { port: number,
 pid: number, 
 /**
  * Topmost process of the server's tree, such as `npm run dev`. When one
- * launcher runs several servers, each tree starts at its own listener.
+ * command runs several servers, each tree starts just below where the
+ * servers' trees meet.
  */
 root: ProcRef, process_name: string, 
 /**

@@ -336,7 +336,7 @@ fn a_launcher_sharing_with_a_port_outside_the_range_still_splits() {
     let (snapshot, _) = fake.engine().scan();
     let server = only_server(&snapshot);
 
-    assert_eq!(server.root, fake.proc_ref(220));
+    assert_eq!(server.root, fake.proc_ref(210));
     assert_eq!(server.memory, 100 * MB);
 }
 
@@ -955,7 +955,10 @@ fn auto_kill_stops_a_server_but_never_a_protected_process_beside_it() {
         .map(|s| (s.port, s.protected))
         .collect();
     assert_eq!(ports, [(3000, false), (6379, true)]);
-    assert_eq!(fake.world().signals, [(230, false), (220, false)]);
+    assert_eq!(
+        fake.world().signals,
+        [(230, false), (220, false), (210, false)]
+    );
 }
 
 #[test]
@@ -1142,45 +1145,102 @@ fn restart_reruns_the_launch_command_with_its_environment() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
-/// `npm run dev` runs Next.js and Redis. Restarting :3000 reruns only
-/// `sh -c "next dev"`, never Turbopack's worker or the shared `npm run dev`.
+/// `npm run dev` → `concurrently "nodemon api.js" vite`, with the API on
+/// :4000 and Vite on :5173. The scripts stand in for `nodemon api.js` and
+/// `vite`, and record that they ran.
+fn concurrently(fake: &Fake, dir: &str) {
+    fake.run(100, 1, "zsh", &["-zsh"], dir, 5 * HOUR);
+    fake.run(200, 100, "node", &["npm run dev"], dir, HOUR);
+    let both = r#"concurrently "nodemon api.js" vite"#;
+    fake.run(210, 200, "sh", &["sh", "-c", both], dir, HOUR);
+    let concurrently = [
+        "node",
+        "node_modules/.bin/concurrently",
+        "nodemon api.js",
+        "vite",
+    ];
+    fake.run(220, 210, "node", &concurrently, dir, HOUR);
+    fake.run(
+        230,
+        220,
+        "sh",
+        &["sh", "-c", "printf api > api.txt"],
+        dir,
+        HOUR,
+    );
+    fake.run(240, 230, "node", &["node", "nodemon", "api.js"], dir, HOUR);
+    fake.run(250, 240, "node", &["node", "api.js"], dir, HOUR);
+    fake.run(
+        260,
+        220,
+        "sh",
+        &["sh", "-c", "printf vite > vite.txt"],
+        dir,
+        HOUR,
+    );
+    fake.run(270, 260, "node", &["node", "vite"], dir, HOUR);
+    fake.listen(4000, 250, "127.0.0.1");
+    fake.listen(5173, 270, "127.0.0.1");
+}
+
+/// Each server's tree starts below `concurrently`, where the two meet.
+#[test]
+fn stop_of_a_server_sharing_its_launcher_stops_only_that_branch() {
+    let fake = Fake::new();
+    concurrently(&fake, project_dir());
+    let mut engine = fake.engine();
+
+    let (snapshot, _) = engine.scan();
+    let roots: Vec<(u16, u32)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.root.pid))
+        .collect();
+    assert_eq!(roots, [(4000, 230), (5173, 260)]);
+    let stop = Call::Stop {
+        port: 4000,
+        root: fake.proc_ref(230),
+        force: false,
+        confirm_protected: false,
+    };
+    assert_eq!(engine.call(&stop), Ok(()));
+    assert_eq!(
+        fake.world().signals,
+        [(250, false), (240, false), (230, false)]
+    );
+}
+
 #[cfg(unix)]
 #[test]
-fn restart_of_a_server_sharing_its_launcher_reruns_only_that_server() {
+fn restart_of_a_server_sharing_its_launcher_reruns_only_that_branch() {
     let dir = std::env::temp_dir().join(format!("ppm-restart-shared-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    let dir_str = dir.to_str().unwrap();
     let fake = Fake::new();
-    fake.run(200, 1, "node", &["npm run dev"], dir_str, HOUR);
-    let script = "printf next > restarted.txt";
-    fake.run(210, 200, "sh", &["sh", "-c", script], dir_str, HOUR);
-    fake.run(220, 210, "node", &["next-server (v15.1.0)"], dir_str, HOUR);
-    let turbopack = ["/usr/local/bin/node", "/app/node_modules/.bin/turbopack"];
-    fake.run(230, 220, "node", &turbopack, dir_str, HOUR);
-    fake.run(240, 200, "redis-server", &["redis-server"], dir_str, HOUR);
-    fake.listen(3000, 220, "127.0.0.1");
-    fake.listen(6379, 240, "127.0.0.1");
-
+    concurrently(&fake, dir.to_str().unwrap());
     let mut engine = fake.engine();
-    let (snapshot, _) = engine.scan();
-    assert_eq!(snapshot.servers[0].root, fake.proc_ref(220));
+    engine.scan();
+
     let restart = Call::Restart {
-        port: 3000,
-        root: fake.proc_ref(220),
+        port: 4000,
+        root: fake.proc_ref(230),
         confirm_protected: false,
     };
     assert_eq!(engine.call(&restart), Ok(()));
     engine.scan();
     assert!(!engine.pending());
 
-    assert_eq!(fake.world().signals, [(230, false), (220, false)]);
-    let output = dir.join("restarted.txt");
+    assert_eq!(
+        fake.world().signals,
+        [(250, false), (240, false), (230, false)]
+    );
+    let api = dir.join("api.txt");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-    while !output.exists() && std::time::Instant::now() < deadline {
+    while !api.exists() && std::time::Instant::now() < deadline {
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
     std::thread::sleep(std::time::Duration::from_millis(100));
-    assert_eq!(std::fs::read_to_string(&output).unwrap(), "next");
+    assert_eq!(std::fs::read_to_string(&api).unwrap(), "api");
+    assert!(!dir.join("vite.txt").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

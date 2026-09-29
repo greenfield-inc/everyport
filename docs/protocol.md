@@ -147,7 +147,7 @@ The full state. It's sent after `hello`, after every scan where something other 
 |---|---|
 | `port` | The listening TCP port |
 | `pid` | The process that owns the socket |
-| `root` | The topmost process of the server's tree, such as `npm run dev`. When one launcher runs several servers, each server's tree starts at its own listening process. Pass it to `stop` and `restart`. |
+| `root` | The topmost process of the server's tree, such as `npm run dev`. When one command runs several servers, such as `concurrently` starting an API and Vite, each server's tree starts just below where their trees meet, so `stop` and `restart` cover that server only. Pass it to `stop` and `restart`. |
 | `process_name` | Name of the process that owns the socket |
 | `addresses` | Bound addresses, such as `127.0.0.1` and `::1` |
 | `cwd`, `cwd_exists` | The server's folder (or `null`), and whether it still exists. It's `false` once a worktree is deleted. |

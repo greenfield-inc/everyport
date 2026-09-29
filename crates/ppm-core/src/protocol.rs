@@ -90,7 +90,8 @@ pub struct Server {
     /// Process that owns the socket.
     pub pid: u32,
     /// Topmost process of the server's tree, such as `npm run dev`. When one
-    /// launcher runs several servers, each tree starts at its own listener.
+    /// command runs several servers, each tree starts just below where the
+    /// servers' trees meet.
     pub root: ProcRef,
     pub process_name: String,
     /// Bound addresses, such as `127.0.0.1` and `::1`.
