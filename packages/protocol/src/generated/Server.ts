@@ -17,7 +17,8 @@ export type Server = { port: number,
  */
 pid: number, 
 /**
- * Topmost process of the server's tree, such as `npm run dev`.
+ * Topmost process of the server's tree, such as `npm run dev`. When one
+ * launcher runs several servers, each tree starts at its own listener.
  */
 root: ProcRef, process_name: string, 
 /**
@@ -41,7 +42,8 @@ launch_dir: string | null, started_at: number | null, project: Project, workspac
  */
 processes: Array<ServerProcess>, 
 /**
- * Sum over `processes`.
+ * Sum over `processes` that no lower port's server already counts, so
+ * servers never count a process twice.
  */
 memory: number, cpu_percent: number, connections: number, 
 /**

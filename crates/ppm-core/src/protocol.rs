@@ -89,7 +89,8 @@ pub struct Server {
     pub port: u16,
     /// Process that owns the socket.
     pub pid: u32,
-    /// Topmost process of the server's tree, such as `npm run dev`.
+    /// Topmost process of the server's tree, such as `npm run dev`. When one
+    /// launcher runs several servers, each tree starts at its own listener.
     pub root: ProcRef,
     pub process_name: String,
     /// Bound addresses, such as `127.0.0.1` and `::1`.
@@ -108,7 +109,8 @@ pub struct Server {
     pub agent: Option<AgentSession>,
     /// Depth-first, root first.
     pub processes: Vec<ServerProcess>,
-    /// Sum over `processes`.
+    /// Sum over `processes` that no lower port's server already counts, so
+    /// servers never count a process twice.
     #[ts(type = "number")]
     pub memory: u64,
     pub cpu_percent: f32,

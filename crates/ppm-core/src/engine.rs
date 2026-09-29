@@ -96,21 +96,44 @@ impl Engine {
             }
         }
 
-        let mut usage = HashMap::new();
-        let mut servers = Vec::new();
+        let mut seen = Vec::new();
         for (port, (pid, addresses)) in ports {
             let Some(listener) = table.get(pid).filter(|_| pid != own_pid) else {
                 continue;
             };
+            let root = table.root(listener, |p| {
+                let details = self.details(p);
+                tree::is_agent(p, details.as_deref())
+            });
             let connections = connections
                 .as_ref()
                 .map(|counts| counts.get(&port).copied().unwrap_or(0));
-            let seen = Seen {
+            seen.push(Seen {
                 port,
                 listener,
+                root,
                 addresses,
                 connections,
-            };
+            });
+        }
+        // A launcher that runs several servers, such as a script starting a
+        // proxy and an API, has one row per port, each with its own process.
+        let shared: Vec<bool> = seen
+            .iter()
+            .map(|s| {
+                seen.iter()
+                    .any(|o| o.root.proc == s.root.proc && o.listener.proc != s.listener.proc)
+            })
+            .collect();
+        for (s, shared) in seen.iter_mut().zip(shared) {
+            if shared {
+                s.root = s.listener;
+            }
+        }
+
+        let mut usage = HashMap::new();
+        let mut servers = Vec::new();
+        for seen in seen {
             if let Some(server) = self.server(seen, &table, &mut usage, now) {
                 servers.push(server);
             }
@@ -226,8 +249,9 @@ impl Engine {
     }
 
     /// Builds the server behind one listening port. `usage` holds each
-    /// process's memory and CPU for this scan, so trees shared by several
-    /// ports are measured once.
+    /// process's memory and CPU for this scan. A process counts toward the
+    /// first server that holds it, so one listening on several ports adds
+    /// its memory once and servers always sum to what they use.
     fn server(
         &mut self,
         seen: Seen,
@@ -235,11 +259,7 @@ impl Engine {
         usage: &mut HashMap<ProcRef, (u64, f32)>,
         now: u64,
     ) -> Option<Server> {
-        let (port, listener) = (seen.port, seen.listener);
-        let root = table.root(listener, |p| {
-            let details = self.details(p);
-            tree::is_agent(p, details.as_deref())
-        });
+        let (port, listener, root) = (seen.port, seen.listener, seen.root);
         let listener_details = self.details(listener);
         let root_details = self.details(root);
         let cwd = self.cwd(listener, root);
@@ -255,10 +275,16 @@ impl Engine {
 
         let members = table.tree(root);
         let mut processes = Vec::with_capacity(members.len());
+        let (mut memory, mut cpu_percent) = (0, 0.0);
         for (info, depth) in &members {
-            let (memory, cpu_percent) = *usage
+            let counted = usage.contains_key(&info.proc);
+            let (process_memory, process_cpu) = *usage
                 .entry(info.proc)
                 .or_insert_with(|| self.measure(info.proc, now));
+            if !counted {
+                memory += process_memory;
+                cpu_percent += process_cpu;
+            }
             let name = match self.details(info) {
                 Some(d) => command::display_name(&d.args, &info.name),
                 None => info.name.clone(),
@@ -267,12 +293,10 @@ impl Engine {
                 proc: info.proc,
                 name,
                 depth: *depth,
-                memory,
-                cpu_percent,
+                memory: process_memory,
+                cpu_percent: process_cpu,
             });
         }
-        let memory = processes.iter().map(|p| p.memory).sum();
-        let cpu_percent = processes.iter().map(|p| p.cpu_percent).sum();
 
         let tracked = self.tracked.entry((port, root.proc)).or_insert(Tracked {
             history: Vec::new(),
@@ -314,7 +338,7 @@ impl Engine {
             addresses: seen.addresses,
             cwd_exists: cwd.as_deref().is_none_or(|c| Path::new(c).exists()),
             project: match &cwd {
-                Some(cwd) => links::project(cwd, command.as_deref()),
+                Some(cwd) => links::project(cwd, command.as_deref(), &listener.name),
                 None => unknown_project(&listener.name),
             },
             command,
@@ -438,6 +462,8 @@ fn protected<'a>(members: &[(&'a ProcInfo, u32)], config: &Config) -> Option<&'a
 struct Seen<'a> {
     port: u16,
     listener: &'a ProcInfo,
+    /// The tree the server's memory, stop and restart cover.
+    root: &'a ProcInfo,
     addresses: Vec<String>,
     connections: Option<u32>,
 }

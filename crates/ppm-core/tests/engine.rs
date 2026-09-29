@@ -253,6 +253,91 @@ fn builds_the_tree_from_the_command_the_user_ran() {
     assert_eq!(server.clean_up, None);
 }
 
+/// `node start.mjs` launching a LiteLLM proxy and two forwarders, each on
+/// its own port, as a model router does.
+#[test]
+fn servers_sharing_a_launcher_each_show_their_own_process() {
+    let fake = Fake::new();
+    let dir = project_dir();
+    fake.run(100, 1, "zsh", &["-zsh"], dir, 5 * HOUR);
+    fake.run(200, 100, "node", &["node", "start.mjs"], dir, HOUR);
+    let litellm = ["python", "litellm", "--port", "4200"];
+    fake.run(210, 200, "python3.12", &litellm, dir, HOUR);
+    fake.run(211, 210, "python3.12", &["python", "worker.py"], dir, HOUR);
+    fake.run(
+        220,
+        200,
+        "node",
+        &["node", "oauth-forwarder.mjs"],
+        dir,
+        HOUR,
+    );
+    fake.run(230, 200, "node", &["node", "api-forwarder.mjs"], dir, HOUR);
+    fake.listen(4200, 210, "127.0.0.1");
+    fake.listen(4201, 220, "127.0.0.1");
+    fake.listen(4203, 230, "127.0.0.1");
+    for (pid, memory) in [(200, 32), (210, 268), (211, 40), (220, 27), (230, 29)] {
+        fake.set_usage(pid, memory * MB, 0);
+    }
+    fake.world().used_memory = 10 * 1024 * MB;
+
+    let mut engine = fake.engine();
+    let (snapshot, _) = engine.scan();
+
+    let rows: Vec<(u16, ProcRef, u64)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.root, s.memory / MB))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (4200, fake.proc_ref(210), 308),
+            (4201, fake.proc_ref(220), 27),
+            (4203, fake.proc_ref(230), 29),
+        ]
+    );
+    // The launcher belongs to no row, so it counts as another app.
+    assert_eq!(
+        snapshot.system.memory_other_apps,
+        (10 * 1024 - 308 - 27 - 29) * MB
+    );
+
+    // Stopping one port leaves the launcher and the other servers running.
+    engine
+        .call(&Call::Stop {
+            port: 4201,
+            root: fake.proc_ref(220),
+            force: false,
+            confirm_protected: false,
+        })
+        .unwrap();
+    assert_eq!(fake.world().signals, [(220, false)]);
+}
+
+/// An ssh connection multiplexer forwarding three ports.
+#[test]
+fn a_process_on_several_ports_counts_its_memory_once() {
+    let fake = Fake::new();
+    fake.run(10, 1, "ssh", &["ssh.sock [mux]"], project_dir(), HOUR);
+    for port in [17721, 17740, 55465] {
+        fake.listen(port, 10, "127.0.0.1");
+    }
+    fake.set_usage(10, 13 * MB, 0);
+    fake.world().used_memory = 10 * 1024 * MB;
+
+    let (snapshot, _) = fake.engine().scan();
+
+    let rows: Vec<(u16, u64)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.memory / MB))
+        .collect();
+    assert_eq!(rows, [(17721, 13), (17740, 0), (55465, 0)]);
+    assert_eq!(snapshot.servers[2].processes[0].memory, 13 * MB);
+    assert_eq!(snapshot.system.memory_other_apps, (10 * 1024 - 13) * MB);
+}
+
 #[test]
 fn other_users_ports_show_once_each_with_owner_and_process_name() {
     let fake = Fake::new();
@@ -792,7 +877,7 @@ fn auto_kill_never_stops_a_leaking_server() {
 }
 
 #[test]
-fn auto_kill_never_stops_a_tree_that_runs_a_protected_process() {
+fn auto_kill_stops_a_server_but_never_a_protected_process_beside_it() {
     let fake = Fake::new();
     next_dev(&fake);
     // `npm run dev` also started Redis, which listens on its own port.
@@ -812,10 +897,14 @@ fn auto_kill_never_stops_a_tree_that_runs_a_protected_process() {
     fake.advance(90_000);
     let (snapshot, _) = engine.scan();
 
-    // Redis protects the whole tree, :3000 included.
-    assert!(snapshot.servers[0].protected);
-    assert_eq!(snapshot.servers[0].clean_up, None);
-    assert!(fake.world().signals.is_empty());
+    // Each port has its own tree, so stopping :3000 leaves Redis running.
+    let ports: Vec<(u16, bool)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.protected))
+        .collect();
+    assert_eq!(ports, [(3000, false), (6379, true)]);
+    assert_eq!(fake.world().signals, [(230, false), (220, false)]);
 }
 
 #[test]
