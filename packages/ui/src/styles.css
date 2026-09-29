@@ -1,0 +1,254 @@
+/*
+ * @ppm/ui styles. Import once from the host app, which runs Tailwind 4
+ * (`@tailwindcss/vite`). There is no preflight, so the host page keeps its own
+ * base styles; everything here is scoped to `.ppm-root`.
+ *
+ * Host hooks:
+ *   html[data-vibrancy]   native blur sits behind the page: tint the panel
+ *   html[data-hidden]     the popover is hidden: pause animation
+ *   --ppm-shadow          the panel's drop shadow; set to `none` inside a
+ *                         native window, where the OS draws the shadow
+ */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+@source "./";
+
+@font-face {
+  font-family: "Sora";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 800;
+  src: url("./fonts/sora.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("./fonts/geist-mono.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-display: block;
+  font-weight: 100 900;
+  src: url("./fonts/geist-mono-symbols.woff2") format("woff2");
+  unicode-range: U+2000-2001, U+2004-2008, U+200A, U+23B8-23BD, U+2500-259F;
+}
+
+/* Colors come from the active theme's CSS variables (set on .ppm-root). */
+@theme inline {
+  --color-fg: var(--foreground);
+  --color-fg2: var(--muted-foreground);
+  --color-fg3: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  --color-panel: var(--popover);
+  --color-accent: var(--accent);
+  --color-line: var(--border);
+  --color-warn: var(--ppm-warn);
+  --color-danger: var(--destructive);
+  --color-on-danger: var(--destructive-foreground);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--primary-foreground);
+  --font-sans: var(--ppm-sans);
+  --font-mono: var(--ppm-mono);
+}
+
+/* Paper's three type sizes. */
+@theme {
+  --text-11: 11px;
+  --text-11--line-height: 14px;
+  --text-13: 13px;
+  --text-13--line-height: 16px;
+  --text-28: 28px;
+  --text-28--line-height: 32px;
+  --text-28--letter-spacing: -0.02em;
+}
+
+@utility hairline-t {
+  border-top: 0.5px solid var(--border);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility clamp-1 {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.ppm-root {
+  --ppm-tint: 100%;
+  --ppm-warn: var(--warning, var(--chart-4));
+  color-scheme: light;
+  font-family: var(--ppm-sans);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  overscroll-behavior: none;
+}
+
+.ppm-root[data-appearance="dark"] {
+  color-scheme: dark;
+}
+
+html[data-vibrancy] .ppm-root {
+  --ppm-tint: 80%;
+}
+
+html[data-vibrancy] .ppm-root[data-appearance="dark"] {
+  --ppm-tint: 72%;
+}
+
+@layer base {
+  .ppm-root *,
+  .ppm-root *::before,
+  .ppm-root *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+
+  .ppm-root button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    text-align: inherit;
+    cursor: default;
+  }
+
+  .ppm-root :focus {
+    outline: none;
+  }
+
+  .ppm-root :focus-visible {
+    outline: 2px solid var(--ring, var(--primary));
+    outline-offset: -2px;
+  }
+}
+
+.ppm-root .selectable {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.ppm-panel {
+  width: 400px;
+  border-radius: 16px;
+  overflow: clip;
+  position: relative;
+  background: color-mix(in oklab, var(--popover) var(--ppm-tint), transparent);
+  box-shadow:
+    inset 0 0 0 0.5px var(--border),
+    var(--ppm-shadow, 0 0 0 0.5px rgb(0 0 0 / 0.6), 0 24px 64px rgb(0 0 0 / 0.55));
+  transform-origin: top center;
+  animation: ppm-open 140ms ease-out;
+}
+
+.ppm-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+/* Motion (intent brief, item 13). */
+@keyframes ppm-open {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes ppm-view-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--ppm-dir, 1) * 28px));
+  }
+}
+
+@keyframes ppm-row-out {
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+@keyframes ppm-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ppm-view {
+  animation: ppm-view-in 180ms
+    linear(0, 0.25 8%, 0.62 20%, 0.86 33%, 0.98 46%, 1.02 58%, 1.01 72%, 1);
+}
+
+.ppm-view[data-first] {
+  animation: none;
+}
+
+.ppm-grow {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition:
+    grid-template-rows 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.ppm-grow > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ppm-grow[data-closed] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+/* Rows added after the first render grow in; `data-live` is set once mounted. */
+[data-live] > .ppm-grow {
+  @starting-style {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}
+
+.ppm-grow[data-leave] {
+  animation: ppm-row-out 180ms ease-in forwards;
+  pointer-events: none;
+}
+
+.ppm-spin {
+  animation: ppm-spin 900ms linear infinite;
+}
+
+html[data-hidden] .ppm-root *,
+html[data-hidden] .ppm-root {
+  animation-play-state: paused;
+}
+
+html[data-hidden] .ppm-panel {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ppm-root *,
+  .ppm-root {
+    animation: none !important;
+    transition: none !important;
+  }
+}
