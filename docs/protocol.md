@@ -183,7 +183,7 @@ The full state. It's sent after `hello`, after every scan where something other 
 | `owner` | The user the process runs as, such as `root`, or `null` when the OS doesn't say |
 | `process_name` | Name of the process that owns the socket, or `null` when the OS doesn't say. Linux doesn't tell a normal user which process holds another user's socket. |
 
-On macOS and Linux, when `ppm` runs as root, every port is a server and `other_ports` is empty. On macOS it's empty for other users too: macOS lists other users' sockets only to its own tools, such as `netstat`.
+On macOS and Linux, when `ppm` runs as root, every port is a server and `other_ports` is empty. On macOS, `ppm` reads other users' ports from `nettop` at most every 10 seconds, so a new one can take that long to appear. macOS lists other users' sockets only to its own tools.
 
 ### alert
 

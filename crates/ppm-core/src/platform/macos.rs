@@ -1,12 +1,13 @@
 //! macOS implementation of [`Platform`], on libproc, sysctl and Mach host
-//! statistics. Without root, other users' processes and sockets are not
-//! visible, as with `lsof`, so `other_listeners` stays empty. The one other
-//! source, the `net.inet.tcp.pcblist_n` sysctl that `netstat -anv` reads,
-//! lists sockets without root only for Apple's own binaries on macOS 27. Any
-//! other program gets just the header, and so does a `netstat` it starts.
+//! statistics. Without root, libproc shows only our own user's sockets, as
+//! with `lsof`. Other users' listeners come from `nettop`, which reads every
+//! socket through a kernel channel open only to Apple's own tools. The
+//! `net.inet.tcp.pcblist_n` sysctl behind `netstat` returns no sockets to a
+//! program started from an app on macOS 27, so it isn't used.
 
 use super::{
-    inbound_connections, unix, Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage,
+    inbound_connections, unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails,
+    ProcInfo, ProcUsage,
 };
 use crate::protocol::ProcRef;
 use std::collections::{HashMap, HashSet};
@@ -14,6 +15,7 @@ use std::ffi::{c_char, c_void, CStr};
 use std::io;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -21,12 +23,17 @@ use std::time::{Duration, Instant};
 /// walk younger than this serves both.
 const SOCKETS_MAX_AGE: Duration = Duration::from_millis(500);
 
+/// Other users' ports change rarely, and each read starts `nettop`.
+const OTHERS_MAX_AGE: Duration = Duration::from_secs(10);
+
 pub struct Macos {
     host: libc::mach_port_t,
     /// Mach time units to nanoseconds, as numerator and denominator.
     timebase: (u64, u64),
     cpu: unix::CpuSampler,
     sockets: Mutex<Option<(Instant, Sockets)>>,
+    others: Mutex<Option<(Instant, Vec<OtherListener>)>>,
+    users: Mutex<HashMap<u32, String>>,
 }
 
 impl Macos {
@@ -39,6 +46,8 @@ impl Macos {
             timebase: (u64::from(timebase.numer), u64::from(timebase.denom.max(1))),
             cpu: unix::CpuSampler::default(),
             sockets: Mutex::new(None),
+            others: Mutex::new(None),
+            users: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -55,11 +64,58 @@ impl Macos {
         *cached = Some((Instant::now(), sockets.clone()));
         Ok(sockets)
     }
+
+    /// The user name for `uid`, or the number when it has none, as `ls -l`
+    /// shows it. Each uid is looked up once.
+    fn user_name(&self, uid: u32) -> String {
+        self.users
+            .lock()
+            .unwrap()
+            .entry(uid)
+            .or_insert_with(|| passwd_name(uid).unwrap_or_else(|| uid.to_string()))
+            .clone()
+    }
 }
 
 impl Platform for Macos {
     fn listeners(&self) -> io::Result<Vec<Listener>> {
         Ok(self.sockets()?.listeners)
+    }
+
+    /// Listeners from `nettop` whose process runs as another user. Root sees
+    /// every socket through libproc, so it has none.
+    fn other_listeners(&self) -> io::Result<Vec<OtherListener>> {
+        let me = unsafe { libc::geteuid() };
+        if me == 0 {
+            return Ok(Vec::new());
+        }
+        let mut cached = self.others.lock().unwrap();
+        if let Some((at, others)) = cached.as_ref() {
+            if at.elapsed() < OTHERS_MAX_AGE {
+                return Ok(others.clone());
+            }
+        }
+        let output = Command::new("/usr/bin/nettop")
+            .args(["-L", "1", "-n", "-m", "tcp", "-J", "state"])
+            .output()?;
+        if !output.status.success() {
+            return Err(io::Error::other("nettop failed"));
+        }
+        let others: Vec<_> = nettop_listeners(&String::from_utf8_lossy(&output.stdout))
+            .filter_map(|(pid, port, address)| {
+                // Unlike the full info, the short info is readable for every process.
+                let info = pidinfo::<libc::proc_bsdshortinfo>(pid, libc::PROC_PIDT_SHORTBSDINFO)?;
+                (info.pbsi_uid != me).then(|| OtherListener {
+                    port,
+                    address,
+                    owner: Some(self.user_name(info.pbsi_uid)),
+                    pid: Some(pid),
+                    process_name: Some(c_string(&info.pbsi_comm)),
+                })
+            })
+            .collect();
+        *cached = Some((Instant::now(), others.clone()));
+        Ok(others)
     }
 
     fn connections(&self) -> Option<HashMap<u16, u32>> {
@@ -196,6 +252,38 @@ impl Sockets {
             connections: inbound_connections(&listening, established),
         })
     }
+}
+
+/// `(pid, port, address)` for each listener in the output of
+/// `nettop -L 1 -n -m tcp -J state`: a `name.pid,,` line per process, then
+/// its sockets, such as `tcp4 127.0.0.1:8317<->*:*,Listen,` or
+/// `tcp6 *.53<->*.*,Listen,`.
+fn nettop_listeners(csv: &str) -> impl Iterator<Item = (u32, u16, String)> + '_ {
+    let mut pid = None;
+    csv.lines().filter_map(move |line| {
+        let (socket, state) = line.split_once(',')?;
+        let Some((family, local)) = socket
+            .split_once(' ')
+            .filter(|(family, _)| family.starts_with("tcp"))
+        else {
+            pid = socket.rsplit_once('.').and_then(|(_, p)| p.parse().ok());
+            return None;
+        };
+        if !state.starts_with("Listen,") {
+            return None;
+        }
+        let local = local.split("<->").next()?;
+        let (address, port) = match family {
+            "tcp4" => local.rsplit_once(':')?,
+            _ => local.rsplit_once('.')?,
+        };
+        let address = match (address, family) {
+            ("*", "tcp4") => "0.0.0.0",
+            ("*", _) => "::",
+            _ => address,
+        };
+        Some((pid?, port.parse().ok()?, address.to_string()))
+    })
 }
 
 fn socket_fds(pid: u32) -> Vec<i32> {
@@ -336,6 +424,27 @@ fn proc_info(pid: u32) -> Option<ProcInfo> {
     })
 }
 
+/// The account name for `uid` from the directory service.
+fn passwd_name(uid: u32) -> Option<String> {
+    let mut entry: libc::passwd = unsafe { mem::zeroed() };
+    let mut buffer = [0 as c_char; 4096];
+    let mut result = std::ptr::null_mut();
+    unsafe {
+        libc::getpwuid_r(
+            uid,
+            &mut entry,
+            buffer.as_mut_ptr(),
+            buffer.len(),
+            &mut result,
+        )
+    };
+    (!result.is_null()).then(|| {
+        unsafe { CStr::from_ptr(entry.pw_name) }
+            .to_string_lossy()
+            .into_owned()
+    })
+}
+
 fn pidinfo<T>(pid: u32, flavor: i32) -> Option<T> {
     let mut info: T = unsafe { mem::zeroed() };
     let size = mem::size_of::<T>() as i32;
@@ -414,4 +523,36 @@ fn c_string(chars: &[c_char]) -> String {
         .map(|&c| c as u8)
         .collect();
     String::from_utf8_lossy(&bytes).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::nettop_listeners;
+
+    #[test]
+    fn nettop_listeners_carry_the_pid_of_the_process_line_above() {
+        // From `nettop -L 1 -n -m tcp -J state` on macOS 27.
+        let csv = "\
+,state,
+apsd.1046,,
+tcp4 192.168.1.88:62972<->17.57.144.184:5223,Established,
+rapportd.1420,,
+tcp4 *:49452<->*:*,Listen,
+tcp6 *.49452<->*.*,Listen,
+Google Chrome H.94042,,
+tcp6 fe80::1c2b:3aff:fe4d:5e6f.5060<->*.*,Listen,
+cliproxyapi.2118,,
+tcp4 127.0.0.1:8317<->*:*,Listen,
+tcp4 127.0.0.1:59736<->127.0.0.1:8317,Established,
+";
+        let found: Vec<_> = nettop_listeners(csv).collect();
+        let expected = [
+            (1420, 49452, "0.0.0.0"),
+            (1420, 49452, "::"),
+            (94042, 5060, "fe80::1c2b:3aff:fe4d:5e6f"),
+            (2118, 8317, "127.0.0.1"),
+        ]
+        .map(|(pid, port, address)| (pid, port, address.to_string()));
+        assert_eq!(found, expected);
+    }
 }

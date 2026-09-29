@@ -106,8 +106,7 @@ fn listeners_include_sockets_we_bind() {
 }
 
 /// Root's listener, as a normal user sees it. Starting it takes passwordless
-/// sudo, which CI's Linux runner has; elsewhere the test says why it skips.
-#[cfg(target_os = "linux")]
+/// sudo, which CI's runners have; elsewhere the test says why it skips.
 #[test]
 fn another_users_listener_shows_port_and_owner() {
     use ppm_core::platform::OtherListener;
@@ -133,25 +132,23 @@ fn another_users_listener_shows_port_and_owner() {
     // sudo runs as root, so only root can stop it.
     let kill = || sudo().args(["kill", &root.id().to_string()]).status();
 
-    let expected = OtherListener {
-        port,
-        address: "127.0.0.1".into(),
-        owner: Some("root".into()),
-        pid: None,
+    // Linux can't tell a normal user which process holds the socket; macOS can.
+    let shown = |l: &OtherListener| {
+        l.port == port && l.address == "127.0.0.1" && l.owner.as_deref() == Some("root")
     };
-    let platform = native();
     let mut found = Vec::new();
     for _ in 0..200 {
-        found = platform.other_listeners().unwrap();
-        if found.contains(&expected) {
+        // A new platform each time, so macOS doesn't serve a cached answer.
+        found = native().other_listeners().unwrap();
+        if found.iter().any(shown) {
             break;
         }
         sleep(Duration::from_millis(50));
     }
-    let listed = platform.listeners().unwrap();
+    let listed = native().listeners().unwrap();
     kill().unwrap();
     root.wait().unwrap();
-    assert!(found.contains(&expected), "{expected:?} not in {found:?}");
+    assert!(found.iter().any(shown), "root on {port} not in {found:?}");
     assert!(listed.iter().all(|l| l.port != port), "{listed:?}");
 }
 
