@@ -9,6 +9,8 @@
 #   EVERYPORT_ALLOW_INSECURE set to 1 to allow a EVERYPORT_DOWNLOAD_URL that is not https://, for testing
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+# Windows PowerShell 5.1 can default to TLS 1.0, which GitHub refuses.
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $repo = 'https://github.com/greenfield-inc/everyport'
 $installDir = if ($env:EVERYPORT_INSTALL_DIR) { $env:EVERYPORT_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
@@ -31,14 +33,21 @@ if (-not $base.StartsWith('https://') -and $env:EVERYPORT_ALLOW_INSECURE -ne '1'
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("everyport-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $tmp | Out-Null
 try {
+  # Accept matches curl. Without it, GitHub answers a missing file with a large HTML page, which
+  # Windows PowerShell 5.1 reports as "The connection was closed unexpectedly" instead of a 404.
+  function Save-ReleaseFile($name, $path) {
+    Invoke-WebRequest -UseBasicParsing -Headers @{ Accept = '*/*' } -Uri "$base/$name" -OutFile $path
+  }
+
+  $sumsPath = Join-Path $tmp 'SHA256SUMS'
+  try { Save-ReleaseFile 'SHA256SUMS' $sumsPath }
+  catch { throw "everyport install: no release found at $base. If Everyport hasn't had its first release yet, check $repo/releases.`n$($_.Exception.Message)" }
   Write-Host "Downloading $asset from $base"
   $binary = Join-Path $tmp 'everyport.exe'
-  Invoke-WebRequest -UseBasicParsing -Uri "$base/$asset" -OutFile $binary
-  $sums = (Invoke-WebRequest -UseBasicParsing -Uri "$base/SHA256SUMS").Content
-  if ($sums -is [byte[]]) { $sums = [System.Text.Encoding]::UTF8.GetString($sums) }
+  Save-ReleaseFile $asset $binary
 
   $expected = $null
-  foreach ($line in $sums -split "`r?`n") {
+  foreach ($line in Get-Content $sumsPath) {
     $fields = $line.Trim() -split '\s+'
     if ($fields.Count -eq 2 -and $fields[1].TrimStart('*') -eq $asset) { $expected = $fields[0].ToLower() }
   }
