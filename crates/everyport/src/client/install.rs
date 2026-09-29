@@ -6,6 +6,7 @@
 //! prefix, so a machine needs no shell tricks beyond what `ssh` or `docker
 //! exec` already give.
 
+use crate::client::check::Failure;
 use crate::client::remote;
 use crate::protocol::Os;
 use anyhow::{anyhow, bail, Context};
@@ -46,6 +47,18 @@ impl Probe {
     }
 }
 
+/// True when version `a` is older than `b`, comparing `major.minor.patch`
+/// as numbers. Versions that don't parse are never older, so the app
+/// doesn't replace an everyport it can't place.
+pub fn older(a: &str, b: &str) -> bool {
+    let parse = |v: &str| -> Option<Vec<u64>> {
+        let core = v.split(['-', '+']).next()?;
+        let parts: Option<Vec<u64>> = core.split('.').map(|n| n.parse().ok()).collect();
+        parts.filter(|p| p.len() == 3)
+    };
+    matches!((parse(a), parse(b)), (Some(a), Some(b)) if a < b)
+}
+
 /// Checks the machine's OS and CPU, and the `everyport` installed there. Looks at
 /// the install path first, then `everyport` on the machine's `PATH`.
 pub async fn probe(prefix: &[String]) -> anyhow::Result<Probe> {
@@ -59,6 +72,8 @@ pub async fn probe(prefix: &[String]) -> anyhow::Result<Probe> {
                 format!("{}/.local/bin/everyport", home.trim_end_matches('/')),
             )
         }
+        // ssh itself failed, so there's no point asking PowerShell.
+        Err(unix) if Failure::of(&unix.to_string()).is_some() => return Err(unix),
         uname => {
             // Git Bash and MSYS answer `uname` too, but everyport needs the Windows build.
             let script = "Write-Output $env:PROCESSOR_ARCHITECTURE; Write-Output $env:LOCALAPPDATA";
@@ -278,7 +293,7 @@ async fn powershell(prefix: &[String], script: &str, input: &[u8]) -> anyhow::Re
 }
 
 /// Runs `args` through the prefix and returns its trimmed stdout.
-async fn run(prefix: &[String], os: Os, args: &[&str]) -> anyhow::Result<String> {
+pub(crate) async fn run(prefix: &[String], os: Os, args: &[&str]) -> anyhow::Result<String> {
     send(prefix, os, args, &[]).await
 }
 
@@ -325,6 +340,16 @@ async fn send(prefix: &[String], os: Os, args: &[&str], input: &[u8]) -> anyhow:
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compares_versions_as_numbers() {
+        assert!(older("0.9.0", "0.10.0"));
+        assert!(older("1.2.3", "1.3.0"));
+        assert!(older("0.1.0-rc.1", "0.2.0"));
+        assert!(!older("0.10.0", "0.9.0"));
+        assert!(!older("0.1.0", "0.1.0"));
+        assert!(!older("nightly", "0.1.0"));
+    }
 
     #[test]
     fn maps_uname_to_release_targets() {

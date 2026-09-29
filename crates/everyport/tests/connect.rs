@@ -111,7 +111,7 @@ async fn sidecar_streams_events_answers_calls_and_reconnects() {
         next(&mut updates).await,
         Update::Disconnected {
             error: "everyport: lost the machine".into(),
-            retry_in: Duration::from_secs(1)
+            retry_in: Some(Duration::from_secs(1))
         }
     );
     assert_eq!(
@@ -146,12 +146,42 @@ async fn a_missing_program_is_reported_and_retried_with_backoff() {
         error.starts_with("Couldn't run /nonexistent/ssh"),
         "{error}"
     );
-    assert_eq!(retry_in, Duration::from_secs(1));
+    assert_eq!(retry_in, Some(Duration::from_secs(1)));
     assert_eq!(next(&mut updates).await, Update::Connecting);
     let Update::Disconnected { retry_in, .. } = next(&mut updates).await else {
         panic!()
     };
-    assert_eq!(retry_in, Duration::from_secs(2));
+    assert_eq!(retry_in, Some(Duration::from_secs(2)));
+}
+
+#[tokio::test]
+async fn a_rejected_key_is_not_retried() {
+    let dir = temp_dir("rejected");
+    let ssh = dir.join("ssh");
+    write_script(
+        &ssh,
+        "echo 'me@devbox: Permission denied (publickey).' >&2\nexit 255\n",
+    );
+    let (_client, mut updates) = connect(Connection::Command {
+        argv_prefix: vec![ssh.to_string_lossy().into_owned(), "devbox".into()],
+        everyport_path: "everyport".into(),
+    });
+    assert_eq!(next(&mut updates).await, Update::Connecting);
+    assert_eq!(
+        next(&mut updates).await,
+        Update::Disconnected {
+            error: "me@devbox: Permission denied (publickey).".into(),
+            retry_in: None
+        }
+    );
+    // The connection stops rather than trying again.
+    assert_eq!(
+        tokio::time::timeout(Duration::from_secs(10), updates.recv())
+            .await
+            .unwrap(),
+        None
+    );
+    std::fs::remove_dir_all(&dir).unwrap();
 }
 
 /// The release target for the machine running the tests, from the release

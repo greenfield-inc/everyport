@@ -3,6 +3,7 @@
 //! passes its arguments on like `docker exec` does.
 #![cfg(unix)]
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -16,13 +17,23 @@ impl Home {
             std::env::temp_dir().join(format!("everyport-{test}-{}.noindex", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
+        // A `tailscale` that isn't running, so this computer's tailnet isn't discovered.
+        let tailscale = dir.join("bin").join("tailscale");
+        std::fs::create_dir_all(tailscale.parent().unwrap()).unwrap();
+        std::fs::write(&tailscale, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(&tailscale, std::fs::Permissions::from_mode(0o755)).unwrap();
         Self(dir)
     }
 
     fn everyport(&self, args: &[&str]) -> Output {
         // `everyport` on PATH is this build, so `here` has it installed.
         let bin = Path::new(EVERYPORT).parent().unwrap();
-        let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+        let path = format!(
+            "{}:{}:{}",
+            self.0.join("bin").display(),
+            bin.display(),
+            std::env::var("PATH").unwrap()
+        );
         Command::new(EVERYPORT)
             .args(args)
             .env("HOME", &self.0)
@@ -100,11 +111,28 @@ fn on_runs_the_command_on_the_named_machine() {
         "everyport: No machine named nowhere. Add it with `everyport remote add nowhere -- ssh nowhere`, or see `everyport remote list`.\n"
     );
 
-    let local_only = home.everyport(&["--on", "here", "doctor"]);
+    let local_only = home.everyport(&["--on", "here", "stdio"]);
     assert!(!local_only.status.success());
     assert_eq!(
         stderr(&local_only),
-        "everyport: --on works with list, watch, stop, restart, open, clean and the terminal UI\n"
+        "everyport: --on works with list, watch, stop, restart, open, clean, doctor and the terminal UI\n"
+    );
+}
+
+#[test]
+fn doctor_checks_the_way_to_a_machine_step_by_step() {
+    let home = Home::new("doctor");
+    home.everyport(&["remote", "add", "here", "--", "env"]);
+
+    let here = home.everyport(&["doctor", "--on", "here"]);
+    assert!(here.status.success(), "{}", stdout(&here));
+    let lines: Vec<String> = stdout(&here).lines().map(String::from).collect();
+    assert_eq!(lines[0], "here (env)");
+    assert_eq!(lines[1], "✓ Runs commands through `env`");
+    assert!(lines[2].starts_with("✓ here runs "), "{}", lines[2]);
+    assert_eq!(
+        lines[3],
+        format!("✓ everyport {} is installed", env!("CARGO_PKG_VERSION"))
     );
 }
 

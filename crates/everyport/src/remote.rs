@@ -2,10 +2,10 @@
 //! the desktop app, next to the ones everyport discovers.
 
 use crate::machine::{machines_path, RUNTIME};
-use everyport::client::discover::{self, Source};
 use everyport::client::install;
 use everyport::client::machines::{self, Machine, Via};
 use everyport::client::Connection;
+use everyport::client::{check, discover};
 use std::io;
 use std::path::Path;
 use std::process::ExitCode;
@@ -54,21 +54,73 @@ pub fn rm(name: &str) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Checks the way to one machine, or to every saved and discovered one, step
+/// by step. Each stops at its first failed step and says how to fix it.
+pub fn doctor(name: Option<&str>) -> io::Result<ExitCode> {
+    let saved = machines::load(&machines_path().map_err(other)?).map_err(other)?;
+    let reports = RUNTIME.block_on(async {
+        let found = discover::all().await;
+        let mut known: Vec<Machine> = saved;
+        for f in &found {
+            if !known.iter().any(|m| m.name == f.machine.name) {
+                known.push(f.machine.clone());
+            }
+        }
+        if let Some(name) = name {
+            known.retain(|m| m.name == name);
+        }
+        let checks: Vec<_> = known
+            .into_iter()
+            .map(|machine| {
+                let hint = discover::hint(&found, &machine.via);
+                tokio::spawn(async move {
+                    let report = check::check(&machine.name, &machine.via, &hint).await;
+                    (machine, report)
+                })
+            })
+            .collect();
+        let mut reports = Vec::new();
+        for check in checks {
+            reports.extend(check.await);
+        }
+        reports
+    });
+    if let (Some(name), true) = (name, reports.is_empty()) {
+        eprintln!("everyport: no machine named {name}. See `everyport remote list`.");
+        return Ok(ExitCode::FAILURE);
+    }
+    if reports.is_empty() {
+        println!(
+            "No other machines yet. Add one with `everyport remote add devbox -- ssh devbox`."
+        );
+    }
+    let mut ok = true;
+    for (i, (machine, report)) in reports.iter().enumerate() {
+        if i > 0 {
+            println!();
+        }
+        println!("{} ({})", machine.name, connection(&machine.via));
+        println!("{report}");
+        ok &= report.ok();
+    }
+    Ok(if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
 /// Saved machines, then discovered ones not saved under the same name, each
 /// with the everyport version installed there.
 pub fn list() -> io::Result<ExitCode> {
     let saved = machines::load(&machines_path().map_err(other)?).map_err(other)?;
     let rows = RUNTIME.block_on(async {
         let found = discover::all().await;
-        let mut rows: Vec<(Machine, &str)> = saved.into_iter().map(|m| (m, "saved")).collect();
+        let mut rows: Vec<(Machine, String)> =
+            saved.into_iter().map(|m| (m, "saved".into())).collect();
         for found in found {
             if !rows.iter().any(|(m, _)| m.name == found.machine.name) {
-                let source = match found.source {
-                    Source::SshConfig => "ssh config",
-                    Source::Pane => "Pane",
-                    Source::Wsl => "WSL",
-                };
-                rows.push((found.machine, source));
+                rows.push((found.machine, found.source.label()));
             }
         }
         let probes: Vec<_> = rows
@@ -78,12 +130,7 @@ pub fn list() -> io::Result<ExitCode> {
         let mut table = Vec::new();
         for ((machine, source), probe) in rows.into_iter().zip(probes) {
             let everyport = probe.await.unwrap_or_else(|_| "unreachable".into());
-            table.push([
-                machine.name,
-                connection(&machine.via),
-                source.into(),
-                everyport,
-            ]);
+            table.push([machine.name, connection(&machine.via), source, everyport]);
         }
         table
     });

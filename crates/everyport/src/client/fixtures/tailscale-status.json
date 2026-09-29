@@ -1,0 +1,68 @@
+{
+  "Version": "1.90.6-t6f3c2a1e4-g0b7c9d2e1",
+  "TUN": false,
+  "BackendState": "Running",
+  "TailscaleIPs": ["100.101.1.1", "fd7a:115c:a1e0::1"],
+  "Self": {
+    "ID": "nSelf1CNTRL",
+    "HostName": "Sam's MacBook Pro",
+    "DNSName": "sams-macbook-pro.tail0000.ts.net.",
+    "OS": "macOS",
+    "TailscaleIPs": ["100.101.1.1", "fd7a:115c:a1e0::1"],
+    "Online": true
+  },
+  "MagicDNSSuffix": "tail0000.ts.net",
+  "Peer": {
+    "nodekey:0001": {
+      "ID": "nPeer1CNTRL",
+      "HostName": "DESKTOP-GAMING",
+      "DNSName": "desktop-gaming.tail0000.ts.net.",
+      "OS": "windows",
+      "TailscaleIPs": ["100.101.2.2", "fd7a:115c:a1e0::2"],
+      "Online": true,
+      "Active": true,
+      "LastSeen": "0001-01-01T00:00:00Z"
+    },
+    "nodekey:0002": {
+      "ID": "nPeer2CNTRL",
+      "HostName": "build-server",
+      "DNSName": "build-server.tail0000.ts.net.",
+      "OS": "linux",
+      "TailscaleIPs": ["100.101.3.3"],
+      "Online": true
+    },
+    "nodekey:0003": {
+      "ID": "nPeer3CNTRL",
+      "HostName": "old-laptop",
+      "DNSName": "old-laptop.tail0000.ts.net.",
+      "OS": "macOS",
+      "TailscaleIPs": ["100.101.4.4"],
+      "Online": false,
+      "LastSeen": "2026-08-01T10:00:00Z"
+    },
+    "nodekey:0004": {
+      "ID": "nPeer4CNTRL",
+      "HostName": "Sam's iPhone",
+      "DNSName": "sams-iphone.tail0000.ts.net.",
+      "OS": "iOS",
+      "TailscaleIPs": ["100.101.5.5"],
+      "Online": true
+    },
+    "nodekey:0005": {
+      "ID": "nPeer5CNTRL",
+      "HostName": "Studio Mac",
+      "DNSName": "studio-mac.tail0000.ts.net.",
+      "OS": "macOS",
+      "TailscaleIPs": ["100.101.6.6"],
+      "Online": true
+    },
+    "nodekey:0006": {
+      "ID": "nPeer6CNTRL",
+      "HostName": "nas",
+      "DNSName": "nas.tail0000.ts.net.",
+      "OS": "linux",
+      "TailscaleIPs": ["100.101.7.7"],
+      "Online": true
+    }
+  }
+}

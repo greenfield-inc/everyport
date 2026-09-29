@@ -6,6 +6,7 @@
 //! [`install::probe`] it, ask before [`install::install`], then [`connect`]
 //! with the probed `everyport_path`.
 
+pub mod check;
 mod connection;
 pub mod discover;
 pub mod forward;
@@ -13,6 +14,7 @@ mod http;
 pub mod install;
 pub mod machines;
 mod remote;
+pub mod retry;
 mod session;
 pub mod wsl;
 

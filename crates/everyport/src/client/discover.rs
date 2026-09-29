@@ -1,15 +1,41 @@
 //! Machines the user can add without typing a command: hosts in
-//! `~/.ssh/config`, Pane remote hosts, and WSL distros on Windows.
+//! `~/.ssh/config`, Pane remote hosts, Tailscale peers, and WSL distros on
+//! Windows.
 
+use crate::client::check::Hint;
 use crate::client::machines::{Machine, Via};
+use crate::protocol::Os;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     SshConfig,
     Pane,
+    /// An online Tailscale peer, and the OS Tailscale reports for it.
+    Tailscale(Os),
     Wsl,
+}
+
+impl Source {
+    /// Where the machine came from, such as `Tailscale (Windows)`.
+    pub fn label(self) -> String {
+        match self {
+            Self::SshConfig => "SSH config".into(),
+            Self::Pane => "Pane".into(),
+            Self::Tailscale(os) => format!(
+                "Tailscale ({})",
+                match os {
+                    Os::Macos => "macOS",
+                    Os::Linux => "Linux",
+                    Os::Windows => "Windows",
+                }
+            ),
+            Self::Wsl => "WSL".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,23 +49,141 @@ pub async fn all() -> Vec<Found> {
     let home = dirs::home_dir().unwrap_or_default();
     let pane_dir = std::env::var_os("PANE_DIR").map_or_else(|| home.join(".pane"), PathBuf::from);
     let found = |source| move |machine| Found { machine, source };
-    ssh_config(&home.join(".ssh").join("config"))
+    let mut all: Vec<Found> = ssh_config(&home.join(".ssh").join("config"))
         .into_iter()
         .map(found(Source::SshConfig))
         .chain(pane(&pane_dir).into_iter().map(found(Source::Pane)))
-        .chain(
-            crate::client::wsl::distros()
-                .await
-                .into_iter()
-                .map(|distro| Machine {
-                    name: distro.clone(),
+        .collect();
+    let peers = match tailscale_status().await {
+        Some(status) => tailscale(&status, &all),
+        None => Vec::new(),
+    };
+    all.extend(peers);
+    all.extend(
+        crate::client::wsl::distros()
+            .await
+            .into_iter()
+            .map(|distro| Machine {
+                name: distro.clone(),
+                via: Via::Command {
+                    command: crate::client::wsl::prefix(&distro),
+                },
+            })
+            .map(found(Source::Wsl)),
+    );
+    all
+}
+
+/// What discovery knows about the machine reached through `via`: whether
+/// Pane lists it, and the OS Tailscale reports.
+pub fn hint(found: &[Found], via: &Via) -> Hint {
+    let same = || found.iter().filter(|f| f.machine.via == *via);
+    Hint {
+        os: same().find_map(|f| match f.source {
+            Source::Tailscale(os) => Some(os),
+            _ => None,
+        }),
+        pane: same().any(|f| f.source == Source::Pane),
+    }
+}
+
+/// `tailscale status --json`, from the first `tailscale` CLI found.
+async fn tailscale_status() -> Option<String> {
+    let clis = [
+        "tailscale",
+        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+        r"C:\Program Files\Tailscale\tailscale.exe",
+    ];
+    for cli in clis {
+        let mut command = tokio::process::Command::new(cli);
+        command
+            .args(["status", "--json"])
+            .stdin(std::process::Stdio::null())
+            .kill_on_drop(true);
+        #[cfg(windows)]
+        command.creation_flags(crate::client::remote::CREATE_NO_WINDOW);
+        match tokio::time::timeout(Duration::from_secs(3), command.output()).await {
+            Ok(Ok(out)) if out.status.success() => {
+                return Some(String::from_utf8_lossy(&out.stdout).into_owned())
+            }
+            // It's there but not running or signed in.
+            Ok(Ok(_)) | Err(_) => return None,
+            Ok(Err(_)) => {}
+        }
+    }
+    None
+}
+
+/// Online peers in `tailscale status --json` that can run everyport, as ssh
+/// machines named by their MagicDNS name. Skips this device, and peers that
+/// `known` machines already reach by name or Tailscale IP.
+pub fn tailscale(status: &str, known: &[Found]) -> Vec<Found> {
+    #[derive(Deserialize)]
+    struct Status {
+        #[serde(rename = "Self")]
+        this: Option<Peer>,
+        #[serde(rename = "Peer", default)]
+        peers: HashMap<String, Peer>,
+    }
+    #[derive(Deserialize)]
+    #[serde(rename_all = "PascalCase")]
+    struct Peer {
+        #[serde(rename = "DNSName", default)]
+        dns_name: String,
+        #[serde(rename = "OS", default)]
+        os: String,
+        #[serde(default)]
+        online: bool,
+        #[serde(rename = "TailscaleIPs", default)]
+        tailscale_ips: Vec<String>,
+    }
+
+    let Ok(status) = serde_json::from_str::<Status>(status) else {
+        return Vec::new();
+    };
+    let this = status.this.map(|s| s.dns_name).unwrap_or_default();
+    let known_hosts: Vec<&str> = known
+        .iter()
+        .filter_map(|f| match &f.machine.via {
+            Via::Command { command } if command.first().is_some_and(|c| c == "ssh") => {
+                let dest = command.last()?;
+                Some(dest.rsplit('@').next().unwrap_or(dest))
+            }
+            _ => None,
+        })
+        .collect();
+    let mut peers: Vec<Found> = status
+        .peers
+        .into_values()
+        .filter(|peer| peer.online && !peer.dns_name.is_empty() && peer.dns_name != this)
+        .filter_map(|peer| {
+            let os = match peer.os.as_str() {
+                "macOS" => Os::Macos,
+                "linux" => Os::Linux,
+                "windows" => Os::Windows,
+                // Phones and TVs can't run everyport.
+                _ => return None,
+            };
+            let name = peer.dns_name.trim_end_matches('.').to_string();
+            let short = name.split('.').next().unwrap_or(&name);
+            let known = known_hosts.iter().any(|host| {
+                host.eq_ignore_ascii_case(&name)
+                    || host.eq_ignore_ascii_case(short)
+                    || peer.tailscale_ips.iter().any(|ip| ip == host)
+            });
+            (!known).then(|| Found {
+                machine: Machine {
+                    name: name.clone(),
                     via: Via::Command {
-                        command: crate::client::wsl::prefix(&distro),
+                        command: vec!["ssh".into(), name],
                     },
-                })
-                .map(found(Source::Wsl)),
-        )
-        .collect()
+                },
+                source: Source::Tailscale(os),
+            })
+        })
+        .collect();
+    peers.sort_by(|a, b| a.machine.name.cmp(&b.machine.name));
+    peers
 }
 
 /// Named `Host` entries in an ssh config file and the files it `Include`s.
@@ -327,5 +471,62 @@ mod tests {
         assert!(!format!("{machines:?}").contains("SECRET"));
         assert!(pane(&dir.join("missing")).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn lists_online_tailscale_peers_not_found_another_way() {
+        let status = include_str!("fixtures/tailscale-status.json");
+        let ssh = |name: &str, dest: &str, source| Found {
+            machine: Machine {
+                name: name.into(),
+                via: Via::Command {
+                    command: vec!["ssh".into(), dest.into()],
+                },
+            },
+            source,
+        };
+        // An ssh config alias by the short name, and Pane by Tailscale IP.
+        let known = [
+            ssh("nas", "nas", Source::SshConfig),
+            ssh("Studio", "me@100.101.6.6", Source::Pane),
+        ];
+        let peers = tailscale(status, &known);
+        let summary: Vec<(&str, &Via, String)> = peers
+            .iter()
+            .map(|f| (f.machine.name.as_str(), &f.machine.via, f.source.label()))
+            .collect();
+        let via = |dest: &str| Via::Command {
+            command: vec!["ssh".into(), dest.into()],
+        };
+        assert_eq!(
+            summary,
+            [
+                (
+                    "build-server.tail0000.ts.net",
+                    &via("build-server.tail0000.ts.net"),
+                    "Tailscale (Linux)".to_string()
+                ),
+                (
+                    "desktop-gaming.tail0000.ts.net",
+                    &via("desktop-gaming.tail0000.ts.net"),
+                    "Tailscale (Windows)".to_string()
+                ),
+            ]
+        );
+        assert_eq!(
+            hint(&peers, &via("desktop-gaming.tail0000.ts.net")),
+            Hint {
+                os: Some(Os::Windows),
+                pane: false
+            }
+        );
+        assert_eq!(
+            hint(&known, &via("me@100.101.6.6")),
+            Hint {
+                os: None,
+                pane: true
+            }
+        );
+        assert!(tailscale("not json", &[]).is_empty());
     }
 }

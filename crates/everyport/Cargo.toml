@@ -21,6 +21,7 @@ ts-rs.workspace = true
 base64 = "0.23"
 dirs = "7"
 getrandom = "0.4"
+if-addrs = "0.15"
 open = "5"
 ratatui = "0.30"
 terminal-colorsaurus = "1"
