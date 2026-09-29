@@ -88,6 +88,8 @@ fn apply(app: &AppHandle, id: &str, update: Update) {
         match update {
             Update::Connecting => machine.state = MachineState::Connecting,
             Update::Disconnected { error, retry_in } => {
+                // Its servers are unknown now; the page shows the error instead.
+                machine.snapshot = None;
                 machine.state = MachineState::Error;
                 machine.error = Some(format!("{error}. Retrying in {} s.", retry_in.as_secs()));
             }

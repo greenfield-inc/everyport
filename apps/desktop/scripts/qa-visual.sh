@@ -5,8 +5,9 @@
 # attached, the alert card, and an open/close GIF.
 #
 # The terminal app running this needs Screen Recording and Accessibility.
-# It starts five throwaway servers on ports 43101-43105, flips the system
-# between light and dark mode, and puts both back when it exits.
+# It starts throwaway servers on ports 39101-39106 and stops only those, by
+# PID. It never stops, restarts or cleans anything through ppm. It switches
+# the system between light and dark mode, and puts it back when it exits.
 #
 #   apps/desktop/scripts/qa-visual.sh [app binary] [output folder]
 #
@@ -109,7 +110,7 @@ for mode in dark light; do
   shot_tray "tray-idle-$mode"
 done
 
-for port in 43101 43102 43103 43104 43105; do start_server "$port"; done
+for port in 39101 39102 39103 39104 39105; do start_server "$port"; done
 sleep 5 # two scans
 
 for mode in dark light; do
@@ -160,7 +161,7 @@ else
 fi
 
 # Attention: a server over the 2 GB alert threshold, then the alert card.
-start_server 43106 "ballast = bytearray(2200 * 1024 * 1024)"
+start_server 39106 "ballast = bytearray(2200 * 1024 * 1024)"
 sleep 8
 shot_tray "tray-attention-dark"
 read -r mx my mw _ < <(sed -n 1p <<<"$screens")

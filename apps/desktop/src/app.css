@@ -27,8 +27,8 @@ body {
   outline: none;
 }
 
-a,
-button {
+/* Native controls keep the arrow; only links get the hand. */
+a {
   cursor: pointer;
 }
 
