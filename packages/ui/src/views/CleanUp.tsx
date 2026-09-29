@@ -1,5 +1,5 @@
 import type { Server } from "@ppm/protocol";
-import { Colon, Header } from "../components.tsx";
+import { Colon, Header, useTween } from "../components.tsx";
 import type { ViewContext } from "../context.ts";
 import { memory, totalParts } from "../format.ts";
 import { CheckIcon, LockIcon, ReasonIcon } from "../icons.tsx";
@@ -26,7 +26,7 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
   const candidates = cleanUpCandidates(ctx.snapshot.servers);
   const chosen = candidates.filter((server) => checked.has(server.port));
   const freed = chosen.reduce((sum, server) => sum + server.memory, 0);
-  const [amount, unit] = totalParts(freed);
+  const [amount, unit] = totalParts(useTween(freed));
   const note = protectedNote(ctx.snapshot.servers.filter((server) => server.protected));
   const count = `${chosen.length} ${chosen.length === 1 ? "server" : "servers"}`;
 

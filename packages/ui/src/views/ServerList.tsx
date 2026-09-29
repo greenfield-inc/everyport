@@ -1,7 +1,7 @@
 import type { OtherPort, Server } from "@ppm/protocol";
 import { useEffect, useRef, useState } from "react";
 import { Sparkline } from "../charts.tsx";
-import { Colon, Grow, Header, ProtectedBadge, ProtectedConfirm, useLeaving } from "../components.tsx";
+import { Colon, Grow, Header, ProtectedBadge, ProtectedConfirm, useLeaving, useTween } from "../components.tsx";
 import { confirmOf, errorOf, type Pending, type ViewContext } from "../context.ts";
 import { memory, memoryParts, percent, total, totalParts } from "../format.ts";
 import { AgentIcon, BranchIcon, BroomIcon, Chevron, DotGrid, GearIcon, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
@@ -80,7 +80,7 @@ function Summary(props: {
   const { servers, system } = props.ctx.snapshot;
   const focused = servers.find((server) => server.port === props.segment);
   const [showMemory, setShowMemory] = useState(false);
-  const serversMemory = servers.reduce((sum, server) => sum + server.memory, 0);
+  const serversMemory = useTween(servers.reduce((sum, server) => sum + server.memory, 0));
   const [amount, unit] = focused ? memoryParts(focused.memory) : totalParts(serversMemory);
   const lit = props.segment ?? props.highlighted;
   const detail = focused
