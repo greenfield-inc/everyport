@@ -7,6 +7,7 @@ import "./app.css";
 import { syncAttentionColor } from "./attention";
 import { TauriEveryportClient } from "./client";
 import { NotificationWindow } from "./NotificationWindow";
+import { OnboardingWindow } from "./OnboardingWindow";
 import { PopoverWindow } from "./PopoverWindow";
 import { SettingsWindow } from "./settings/SettingsWindow";
 
@@ -19,6 +20,7 @@ root.dataset.window = label;
 
 async function page(): Promise<ReactNode> {
   if (label === "settings") return <SettingsWindow />;
+  if (label === "onboarding") return <OnboardingWindow />;
   // The popover and notification are transparent over native blur, where there is one.
   root.toggleAttribute("data-vibrancy", await invoke<boolean>("has_vibrancy"));
   if (label === "notification") return <NotificationWindow />;

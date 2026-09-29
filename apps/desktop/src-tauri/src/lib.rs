@@ -4,6 +4,7 @@
 mod launch;
 mod machines;
 mod notify;
+mod onboarding;
 mod placement;
 mod popover;
 mod settings;
@@ -65,6 +66,11 @@ pub fn run() {
             notify::notification_current,
             notify::notification_action,
             settings::open_settings,
+            settings::settings_take_pane,
+            onboarding::onboarding_tools,
+            onboarding::onboarding_finish,
+            onboarding::cli_status,
+            onboarding::cli_install,
             settings::launch_at_login,
             settings::set_launch_at_login,
             settings::settings_get,

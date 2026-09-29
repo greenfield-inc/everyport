@@ -311,8 +311,9 @@ pub fn fit(app: &AppHandle, size: LogicalSize<f64>) {
     });
 }
 
-/// Places the popover next to the tray icon, or the cursor where the tray
-/// can't report its rect (Linux), or the top center of the main screen.
+/// Places the popover next to the tray icon. Where the tray can't report its
+/// rect, it goes next to the cursor on Linux, above the bottom right corner on
+/// Windows (the icon may be in the ^ overflow), and top center on macOS.
 /// Takes the size to place rather than reading it back, since a resize may not
 /// have reached the window yet.
 fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
@@ -328,13 +329,17 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
                 height: size.height,
             }
         })
+        .filter(|rect| on_taskbar(app, rect))
         .or_else(|| {
-            app.cursor_position().ok().map(|p| Rect {
-                x: p.x,
-                y: p.y,
-                width: 0.0,
-                height: 0.0,
-            })
+            cfg!(target_os = "linux")
+                .then(|| app.cursor_position().ok())
+                .flatten()
+                .map(|p| Rect {
+                    x: p.x,
+                    y: p.y,
+                    width: 0.0,
+                    height: 0.0,
+                })
         });
     let monitor = anchor
         .and_then(|a| {
@@ -352,11 +357,24 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
         width: work.size.width.into(),
         height: work.size.height.into(),
     };
-    let anchor = anchor.unwrap_or(Rect {
-        x: area.x + area.width / 2.0,
-        y: area.y,
-        width: 0.0,
-        height: 0.0,
+    let anchor = anchor.unwrap_or_else(|| {
+        if cfg!(windows) {
+            let bounds = monitor.position();
+            let full = monitor.size();
+            Rect {
+                x: f64::from(bounds.x) + f64::from(full.width),
+                y: f64::from(bounds.y) + f64::from(full.height),
+                width: 0.0,
+                height: 0.0,
+            }
+        } else {
+            Rect {
+                x: area.x + area.width / 2.0,
+                y: area.y,
+                width: 0.0,
+                height: 0.0,
+            }
+        }
     });
     let (x, y) = place(
         anchor,
@@ -365,6 +383,26 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
         GAP * scale,
     );
     let _ = window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
+}
+
+/// Whether a tray icon's rect is on the taskbar, outside its screen's work
+/// area. On Windows an icon in the ^ overflow reports a rect inside the
+/// flyout, which is hidden by the time the popover shows.
+fn on_taskbar(app: &AppHandle, rect: &Rect) -> bool {
+    if !cfg!(windows) {
+        return true;
+    }
+    let (x, y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    let Some(monitor) = app.monitor_from_point(x, y).ok().flatten() else {
+        return false;
+    };
+    let work = monitor.work_area();
+    let (left, top) = (f64::from(work.position.x), f64::from(work.position.y));
+    let (right, bottom) = (
+        left + f64::from(work.size.width),
+        top + f64::from(work.size.height),
+    );
+    !(left..right).contains(&x) || !(top..bottom).contains(&y)
 }
 
 /// The page rendered its first data: show it if someone already asked.

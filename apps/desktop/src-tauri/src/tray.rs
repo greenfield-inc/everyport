@@ -66,7 +66,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "open" => popover::show(app),
-            "settings" => settings::open(app),
+            "settings" => settings::open(app, None),
             "login" => {
                 let enable = !settings::launch_at_login(app.clone());
                 if let Err(error) = settings::set_launch_at_login(app.clone(), enable) {

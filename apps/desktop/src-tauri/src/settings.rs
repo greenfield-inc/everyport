@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Windo
 use tauri_plugin_autostart::ManagerExt;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-use crate::{machines, popover, tray};
+use crate::{machines, onboarding, popover, tray};
 
 pub const LABEL: &str = "settings";
 
@@ -32,6 +32,9 @@ pub struct App {
     pub appearance: String,
     /// Opens the popover from anywhere, in Tauri's accelerator syntax.
     pub shortcut: String,
+    /// Onboarding has opened, and launch at login was turned on with it. Set
+    /// once, so neither happens again, even after the user turns it off.
+    pub onboarded: bool,
 }
 
 impl Default for App {
@@ -40,6 +43,7 @@ impl Default for App {
             theme: None,
             appearance: "system".into(),
             shortcut: "CommandOrControl+Alt+P".into(),
+            onboarded: false,
         }
     }
 }
@@ -74,8 +78,10 @@ fn state(app: &AppHandle) -> std::sync::MutexGuard<'_, Settings> {
 }
 
 /// Reads both files, registers the shortcut, and reloads the files when
-/// they change, such as after an edit by hand.
+/// they change, such as after an edit by hand. On first launch also turns on
+/// launch at login and opens onboarding.
 pub fn setup(app: &AppHandle) {
+    app.manage(Mutex::new(Pane(None)));
     app.manage(Mutex::new(Settings {
         config: Config::default(),
         app: App::default(),
@@ -87,6 +93,7 @@ pub fn setup(app: &AppHandle) {
     if let Err(error) = register(app, &default) {
         eprintln!("shortcut {default}: {error}");
     }
+    let first = app_file().and_then(|path| first_run(&path));
     reload(app);
     match watch(app) {
         Ok(watcher) => {
@@ -94,6 +101,28 @@ pub fn setup(app: &AppHandle) {
         }
         Err(error) => eprintln!("settings: can't watch the config folder: {error}"),
     }
+    match first {
+        Ok(true) => {
+            if let Err(error) = set_launch_at_login(app.clone(), true) {
+                eprintln!("launch at login: {error}");
+            }
+            onboarding::open(app);
+        }
+        Ok(false) => {}
+        Err(error) => eprintln!("first run: {error}"),
+    }
+}
+
+/// Whether this is the first launch, which it records in `app.toml`. An
+/// unreadable file is never overwritten.
+fn first_run(path: &Path) -> Result<bool, String> {
+    let mut prefs = load_app(path)?;
+    if prefs.onboarded {
+        return Ok(false);
+    }
+    prefs.onboarded = true;
+    save_app(path, &prefs)?;
+    Ok(true)
 }
 
 fn watch(app: &AppHandle) -> Result<notify::RecommendedWatcher, String> {
@@ -293,7 +322,17 @@ fn check_shortcut(shortcut: &str) -> Result<(), String> {
     }
 }
 
-pub fn open(app: &AppHandle) {
+/// The pane Settings should show next, taken by the page when it comes forward.
+struct Pane(Option<String>);
+
+/// Opens Settings, on `pane` when given.
+pub fn open(app: &AppHandle, pane: Option<String>) {
+    if pane.is_some() {
+        app.state::<Mutex<Pane>>()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .0 = pane;
+    }
     let window = match app.get_webview_window(LABEL) {
         Some(window) => window,
         None => match WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))
@@ -324,8 +363,18 @@ pub fn open(app: &AppHandle) {
 }
 
 #[tauri::command]
-pub fn open_settings(app: AppHandle) {
-    open(&app);
+pub fn open_settings(app: AppHandle, pane: Option<String>) {
+    open(&app, pane);
+}
+
+/// The pane `open` asked for, once.
+#[tauri::command]
+pub fn settings_take_pane(app: AppHandle) -> Option<String> {
+    app.state::<Mutex<Pane>>()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .0
+        .take()
 }
 
 #[tauri::command]
@@ -568,6 +617,32 @@ mod tests {
     }
 
     #[test]
+    fn launch_at_login_turns_on_once_and_never_again() {
+        let dir = std::env::temp_dir().join(format!("everyport-first-run-{}", std::process::id()));
+        let path = dir.join("app.toml");
+        // First launch: no app.toml yet.
+        assert_eq!(first_run(&path), Ok(true));
+        // The user turns launch at login off (it lives in the OS, not app.toml)
+        // and changes a setting; later launches leave it off.
+        let prefs = App {
+            appearance: "dark".into(),
+            ..load_app(&path).unwrap()
+        };
+        save_app(&path, &prefs).unwrap();
+        assert_eq!(first_run(&path), Ok(false));
+        assert_eq!(first_run(&path), Ok(false));
+        assert_eq!(load_app(&path).unwrap().appearance, "dark");
+        // A file with a typo is neither read as a first launch nor overwritten.
+        std::fs::write(&path, "appearance = dark\n").unwrap();
+        assert!(first_run(&path).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "appearance = dark\n"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn app_settings_round_trip_and_keep_defaults() {
         let dir =
             std::env::temp_dir().join(format!("everyport-app-settings-{}", std::process::id()));
@@ -577,6 +652,7 @@ mod tests {
             theme: Some("catppuccin".into()),
             appearance: "dark".into(),
             shortcut: "Alt+Space".into(),
+            onboarded: true,
         };
         save_app(&path, &prefs).unwrap();
         assert_eq!(load_app(&path), Ok(prefs));

@@ -1,10 +1,11 @@
 import { Socket, Themed } from "@everyport/ui";
-import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useState } from "react";
 import { CleanUpPane } from "./CleanUpPane";
 import { GeneralPane } from "./GeneralPane";
 import { MachinesPane } from "./MachinesPane";
 import "./settings.css";
-import { useSettings } from "./useSettings";
+import { useOnFocus, useSettings } from "./useSettings";
 
 const PANES = [
   { title: "General", view: GeneralPane },
@@ -15,7 +16,12 @@ const PANES = [
 /** The Settings window: a sidebar of panes, in the active theme. */
 export function SettingsWindow() {
   const settings = useSettings();
-  const [pane, setPane] = useState<(typeof PANES)[number]["title"]>("General");
+  type Pane = (typeof PANES)[number]["title"];
+  const [pane, setPane] = useState<Pane>("General");
+  // Opened on a pane, such as Machines from onboarding.
+  useOnFocus(
+    useCallback(() => void invoke<Pane | null>("settings_take_pane").then((next) => next && setPane(next)), []),
+  );
   // A save that failed, such as an unwritable settings folder.
   const [failure, setFailure] = useState<string | null>(null);
   useEffect(() => {
