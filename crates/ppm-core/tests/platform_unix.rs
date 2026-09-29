@@ -106,7 +106,8 @@ fn listeners_include_sockets_we_bind() {
 }
 
 /// Root's listener, as a normal user sees it. Starting it takes passwordless
-/// sudo, which CI's runners have; elsewhere the test says why it skips.
+/// sudo, which CI's runners have, so it fails there rather than skip. Elsewhere
+/// the test says why it skips.
 #[test]
 fn another_users_listener_shows_port_and_owner() {
     use ppm_core::platform::OtherListener;
@@ -117,7 +118,9 @@ fn another_users_listener_shows_port_and_owner() {
     };
     let can_sudo = sudo().arg("true").status().is_ok_and(|s| s.success());
     if unsafe { libc::geteuid() } == 0 || !can_sudo {
-        eprintln!("skipped: needs a user other than root with passwordless sudo");
+        let why = "needs a user other than root with passwordless sudo";
+        assert!(std::env::var_os("CI").is_none(), "{why}");
+        eprintln!("skipped: {why}");
         return;
     }
     let port = TcpListener::bind("127.0.0.1:0")
