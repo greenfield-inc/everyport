@@ -52,7 +52,7 @@ describe("another machine", () => {
     expect(client.installPpm).toHaveBeenCalledWith("devbox");
   });
 
-  it("shows why an install failed, next to the same question", () => {
+  it("gives the reason instead, when an install failed or ppm there is incompatible", () => {
     const { host, button } = render({
       id: "devbox",
       label: "devbox",
@@ -62,6 +62,8 @@ describe("another machine", () => {
       install: { version: "0.1.0", path: "/home/me/.local/bin/ppm" },
       snapshot: null,
     });
+    expect(host.textContent).toContain("Install ppm 0.1.0 to /home/me/.local/bin/ppm?");
+    expect(host.textContent).not.toContain("isn't on devbox yet");
     expect(host.textContent).toContain("Couldn't install ppm: no space left on device");
     expect(button("Install ppm")).toBeDefined();
   });

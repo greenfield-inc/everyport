@@ -293,7 +293,8 @@ fn update(app: &AppHandle, id: &str, run: u64, f: impl FnOnce(&mut Entry)) -> bo
 enum Plan {
     /// ppm isn't there: ask the user.
     Ask,
-    /// The app's own install is older than the app: update it.
+    /// ppm at the install path is older than the app: update it, as the
+    /// README promises. A newer one is used as it is.
     Update,
     Connect,
 }
@@ -301,9 +302,29 @@ enum Plan {
 fn plan(probe: &Probe) -> Plan {
     match &probe.installed {
         None => Plan::Ask,
-        Some(_) if probe.ppm_path == probe.install_path && !probe.up_to_date() => Plan::Update,
+        Some(v) if probe.ppm_path == probe.install_path && older(v, install::VERSION) => {
+            Plan::Update
+        }
         Some(_) => Plan::Connect,
     }
+}
+
+/// True when version `a` is older than `b`, comparing `major.minor.patch`
+/// as numbers. Versions that don't parse are never older, so the app
+/// doesn't replace a ppm it can't place.
+fn older(a: &str, b: &str) -> bool {
+    let parse = |v: &str| -> Option<Vec<u64>> {
+        let core = v.split(['-', '+']).next()?;
+        let parts: Option<Vec<u64>> = core.split('.').map(|n| n.parse().ok()).collect();
+        parts.filter(|p| p.len() == 3)
+    };
+    matches!((parse(a), parse(b)), (Some(a), Some(b)) if a < b)
+}
+
+/// ppm-client ends a session with this when the machine's ppm speaks
+/// another protocol version, before any hello reaches the app.
+fn incompatible(error: &str) -> bool {
+    error.contains("which speaks protocol")
 }
 
 /// Connects a remote machine: probes it, updates or asks to install ppm, then
@@ -359,8 +380,10 @@ fn run(app: &AppHandle, id: &str) {
             Plan::Connect => {
                 let connection = Connection::Command {
                     argv_prefix: prefix,
-                    ppm_path: probe.ppm_path,
+                    ppm_path: probe.ppm_path.clone(),
                 };
+                // Kept in case its protocol is incompatible, to ask then.
+                update(&app, &id, run, |e| e.probe = Some(probe));
                 connect(&app, &id, run, connection);
             }
         }
@@ -447,6 +470,25 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
         let machine = &mut entry.machine;
         match update {
             Update::Connecting => machine.state = MachineState::Connecting,
+            Update::Disconnected { error, .. } if incompatible(&error) && entry.probe.is_some() => {
+                // A ppm this app can't talk to: stop retrying and ask to install ours.
+                eprintln!(
+                    "machine {id}: {error} Asking to install ppm {}.",
+                    install::VERSION
+                );
+                let path = entry.probe.as_ref().map(|p| p.install_path.clone());
+                entry.client = None;
+                entry.connection = None;
+                machine.state = MachineState::Install;
+                machine.error = Some(error);
+                machine.install = path.map(|path| InstallOffer {
+                    version: install::VERSION.into(),
+                    path,
+                });
+                drop(all);
+                changed(app);
+                return false;
+            }
             Update::Disconnected { error, retry_in } => {
                 // Its servers are unknown now; the page shows the error instead.
                 eprintln!("machine {id}: {error}");
@@ -656,7 +698,9 @@ pub async fn url(app: &AppHandle, machine_id: &str, port: u16) -> Result<String,
         let entry = all
             .entry(machine_id)
             .ok_or_else(|| format!("no machine {machine_id}"))?;
-        if let Some(forward) = entry.forwards.get(&port) {
+        // A tunnel that died, such as an ssh -L whose connection dropped,
+        // no longer listens, and is made again.
+        if let Some(forward) = entry.forwards.get(&port).filter(|f| listens(f.local_port)) {
             return Ok(forward.url.clone());
         }
         let connection = entry
@@ -674,13 +718,26 @@ pub async fn url(app: &AppHandle, machine_id: &str, port: u16) -> Result<String,
         .iter_mut()
         .find(|e| e.machine.id == machine_id && e.run == run)
         .ok_or_else(|| format!("{machine_id} disconnected"))?;
-    // Another open of the same port may have finished first; keep its tunnel.
-    let url = entry.forwards.entry(port).or_insert(forward).url.clone();
+    // Another open of the same port may have finished first; keep a live tunnel.
+    let url = match entry.forwards.get(&port) {
+        Some(other) if listens(other.local_port) => other.url.clone(),
+        _ => {
+            let url = forward.url.clone();
+            entry.forwards.insert(port, forward);
+            url
+        }
+    };
     eprintln!("machine {machine_id}: :{port} opens at {url}");
     all.show_local();
     drop(all);
     changed(app);
     Ok(url)
+}
+
+/// Whether something accepts connections on this computer's `port`.
+fn listens(port: u16) -> bool {
+    let address = (std::net::Ipv4Addr::LOCALHOST, port).into();
+    std::net::TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok()
 }
 
 /// Installs ppm on a machine that is waiting for the user's yes, then connects.
@@ -692,7 +749,10 @@ pub fn install(app: &AppHandle, machine_id: &str) -> Result<(), String> {
             .iter_mut()
             .find(|e| e.machine.id == machine_id)
             .ok_or_else(|| format!("no machine {machine_id}"))?;
-        let (Some(Via::Command { command }), Some(probe)) = (&entry.via, entry.probe.take()) else {
+        let asking = entry.machine.state == MachineState::Install;
+        let (true, Some(Via::Command { command }), Some(probe)) =
+            (asking, &entry.via, entry.probe.take())
+        else {
             return Err(format!("{machine_id} isn't waiting to install ppm"));
         };
         (entry.run, command.clone(), probe)
@@ -837,7 +897,26 @@ mod tests {
         assert_eq!(plan(&probe(ours, None)), Plan::Ask);
         assert_eq!(plan(&probe(ours, Some("0.0.1"))), Plan::Update);
         assert_eq!(plan(&probe(ours, Some(install::VERSION))), Plan::Connect);
+        // A newer one, such as from install.sh, is never downgraded.
+        assert_eq!(plan(&probe(ours, Some("99.0.0"))), Plan::Connect);
         // One the user installed themselves, such as with brew, is theirs to update.
         assert_eq!(plan(&probe("ppm", Some("0.0.1"))), Plan::Connect);
+    }
+
+    #[test]
+    fn compares_versions_as_numbers() {
+        assert!(older("0.9.0", "0.10.0"));
+        assert!(older("1.2.3", "1.3.0"));
+        assert!(older("0.1.0-rc.1", "0.2.0"));
+        assert!(!older("0.10.0", "0.9.0"));
+        assert!(!older("0.1.0", "0.1.0"));
+        assert!(!older("nightly", "0.1.0"));
+    }
+
+    #[test]
+    fn recognizes_ppm_clients_protocol_mismatch() {
+        // The message ppm-client's session ends with, for a ppm 0.3.0 speaking protocol 2.
+        assert!(incompatible("This machine runs ppm 0.3.0, which speaks protocol 2. The app speaks protocol 1. Update ppm on the machine."));
+        assert!(!incompatible("ppm exited: connection reset"));
     }
 }

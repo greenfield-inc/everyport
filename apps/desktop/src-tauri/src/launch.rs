@@ -201,8 +201,11 @@ fn wsl_editor(distro: &str, path: &str) -> bool {
 fn wsl_terminal(distro: &str, directory: &str, command: &str) -> std::io::Result<()> {
     let wsl = wsl_command(distro, directory, command);
     Command::new("wt.exe")
-        .args(["-p", &wt_arg(distro)])
-        .args(wsl.iter().map(|arg| wt_arg(arg)))
+        .args(wt_args(
+            ["-p", distro]
+                .into_iter()
+                .chain(wsl.iter().map(String::as_str)),
+        ))
         .spawn()
         .or_else(|_| {
             let mut console = Command::new(&wsl[0]);
@@ -218,11 +221,14 @@ fn wsl_terminal(distro: &str, directory: &str, command: &str) -> std::io::Result
         .map(drop)
 }
 
-/// An argument for `wt.exe`, which splits its command line at every `;`,
-/// even inside a quoted argument, unless it is escaped as `\;`. A folder
-/// from a snapshot must not start a second command.
-fn wt_arg(arg: &str) -> String {
-    arg.replace(';', r"\;")
+/// Arguments for `wt.exe`, which splits its command line at every `;`, even
+/// inside a quoted argument, unless it is escaped as `\;`. A folder from a
+/// snapshot must not start a second command. Spaces and quotes need nothing
+/// here: `Command` quotes each argument for the Windows command line.
+fn wt_args<'a>(args: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    args.into_iter()
+        .map(|arg| arg.replace(';', r"\;"))
+        .collect()
 }
 
 /// Single-quotes `value` for a POSIX shell.
@@ -278,14 +284,14 @@ fn terminal(_name: &str, directory: &str, command: &str) -> std::io::Result<()> 
     const CREATE_NEW_CONSOLE: u32 = 0x10;
 
     Command::new("wt.exe")
-        .args([
+        .args(wt_args([
             "-d",
-            &wt_arg(directory),
+            directory,
             "powershell.exe",
             "-NoExit",
             "-Command",
-            &wt_arg(command),
-        ])
+            command,
+        ]))
         .spawn()
         .or_else(|_| {
             Command::new("powershell.exe")
@@ -365,8 +371,35 @@ mod tests {
     }
 
     #[test]
-    fn keeps_semicolons_inside_a_windows_terminal_argument() {
-        assert_eq!(wt_arg("/tmp;calc.exe;wsl.exe"), r"/tmp\;calc.exe\;wsl.exe");
+    fn escapes_semicolons_for_windows_terminal() {
+        // Windows Terminal's command line docs: a literal `;` is written `\;`,
+        // or it starts a new tab. Folder and command as a snapshot could send them.
+        let wsl = wsl_command(
+            "Ubuntu",
+            "/home/me/my app;calc.exe",
+            r#"echo "a;b"; claude --resume 0b5c7f36"#,
+        );
+        let args = wt_args(
+            ["-p", "Ubuntu"]
+                .into_iter()
+                .chain(wsl.iter().map(String::as_str)),
+        );
+        assert_eq!(
+            args,
+            [
+                "-p",
+                "Ubuntu",
+                "wsl.exe",
+                "-d",
+                "Ubuntu",
+                "--cd",
+                r"/home/me/my app\;calc.exe",
+                "--exec",
+                "bash",
+                "-lc",
+                r#"echo "a\;b"\; claude --resume 0b5c7f36"#,
+            ]
+        );
     }
 
     #[test]

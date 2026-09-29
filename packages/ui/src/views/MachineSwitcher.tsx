@@ -70,7 +70,7 @@ export function MachineStatus({ machine, client }: { machine: Machine; client: P
     machine.state === "available"
       ? `${machine.label} isn't connected.`
       : machine.state === "install"
-        ? `ppm isn't on ${machine.label} yet. Install ppm ${machine.install?.version ?? ""} to ${machine.install?.path ?? "~/.local/bin"}?`
+        ? `${machine.error ? "" : `ppm isn't on ${machine.label} yet. `}Install ppm ${machine.install?.version ?? ""} to ${machine.install?.path ?? "~/.local/bin"}?`
         : machine.state === "installing"
           ? `Installing ppm on ${machine.label}…`
           : machine.state === "error"
