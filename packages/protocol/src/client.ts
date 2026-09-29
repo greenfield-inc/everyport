@@ -7,8 +7,8 @@ export interface Machine {
   host: HostInfo | null;
   /**
    * `available`: discovered, and connects when picked (`connectMachine`).
-   * `install`: ppm isn't on the machine; `install` says what installing does,
-   * and `installPpm` does it once the user says yes.
+   * `install`: everyport isn't on the machine; `install` says what installing does,
+   * and `installEveryport` does it once the user says yes.
    */
   state: "available" | "connecting" | "install" | "installing" | "connected" | "error";
   error?: string;
@@ -18,10 +18,10 @@ export interface Machine {
 
 /**
  * What the UI needs from its host app. The Tauri app implements it with
- * ppm-client; Pane can implement it over its daemon; tests use the fixture.
- * @ppm/ui imports only this interface, never Tauri.
+ * everyport-client; Pane can implement it over its daemon; tests use the fixture.
+ * @everyport/ui imports only this interface, never Tauri.
  */
-export interface PpmClient {
+export interface EveryportClient {
   machines(): Machine[];
   subscribe(listener: (machines: Machine[]) => void): () => void;
   call(machineId: string, call: Call): Promise<void>;
@@ -37,6 +37,6 @@ export interface PpmClient {
   openSettings?(): void;
   /** Connects a discovered machine the user picked. */
   connectMachine?(machineId: string): Promise<void>;
-  /** Installs ppm on a machine in the `install` state, then connects. */
-  installPpm?(machineId: string): Promise<void>;
+  /** Installs everyport on a machine in the `install` state, then connects. */
+  installEveryport?(machineId: string): Promise<void>;
 }

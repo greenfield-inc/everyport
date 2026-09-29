@@ -1,5 +1,5 @@
-import type { Config } from "@ppm/protocol";
-import type { Appearance } from "@ppm/ui";
+import type { Config } from "@everyport/protocol";
+import type { Appearance } from "@everyport/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 export type AppSettings = { theme: string | null; appearance: Appearance; shortcut: string };
 
 export type Settings = {
-  /** The scanner settings in `config.toml`, which `ppm` also reads. */
+  /** The scanner settings in `config.toml`, which `everyport` also reads. */
   config: Config;
   app: AppSettings;
   /** Why `config.toml` can't be read. Scanner settings don't save until it's fixed. */
@@ -62,7 +62,7 @@ export function saveApp(change: Partial<AppSettings>) {
 
 /**
  * Runs `refresh` now and whenever the window comes forward. Settings stays
- * open in the background, and the tray menu or `ppm remote` can change what
+ * open in the background, and the tray menu or `everyport remote` can change what
  * it shows meanwhile.
  */
 export function useOnFocus(refresh: () => void) {

@@ -1,22 +1,19 @@
 # Site
 
-The landing page at <https://greenfield-inc.github.io/port-process-manager/>. It renders the real `@ppm/ui` popover over an in-page fake `PpmClient` with demo machines, so nothing it does touches a real server.
+The landing page at <https://everyport.dev>. It renders the real `@everyport/ui` popover over an in-page fake `EveryportClient` with demo machines, so nothing it does touches a real server.
 
 ```bash
-pnpm --filter @ppm/site dev      # http://localhost:5198/port-process-manager/
-pnpm --filter @ppm/site build    # site/dist
-pnpm --filter @ppm/site og       # renders og.html to public/og.png
+pnpm --filter @everyport/site dev      # http://localhost:5198/everyport/
+pnpm --filter @everyport/site build    # site/dist
+pnpm --filter @everyport/site og       # renders og.html to public/og.png
 ```
 
-`.github/workflows/pages.yml` builds and deploys it on every push to `main` that changes the site, `@ppm/ui` or `@ppm/protocol`.
+`.github/workflows/pages.yml` builds and deploys it on every push to `main` that changes the site, `@everyport/ui` or `@everyport/protocol`.
 
 The install section's one-line command fetches `install.sh` and `install.ps1` from the site root. They come from `scripts/install-app.sh` and `scripts/install-app.ps1`. Direct downloads link to the release files for the version in `Cargo.toml`.
 
 `public/og.png` is the social preview for the site and for the GitHub repository (Settings, Social preview).
 
-## Moving to a custom domain
+## Domain
 
-1. Add `site/public/CNAME` containing the domain, such as `ppm.example.com`.
-2. Set `SITE_URL` in `.github/workflows/pages.yml` to `https://ppm.example.com/`.
-
-`SITE_URL` sets Vite's `base` (its path, here `/`) and the absolute `og:url` and `og:image` URLs. Every other asset path is relative to the base.
+The `SITE_URL` repository variable (Settings, Secrets and variables, Actions) holds the site's address, `https://everyport.dev`, and the custom domain is set in Settings, Pages. `SITE_URL` sets Vite's `base` (its path, here `/`), the canonical, `og:url` and `og:image` URLs, and the install commands. Every other asset path is relative to the base. Without the variable, the site builds for `https://greenfield-inc.github.io/everyport/`.

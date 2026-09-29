@@ -1,12 +1,12 @@
-import type { Machine, PpmClient } from "@ppm/protocol";
+import type { Machine, EveryportClient } from "@everyport/protocol";
 import { useState } from "react";
 
 const stateLabel: Record<Machine["state"], string> = {
   available: "Not connected",
   connected: "Connected",
   connecting: "Connecting",
-  install: "Needs ppm",
-  installing: "Installing ppm",
+  install: "Needs Everyport",
+  installing: "Installing Everyport",
   error: "Can't connect",
 };
 
@@ -21,19 +21,19 @@ export function MachineSwitcher({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div role="tablist" aria-label="Machines" className="ppm-scroll ppm:flex ppm:gap-1 ppm:overflow-x-auto ppm:px-3 ppm:pt-3">
+    <div role="tablist" aria-label="Machines" className="everyport-scroll everyport:flex everyport:gap-1 everyport:overflow-x-auto everyport:px-3 everyport:pt-3">
       {machines.map((machine) => {
         const count = machine.snapshot?.servers.length;
         const dot =
           machine.state === "error"
-            ? "ppm:bg-danger"
+            ? "everyport:bg-danger"
             : machine.state === "connected"
               ? machine.snapshot?.servers.some((server) => server.status === "attention")
-                ? "ppm:bg-warn"
-                : "ppm:bg-fg2"
+                ? "everyport:bg-warn"
+                : "everyport:bg-fg2"
               : machine.state === "available" || machine.state === "install"
-                ? "ppm:ring-1 ppm:ring-fg3 ppm:ring-inset"
-                : "ppm:bg-fg3 ppm:animate-pulse";
+                ? "everyport:ring-1 everyport:ring-fg3 everyport:ring-inset"
+                : "everyport:bg-fg3 everyport:animate-pulse";
         return (
           <button
             key={machine.id}
@@ -42,13 +42,13 @@ export function MachineSwitcher({
             aria-selected={machine.id === current}
             title={machine.error ?? `${machine.label} · ${stateLabel[machine.state]}`}
             onClick={() => onSelect(machine.id)}
-            className={`ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-1.5 ppm:rounded-md ppm:px-2 ppm:py-1 ppm:text-11 ${
-              machine.id === current ? "ppm:bg-accent ppm:text-fg" : "ppm:text-fg2 ppm:hover:bg-accent"
+            className={`everyport:flex everyport:shrink-0 everyport:items-center everyport:gap-1.5 everyport:rounded-md everyport:px-2 everyport:py-1 everyport:text-11 ${
+              machine.id === current ? "everyport:bg-accent everyport:text-fg" : "everyport:text-fg2 everyport:hover:bg-accent"
             }`}
           >
-            <span className={`ppm:size-1.5 ppm:rounded-full ${dot}`} aria-hidden />
-            <span className="ppm:font-medium">{machine.label}</span>
-            {count !== undefined && <span className="ppm:font-mono ppm:text-fg3">{count}</span>}
+            <span className={`everyport:size-1.5 everyport:rounded-full ${dot}`} aria-hidden />
+            <span className="everyport:font-medium">{machine.label}</span>
+            {count !== undefined && <span className="everyport:font-mono everyport:text-fg3">{count}</span>}
           </button>
         );
       })}
@@ -58,9 +58,9 @@ export function MachineSwitcher({
 
 /**
  * The list area while a machine has no snapshot: connecting, failed, not
- * connected yet, or asking before it installs ppm there.
+ * connected yet, or asking before it installs everyport there.
  */
-export function MachineStatus({ machine, client }: { machine: Machine; client: PpmClient }) {
+export function MachineStatus({ machine, client }: { machine: Machine; client: EveryportClient }) {
   const [failed, setFailed] = useState<string>();
   const run = (action: (id: string) => Promise<void>) => () => {
     setFailed(undefined);
@@ -70,25 +70,25 @@ export function MachineStatus({ machine, client }: { machine: Machine; client: P
     machine.state === "available"
       ? `${machine.label} isn't connected.`
       : machine.state === "install"
-        ? `${machine.error ? "" : `ppm isn't on ${machine.label} yet. `}Install ppm ${machine.install?.version ?? ""} to ${machine.install?.path ?? "~/.local/bin"}?`
+        ? `${machine.error ? "" : `Everyport isn't on ${machine.label} yet. `}Install Everyport ${machine.install?.version ?? ""} to ${machine.install?.path ?? "~/.local/bin"}?`
         : machine.state === "installing"
-          ? `Installing ppm on ${machine.label}…`
+          ? `Installing Everyport on ${machine.label}…`
           : machine.state === "error"
             ? (machine.error ?? `Can't connect to ${machine.label}`)
             : `Connecting to ${machine.label}…`;
   const button =
     machine.state === "available" && client.connectMachine
       ? { label: "Connect", onClick: run(client.connectMachine.bind(client)) }
-      : machine.state === "install" && client.installPpm
-        ? { label: "Install ppm", onClick: run(client.installPpm.bind(client)) }
+      : machine.state === "install" && client.installEveryport
+        ? { label: "Install Everyport", onClick: run(client.installEveryport.bind(client)) }
         : undefined;
   const error = failed ?? (machine.state === "install" ? machine.error : undefined);
   return (
-    <div className="ppm:flex ppm:flex-col ppm:items-center ppm:gap-3 ppm:px-4 ppm:py-7 ppm:text-center ppm:text-13">
-      <p className={machine.state === "error" ? "ppm:text-danger" : "ppm:text-fg2"}>{text}</p>
-      {error && <p className="ppm:text-danger">{error}</p>}
+    <div className="everyport:flex everyport:flex-col everyport:items-center everyport:gap-3 everyport:px-4 everyport:py-7 everyport:text-center everyport:text-13">
+      <p className={machine.state === "error" ? "everyport:text-danger" : "everyport:text-fg2"}>{text}</p>
+      {error && <p className="everyport:text-danger">{error}</p>}
       {button && (
-        <button type="button" onClick={button.onClick} className="ppm:rounded-lg ppm:bg-accent ppm:px-3 ppm:py-[5px] ppm:font-medium ppm:text-fg">
+        <button type="button" onClick={button.onClick} className="everyport:rounded-lg everyport:bg-accent everyport:px-3 everyport:py-[5px] everyport:font-medium everyport:text-fg">
           {button.label}
         </button>
       )}

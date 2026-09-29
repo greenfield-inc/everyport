@@ -1,19 +1,19 @@
 [workspace]
 resolver = "2"
-members = ["crates/ppm-core", "crates/ppm", "crates/ppm-client", "apps/desktop/src-tauri"]
+members = ["crates/everyport-core", "crates/everyport", "crates/everyport-client", "apps/desktop/src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/greenfield-inc/port-process-manager"
-homepage = "https://github.com/greenfield-inc/port-process-manager"
+repository = "https://github.com/greenfield-inc/everyport"
+homepage = "https://github.com/greenfield-inc/everyport"
 readme = "README.md"
 keywords = ["ports", "dev-server", "localhost", "process", "cli"]
 
 [workspace.dependencies]
-ppm-core = { path = "crates/ppm-core", version = "0.1.0" }
-ppm-client = { path = "crates/ppm-client", version = "0.1.0" }
+everyport-core = { path = "crates/everyport-core", version = "0.1.0" }
+everyport-client = { path = "crates/everyport-client", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"

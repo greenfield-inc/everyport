@@ -1,7 +1,7 @@
 //! The machines the app watches and their latest state: this computer through
-//! the bundled `ppm` sidecar, the machines in `machines.toml`, WSL distros,
+//! the bundled `everyport` sidecar, the machines in `machines.toml`, WSL distros,
 //! and the ssh and Pane hosts discovery finds, which connect once picked.
-//! Every machine runs `ppm stdio` through ppm-client, on one code path.
+//! Every machine runs `everyport stdio` through everyport-client, on one code path.
 //! Snapshots always update the tray, but reach a page only while it shows.
 
 use std::collections::HashMap;
@@ -10,12 +10,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
-use ppm_client::discover::{self, Found, Source};
-use ppm_client::forward::{self, Forward};
-use ppm_client::install::{self, Probe};
-use ppm_client::machines::{self as saved, Via};
-use ppm_client::protocol::{AgentSession, Call, Event, HostInfo, Server, ServerStatus, Snapshot};
-use ppm_client::{Client, Connection, Update};
+use everyport_client::discover::{self, Found, Source};
+use everyport_client::forward::{self, Forward};
+use everyport_client::install::{self, Probe};
+use everyport_client::machines::{self as saved, Via};
+use everyport_client::protocol::{
+    AgentSession, Call, Event, HostInfo, Server, ServerStatus, Snapshot,
+};
+use everyport_client::{Client, Connection, Update};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -28,7 +30,7 @@ const LAST_RETRY: Duration = Duration::from_secs(30);
 /// Run numbers start at 1, so a new entry's 0 matches no task.
 static NEXT_RUN: AtomicU64 = AtomicU64::new(1);
 
-/// `Machine` in @ppm/protocol.
+/// `Machine` in @everyport/protocol.
 #[derive(Clone, Serialize)]
 pub struct Machine {
     pub id: String,
@@ -37,7 +39,7 @@ pub struct Machine {
     pub state: MachineState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
-    /// What installing ppm would do, while the app asks.
+    /// What installing everyport would do, while the app asks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub install: Option<InstallOffer>,
     pub snapshot: Option<Snapshot>,
@@ -49,7 +51,7 @@ pub enum MachineState {
     /// Discovered, and connects when the user picks it.
     Available,
     Connecting,
-    /// ppm isn't on the machine; the app asks before installing it.
+    /// everyport isn't on the machine; the app asks before installing it.
     Install,
     Installing,
     Connected,
@@ -74,9 +76,9 @@ struct Entry {
     run: u64,
     connection: Option<Connection>,
     client: Option<Client>,
-    /// The probe that found no ppm, kept for the install the user confirms.
+    /// The probe that found no everyport, kept for the install the user confirms.
     probe: Option<Probe>,
-    /// This computer's snapshot as ppm sent it, before WSL relays are removed.
+    /// This computer's snapshot as everyport sent it, before WSL relays are removed.
     raw: Option<Snapshot>,
     /// Open forwards by remote port. They end with the run, since a new run
     /// may reach another host, and dropping one closes its tunnel.
@@ -136,7 +138,7 @@ fn modified() -> Option<SystemTime> {
 pub fn start(app: &AppHandle) {
     let path = std::env::current_exe()
         .expect("the app knows its own path")
-        .with_file_name(format!("ppm-sidecar{}", std::env::consts::EXE_SUFFIX));
+        .with_file_name(format!("everyport-sidecar{}", std::env::consts::EXE_SUFFIX));
     app.manage(Mutex::new(Machines {
         entries: vec![Entry::new(LOCAL, "This computer", None, None)],
         snoozed: HashMap::new(),
@@ -247,7 +249,7 @@ fn take(entries: &mut Vec<Entry>, id: &str) -> Option<Entry> {
 }
 
 /// Reloads when `machines.toml` changed since it was read, such as after
-/// `ppm remote add`. A single stat, done when the popover opens.
+/// `everyport remote add`. A single stat, done when the popover opens.
 pub fn reload_if_changed(app: &AppHandle) {
     if machines(app).read_at != modified() {
         reload(app);
@@ -294,9 +296,9 @@ fn update(app: &AppHandle, id: &str, run: u64, f: impl FnOnce(&mut Entry)) -> bo
 /// What to do after probing a machine.
 #[derive(Debug, PartialEq)]
 enum Plan {
-    /// ppm isn't there: ask the user.
+    /// everyport isn't there: ask the user.
     Ask,
-    /// ppm at the install path is older than the app: update it, as the
+    /// everyport at the install path is older than the app: update it, as the
     /// README promises. A newer one is used as it is.
     Update,
     Connect,
@@ -305,7 +307,7 @@ enum Plan {
 fn plan(probe: &Probe) -> Plan {
     match &probe.installed {
         None => Plan::Ask,
-        Some(v) if probe.ppm_path == probe.install_path && older(v, install::VERSION) => {
+        Some(v) if probe.everyport_path == probe.install_path && older(v, install::VERSION) => {
             Plan::Update
         }
         Some(_) => Plan::Connect,
@@ -314,7 +316,7 @@ fn plan(probe: &Probe) -> Plan {
 
 /// True when version `a` is older than `b`, comparing `major.minor.patch`
 /// as numbers. Versions that don't parse are never older, so the app
-/// doesn't replace a ppm it can't place.
+/// doesn't replace an everyport it can't place.
 fn older(a: &str, b: &str) -> bool {
     let parse = |v: &str| -> Option<Vec<u64>> {
         let core = v.split(['-', '+']).next()?;
@@ -324,14 +326,14 @@ fn older(a: &str, b: &str) -> bool {
     matches!((parse(a), parse(b)), (Some(a), Some(b)) if a < b)
 }
 
-/// ppm-client ends a session with this when the machine's ppm speaks
+/// everyport-client ends a session with this when the machine's everyport speaks
 /// another protocol version, before any hello reaches the app.
 fn incompatible(error: &str) -> bool {
     error.contains("which speaks protocol")
 }
 
-/// Connects a remote machine: probes it, updates or asks to install ppm, then
-/// runs `ppm stdio` there.
+/// Connects a remote machine: probes it, updates or asks to install everyport, then
+/// runs `everyport stdio` there.
 fn run(app: &AppHandle, id: &str) {
     let Some(run) = begin(app, id) else { return };
     let via = machines(app)
@@ -368,7 +370,7 @@ fn run(app: &AppHandle, id: &str) {
         };
         match plan(&probe) {
             Plan::Ask => {
-                eprintln!("machine {id}: ppm isn't installed, asking");
+                eprintln!("machine {id}: everyport isn't installed, asking");
                 update(&app, &id, run, |e| {
                     e.machine.state = MachineState::Install;
                     e.machine.error = None;
@@ -383,7 +385,7 @@ fn run(app: &AppHandle, id: &str) {
             Plan::Connect => {
                 let connection = Connection::Command {
                     argv_prefix: prefix,
-                    ppm_path: probe.ppm_path.clone(),
+                    everyport_path: probe.everyport_path.clone(),
                 };
                 // Kept in case its protocol is incompatible, to ask then.
                 update(&app, &id, run, |e| e.probe = Some(probe));
@@ -401,7 +403,7 @@ async fn install_and_connect(
     probe: Probe,
 ) {
     eprintln!(
-        "machine {id}: installing ppm {} to {}",
+        "machine {id}: installing everyport {} to {}",
         install::VERSION,
         probe.install_path
     );
@@ -416,12 +418,12 @@ async fn install_and_connect(
         Ok(()) => {
             let connection = Connection::Command {
                 argv_prefix: prefix,
-                ppm_path: probe.install_path,
+                everyport_path: probe.install_path,
             };
             connect(app, id, run, connection);
         }
         Err(error) => {
-            let message = format!("Couldn't install ppm: {error:#}");
+            let message = format!("Couldn't install everyport: {error:#}");
             eprintln!("machine {id}: {message}");
             // Back to the question, with the reason, so the user can try again.
             update(app, id, run, |e| {
@@ -437,13 +439,13 @@ async fn install_and_connect(
     }
 }
 
-/// Runs `ppm stdio` over `connection` for the machine's run `run`, and
+/// Runs `everyport stdio` over `connection` for the machine's run `run`, and
 /// applies what it reports until that run ends.
 fn connect(app: &AppHandle, id: &str, run: u64, connection: Connection) {
     let (app, id) = (app.clone(), id.to_string());
     tauri::async_runtime::spawn(async move {
-        // ppm_client::connect spawns onto the current Tokio runtime.
-        let (client, mut updates) = ppm_client::connect(connection.clone());
+        // everyport_client::connect spawns onto the current Tokio runtime.
+        let (client, mut updates) = everyport_client::connect(connection.clone());
         if !update(&app, &id, run, |e| {
             e.client = Some(client);
             e.connection = Some(connection);
@@ -475,9 +477,9 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
         match update {
             Update::Connecting => machine.state = MachineState::Connecting,
             Update::Disconnected { error, .. } if incompatible(&error) && entry.probe.is_some() => {
-                // A ppm this app can't talk to: stop retrying and ask to install ours.
+                // An everyport this app can't talk to: stop retrying and ask to install ours.
                 eprintln!(
-                    "machine {id}: {error} Asking to install ppm {}.",
+                    "machine {id}: {error} Asking to install everyport {}.",
                     install::VERSION
                 );
                 let path = entry.probe.as_ref().map(|p| p.install_path.clone());
@@ -505,8 +507,8 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
             }
             Update::Event(Event::Hello(hello)) => {
                 eprintln!(
-                    "machine {id}: connected to {} ({:?}, ppm {})",
-                    hello.host.hostname, hello.host.os, hello.ppm_version
+                    "machine {id}: connected to {} ({:?}, everyport {})",
+                    hello.host.hostname, hello.host.os, hello.everyport_version
                 );
                 // Other machines keep the name the user knows them by.
                 if id == LOCAL {
@@ -601,7 +603,7 @@ impl Machines {
             .entry(LOCAL)
             .and_then(|e| e.raw.clone())
             .map(|mut raw| {
-                ppm_client::wsl::dedupe(&mut raw, &distros);
+                everyport_client::wsl::dedupe(&mut raw, &distros);
                 raw.servers.retain(|server| !tunnels.contains(&server.port));
                 raw
             });
@@ -766,7 +768,7 @@ fn listens(port: u16) -> bool {
     std::net::TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_ok()
 }
 
-/// Installs ppm on a machine that is waiting for the user's yes, then connects.
+/// Installs everyport on a machine that is waiting for the user's yes, then connects.
 pub fn install(app: &AppHandle, machine_id: &str) -> Result<(), String> {
     let (run, prefix, probe) = {
         let mut all = machines(app);
@@ -779,7 +781,7 @@ pub fn install(app: &AppHandle, machine_id: &str) -> Result<(), String> {
         let (true, Some(Via::Command { command }), Some(probe)) =
             (asking, &entry.via, entry.probe.take())
         else {
-            return Err(format!("{machine_id} isn't waiting to install ppm"));
+            return Err(format!("{machine_id} isn't waiting to install everyport"));
         };
         (entry.run, command.clone(), probe)
     };
@@ -846,14 +848,14 @@ pub fn connect_machine(app: AppHandle, machine_id: String) -> Result<(), String>
 }
 
 #[tauri::command]
-pub fn install_ppm(app: AppHandle, machine_id: String) -> Result<(), String> {
+pub fn install_everyport(app: AppHandle, machine_id: String) -> Result<(), String> {
     install(&app, &machine_id)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ppm_client::protocol::Os;
+    use everyport_client::protocol::Os;
 
     fn machine(name: &str, command: &[&str]) -> saved::Machine {
         saved::Machine {
@@ -916,26 +918,26 @@ mod tests {
         assert_eq!(listed[0].distro.as_deref(), Some("Ubuntu"));
     }
 
-    fn probe(ppm_path: &str, installed: Option<&str>) -> Probe {
+    fn probe(everyport_path: &str, installed: Option<&str>) -> Probe {
         Probe {
             os: Os::Linux,
             target: "x86_64-unknown-linux-musl".into(),
-            install_path: "/home/me/.local/bin/ppm".into(),
-            ppm_path: ppm_path.into(),
+            install_path: "/home/me/.local/bin/everyport".into(),
+            everyport_path: everyport_path.into(),
             installed: installed.map(String::from),
         }
     }
 
     #[test]
     fn asks_before_installing_and_updates_only_its_own_install() {
-        let ours = "/home/me/.local/bin/ppm";
+        let ours = "/home/me/.local/bin/everyport";
         assert_eq!(plan(&probe(ours, None)), Plan::Ask);
         assert_eq!(plan(&probe(ours, Some("0.0.1"))), Plan::Update);
         assert_eq!(plan(&probe(ours, Some(install::VERSION))), Plan::Connect);
         // A newer one, such as from install.sh, is never downgraded.
         assert_eq!(plan(&probe(ours, Some("99.0.0"))), Plan::Connect);
         // One the user installed themselves, such as with brew, is theirs to update.
-        assert_eq!(plan(&probe("ppm", Some("0.0.1"))), Plan::Connect);
+        assert_eq!(plan(&probe("everyport", Some("0.0.1"))), Plan::Connect);
     }
 
     #[test]
@@ -949,9 +951,9 @@ mod tests {
     }
 
     #[test]
-    fn recognizes_ppm_clients_protocol_mismatch() {
-        // The message ppm-client's session ends with, for a ppm 0.3.0 speaking protocol 2.
-        assert!(incompatible("This machine runs ppm 0.3.0, which speaks protocol 2. The app speaks protocol 1. Update ppm on the machine."));
-        assert!(!incompatible("ppm exited: connection reset"));
+    fn recognizes_everyport_clients_protocol_mismatch() {
+        // The message everyport-client's session ends with, for an everyport 0.3.0 speaking protocol 2.
+        assert!(incompatible("This machine runs everyport 0.3.0, which speaks protocol 2. The app speaks protocol 1. Update everyport on the machine."));
+        assert!(!incompatible("everyport exited: connection reset"));
     }
 }

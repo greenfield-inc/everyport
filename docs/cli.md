@@ -1,13 +1,13 @@
 # CLI reference
 
-Every `ppm` command and its options, exactly as `ppm <command> --help` prints them. For what each one is for, see the [README](../README.md#cli).
+Every `everyport` command and its options, exactly as `everyport <command> --help` prints them. For what each one is for, see the [README](../README.md#cli).
 
-## `ppm`
+## `everyport`
 
 ```text
 See every dev server running on your machine. Run with no command for the terminal UI.
 
-Usage: ppm [OPTIONS] [COMMAND]
+Usage: everyport [OPTIONS] [COMMAND]
 
 Commands:
   list     List servers once
@@ -16,51 +16,51 @@ Commands:
   restart  Stop it, then rerun its command in the folder it started from
   open     Open the server in your browser, forwarding its port with --on
   clean    Stop the servers Clean up suggests
-  stdio    Speak the ppm protocol on stdin and stdout
-  serve    Speak the ppm protocol over HTTP on loopback
+  stdio    Speak the Everyport protocol on stdin and stdout
+  serve    Speak the Everyport protocol over HTTP on loopback
   remote   Manage remote machines
   doctor   Check permissions and platform support
   help     Print this message or the help of the given subcommand(s)
 
 Options:
       --on <MACHINE>  Run the command on another machine
-  -y, --yes           Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes           Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help          Print help
   -V, --version       Print version
 ```
 
-## `ppm list`
+## `everyport list`
 
 ```text
 List servers once
 
-Usage: ppm list [OPTIONS]
+Usage: everyport list [OPTIONS]
 
 Options:
       --json  Print the snapshot as JSON
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm watch`
+## `everyport watch`
 
 ```text
 Print a snapshot on every change
 
-Usage: ppm watch [OPTIONS] --jsonl
+Usage: everyport watch [OPTIONS] --jsonl
 
 Options:
       --jsonl  One JSON snapshot per line
-  -y, --yes    Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes    Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help   Print help
 ```
 
-## `ppm stop`
+## `everyport stop`
 
 ```text
 Stop the server on a port
 
-Usage: ppm stop [OPTIONS] <PORT>
+Usage: everyport stop [OPTIONS] <PORT>
 
 Arguments:
   <PORT>  
@@ -68,150 +68,150 @@ Arguments:
 Options:
       --force      Kill instead of asking it to quit, even if it's protected
       --protected  Stop it even if it's protected, asking it to quit first
-  -y, --yes        Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes        Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help       Print help
 ```
 
-## `ppm restart`
+## `everyport restart`
 
 ```text
 Stop it, then rerun its command in the folder it started from
 
-Usage: ppm restart [OPTIONS] <PORT>
+Usage: everyport restart [OPTIONS] <PORT>
 
 Arguments:
   <PORT>  
 
 Options:
       --protected  Restart it even if it's protected
-  -y, --yes        Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes        Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help       Print help
 ```
 
-## `ppm open`
+## `everyport open`
 
 ```text
 Open the server in your browser, forwarding its port with --on
 
-Usage: ppm open [OPTIONS] <PORT>
+Usage: everyport open [OPTIONS] <PORT>
 
 Arguments:
   <PORT>  
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm clean`
+## `everyport clean`
 
 ```text
 Stop the servers Clean up suggests
 
-Usage: ppm clean [OPTIONS]
+Usage: everyport clean [OPTIONS]
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm stdio`
+## `everyport stdio`
 
 ```text
-Speak the ppm protocol on stdin and stdout
+Speak the Everyport protocol on stdin and stdout
 
-Usage: ppm stdio [OPTIONS]
+Usage: everyport stdio [OPTIONS]
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm serve`
+## `everyport serve`
 
 ```text
-Speak the ppm protocol over HTTP on loopback
+Speak the Everyport protocol over HTTP on loopback
 
-Usage: ppm serve [OPTIONS]
+Usage: everyport serve [OPTIONS]
 
 Options:
       --listen <LISTEN>        Loopback address to listen on [default: 127.0.0.1:7767]
       --url <URL>              URL clients use to reach this server, such as a Tailscale URL, for the connection code
-  -y, --yes                    Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes                    Don't ask: install everyport on the machine, or stop what clean suggests
       --allow-origin <ORIGIN>  Web origin whose pages may use the server, such as https://dash.example.com (repeatable)
   -h, --help                   Print help
 ```
 
-## `ppm remote`
+## `everyport remote`
 
 ```text
 Manage remote machines
 
-Usage: ppm remote [OPTIONS] <COMMAND>
+Usage: everyport remote [OPTIONS] <COMMAND>
 
 Commands:
-  add   Save a machine: `ppm remote add devbox -- ssh devbox`, or `--code` from `ppm serve`
-  list  List saved and discovered machines, and the ppm installed on each
+  add   Save a machine: `everyport remote add devbox -- ssh devbox`, or `--code` from `everyport serve`
+  list  List saved and discovered machines, and the everyport installed on each
   rm    Remove a saved machine
   help  Print this message or the help of the given subcommand(s)
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm remote add`
+## `everyport remote add`
 
 ```text
-Save a machine: `ppm remote add devbox -- ssh devbox`, or `--code` from `ppm serve`
+Save a machine: `everyport remote add devbox -- ssh devbox`, or `--code` from `everyport serve`
 
-Usage: ppm remote add [OPTIONS] <NAME> [-- <COMMAND>...]
+Usage: everyport remote add [OPTIONS] <NAME> [-- <COMMAND>...]
 
 Arguments:
   <NAME>        Name to use with --on
   [COMMAND]...  Command prefix that runs a program on the machine
 
 Options:
-      --code <CODE>  Connection code that `ppm serve` prints
-  -y, --yes          Don't ask: install ppm on the machine, or stop what clean suggests
+      --code <CODE>  Connection code that `everyport serve` prints
+  -y, --yes          Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help         Print help
 ```
 
-## `ppm remote list`
+## `everyport remote list`
 
 ```text
-List saved and discovered machines, and the ppm installed on each
+List saved and discovered machines, and the everyport installed on each
 
-Usage: ppm remote list [OPTIONS]
+Usage: everyport remote list [OPTIONS]
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm remote rm`
+## `everyport remote rm`
 
 ```text
 Remove a saved machine
 
-Usage: ppm remote rm [OPTIONS] <NAME>
+Usage: everyport remote rm [OPTIONS] <NAME>
 
 Arguments:
   <NAME>  
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```
 
-## `ppm doctor`
+## `everyport doctor`
 
 ```text
 Check permissions and platform support
 
-Usage: ppm doctor [OPTIONS]
+Usage: everyport doctor [OPTIONS]
 
 Options:
-  -y, --yes   Don't ask: install ppm on the machine, or stop what clean suggests
+  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help  Print help
 ```

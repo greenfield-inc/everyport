@@ -1,6 +1,6 @@
 // The demo's machines: this computer runs the protocol fixture, and each
 // remote machine runs its own believable servers.
-import { fixtureSnapshot, type Machine, type Os, type Server, type Snapshot } from "@ppm/protocol";
+import { fixtureSnapshot, type Machine, type Os, type Server, type Snapshot } from "@everyport/protocol";
 
 const MB = 1024 * 1024;
 const MINUTE = 60_000;
@@ -292,5 +292,5 @@ export function demoMachines(os: Os, at = Date.now()): Machine[] {
   return os === "windows" ? machines : machines.filter((machine) => machine.id !== "wsl");
 }
 
-/** How the CLI names each machine, for the `ppm --on` line. */
+/** How the CLI names each machine, for the `everyport --on` line. */
 export const cliName: Record<string, string | null> = { local: null, devbox: "devbox", wsl: "Ubuntu", docker: "api-container" };

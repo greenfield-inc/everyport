@@ -1,5 +1,5 @@
-//! Port Process Manager's desktop app: a tray icon and popover over the
-//! bundled `ppm` sidecar.
+//! Everyport's desktop app: a tray icon and popover over the
+//! bundled `everyport` sidecar.
 
 mod launch;
 mod machines;
@@ -55,7 +55,7 @@ pub fn run() {
             machines::machines_sync,
             machines::call_machine,
             machines::connect_machine,
-            machines::install_ppm,
+            machines::install_everyport,
             launch::open_server_url,
             launch::open_external,
             launch::open_workspace,
@@ -75,7 +75,7 @@ pub fn run() {
             settings::machine_remove,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Port Process Manager");
+        .expect("error while running Everyport");
 }
 
 /// Sizes the calling window to its page's content and keeps it in place.

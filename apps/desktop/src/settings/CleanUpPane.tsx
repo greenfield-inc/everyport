@@ -1,4 +1,4 @@
-import type { AutoKill, Config } from "@ppm/protocol";
+import type { AutoKill, Config } from "@everyport/protocol";
 import { useState } from "react";
 import { Row, Section, Segmented, Select, count } from "./controls";
 import { type Settings, saveConfig } from "./useSettings";

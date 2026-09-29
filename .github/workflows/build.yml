@@ -15,7 +15,7 @@ on:
 
 jobs:
   binaries:
-    name: ppm ${{ matrix.target }}
+    name: everyport ${{ matrix.target }}
     strategy:
       fail-fast: false
       matrix:
@@ -42,9 +42,9 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          cargo ${{ matrix.build }} -p port-process-manager --release --locked --target ${{ matrix.target }}
+          cargo ${{ matrix.build }} -p everyport --release --locked --target ${{ matrix.target }}
           mkdir out
-          cp target.noindex/${{ matrix.target }}/release/ppm${{ matrix.exe }} out/ppm-${{ matrix.target }}${{ matrix.exe }}
+          cp target.noindex/${{ matrix.target }}/release/everyport${{ matrix.exe }} out/everyport-${{ matrix.target }}${{ matrix.exe }}
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: "bin-${{ matrix.target }}", path: out/*, if-no-files-found: error }
 
@@ -60,7 +60,7 @@ jobs:
           - { target: x86_64-apple-darwin, os: macos-latest, bundles: dmg }
           # The .msi installs per machine and needs admin. install-app.ps1 uses the per-user NSIS setup.exe.
           - { target: x86_64-pc-windows-msvc, os: windows-latest, bundles: "msi,nsis", exe: .exe }
-          # The static musl ppm serves as the sidecar on glibc Linux too.
+          # The static musl everyport serves as the sidecar on glibc Linux too.
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, bundles: "deb,rpm,appimage", sidecar: x86_64-unknown-linux-musl }
     runs-on: ${{ matrix.os }}
     steps:
@@ -111,9 +111,9 @@ jobs:
         shell: bash
         env:
           # Not SIGN: the AppImage plugin gpg-signs whenever SIGN is set.
-          PPM_SIGN: ${{ inputs.sign && !(runner.os == 'Windows' && vars.WINDOWS_SIGNING == 'skip') }}
-          # apps/desktop/scripts/sidecar.mjs bundles this prebuilt ppm instead of building one.
-          PPM_SIDECAR: ${{ github.workspace }}/sidecar/ppm-${{ matrix.sidecar || matrix.target }}${{ matrix.exe }}
+          EVERYPORT_SIGN: ${{ inputs.sign && !(runner.os == 'Windows' && vars.WINDOWS_SIGNING == 'skip') }}
+          # apps/desktop/scripts/sidecar.mjs bundles this prebuilt everyport instead of building one.
+          EVERYPORT_SIDECAR: ${{ github.workspace }}/sidecar/everyport-${{ matrix.sidecar || matrix.target }}${{ matrix.exe }}
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ inputs.sign && secrets.APPLE_ID || '' }}
@@ -121,7 +121,7 @@ jobs:
           APPLE_PASSWORD: ${{ inputs.sign && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
         run: |
           args=(--target ${{ matrix.target }} --bundles ${{ matrix.bundles }})
-          if [ "$PPM_SIGN" = true ]; then
+          if [ "$EVERYPORT_SIGN" = true ]; then
             if [ "$RUNNER_OS" = macOS ]; then
               for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_PASSWORD; do
                 if [ -z "${!name}" ]; then
@@ -141,20 +141,20 @@ jobs:
             fi
             echo "::notice::Unsigned build: signing and notarization are skipped."
           fi
-          pnpm --filter @ppm/desktop tauri build "${args[@]}"
+          pnpm --filter @everyport/desktop tauri build "${args[@]}"
       - name: Collect bundles
         shell: bash
         run: |
           shopt -s nullglob
-          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "port-process-manager") | .version')"
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "everyport") | .version')"
           arch="${{ matrix.target }}"
           arch="${arch%%-*}"
           mkdir out
           for file in target.noindex/${{ matrix.target }}/release/bundle/*/*.{dmg,msi,deb,rpm,AppImage}; do
-            cp "$file" "out/port-process-manager-$version-$arch.${file##*.}"
+            cp "$file" "out/everyport-$version-$arch.${file##*.}"
           done
           for file in target.noindex/${{ matrix.target }}/release/bundle/nsis/*-setup.exe; do
-            cp "$file" "out/port-process-manager-$version-$arch-setup.exe"
+            cp "$file" "out/everyport-$version-$arch-setup.exe"
           done
           ls -l out
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -174,8 +174,8 @@ jobs:
       - run: scripts/dist.sh artifacts
       - name: Check the npm and PyPI packages
         run: |
-          npm publish --dry-run dist/packages/port-process-manager-*.tgz
-          uvx twine check --strict dist/packages/port_process_manager-*
+          npm publish --dry-run dist/packages/everyport-*.tgz
+          uvx twine check --strict dist/packages/everyport-*.whl dist/packages/everyport-*.tar.gz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: release, path: dist/release, if-no-files-found: error }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

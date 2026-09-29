@@ -1,4 +1,4 @@
-// Renders og.html to public/og.png at 1200x630: `pnpm --filter @ppm/site og`.
+// Renders og.html to public/og.png at 1200x630: `pnpm --filter @everyport/site og`.
 // The same file is the repository's social preview (Settings, Social preview).
 import { chromium } from "playwright-core";
 import { fileURLToPath } from "node:url";

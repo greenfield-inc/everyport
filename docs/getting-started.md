@@ -2,34 +2,34 @@
 
 ## Install
 
-Install the desktop app, the CLI, or both. The desktop app is a menu bar app on macOS, and a tray app on Windows and Linux. The CLI is one binary, `ppm`, with a terminal UI, for servers, VMs and containers.
+Install the desktop app, the CLI, or both. The desktop app is a menu bar app on macOS, and a tray app on Windows and Linux. The CLI is one binary, `everyport`, with a terminal UI, for servers, VMs and containers.
 
 To install both with one command:
 
 ```bash
-curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh          # macOS and Linux
-irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex               # Windows (PowerShell)
+curl -fsSL https://everyport.dev/install.sh | sh          # macOS and Linux
+irm https://everyport.dev/install.ps1 | iex               # Windows (PowerShell)
 ```
 
 Or install each one separately:
 
 | | Desktop app | CLI |
 |---|---|---|
-| macOS | `brew install --cask greenfield-inc/tap/port-process-manager` | `brew install greenfield-inc/tap/ppm` |
-| Windows | `winget install Greenfield.PortProcessManager` | `irm https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.ps1 \| iex` |
-| Linux | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/port-process-manager/releases/latest) | `curl -fsSL https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.sh \| sh` |
+| macOS | `brew install --cask greenfield-inc/tap/everyport` | `brew install greenfield-inc/tap/everyport` |
+| Windows | `winget install Dcouple.Everyport` | `irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
+| Linux | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh \| sh` |
 
 See [Install](../README.md#install) for npm, PyPI and Cargo.
 
 ## The desktop app
 
-1. Open Port Process Manager. On macOS, its menu bar icon shows how many servers are running.
+1. Open Everyport. On macOS, its menu bar icon shows how many servers are running.
 2. Click the icon, or press <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>P</kbd> on Windows and Linux) from any app. A small window, the popover, opens under the icon.
 3. The popover lists every dev server on this computer. The top shows the memory your servers use. Hover it to see other apps and what's free.
 4. Click a server for its details: memory and CPU charts for the last 10 minutes, its process tree, project, branch, and the coding agent session that started it.
 5. Click **Clean up** to see the servers you probably don't need, and stop them.
 
-On many Linux desktops a left click opens the tray menu. Pick **Open Port Process Manager** at the top.
+On many Linux desktops a left click opens the tray menu. Pick **Open Everyport** at the top.
 
 ### Keyboard
 
@@ -50,7 +50,7 @@ Databases such as `postgres` and `redis-server` are protected. Clean up and auto
 
 ## The terminal
 
-Run `ppm` for the terminal UI. It shows the same list, with the same details and actions.
+Run `everyport` for the terminal UI. It shows the same list, with the same details and actions.
 
 | Keys | Action |
 |---|---|
@@ -68,11 +68,11 @@ Run `ppm` for the terminal UI. It shows the same list, with the same details and
 For scripts, use the commands:
 
 ```bash
-ppm list                  # the servers, once
-ppm list --json           # the same, as JSON
-ppm watch --jsonl         # a JSON snapshot on every change
-ppm stop 5173             # stop the server on port 5173
-ppm clean --yes           # stop what Clean up suggests, without asking
+everyport list                  # the servers, once
+everyport list --json           # the same, as JSON
+everyport watch --jsonl         # a JSON snapshot on every change
+everyport stop 5173             # stop the server on port 5173
+everyport clean --yes           # stop what Clean up suggests, without asking
 ```
 
 See the [CLI reference](cli.md) for every command.

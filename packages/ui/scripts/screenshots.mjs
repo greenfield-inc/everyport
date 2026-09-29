@@ -1,5 +1,5 @@
 // Screenshots every view at 2x in dark and light mode, next to its Paper frame.
-//   pnpm --filter @ppm/ui screenshots [theme]
+//   pnpm --filter @everyport/ui screenshots [theme]
 // Writes packages/ui/screenshots/*.png and, for the default theme,
 // docs/assets/popover.png (the README hero). Other themes go in screenshots/<theme>/. Needs Google Chrome; Paper's HTML loads its fonts from Google Fonts.
 import { mkdirSync, readFileSync } from "node:fs";
@@ -87,7 +87,7 @@ async function shoot(url, selector, path, steps, padding = 0) {
 }
 
 for (const view of VIEWS) {
-  const selector = view.selector ?? ".ppm-panel";
+  const selector = view.selector ?? ".everyport-panel";
   for (const mode of ["dark", "light"]) {
     const url = `${base}?shot&theme=${theme}&mode=${mode}&${view.query}`;
     await shoot(url, selector, `${out}/${view.name}-${mode}.png`, view.steps);
@@ -109,8 +109,8 @@ for (const view of VIEWS.filter((view) => view.paper)) {
     `<style>body{margin:0}#sheet{background:#1b1d22;font:600 13px system-ui;color:#aaa;display:flex;gap:24px;padding:20px;align-items:flex-start;width:max-content}
       figure{margin:0;display:flex;flex-direction:column;gap:8px}img{zoom:0.5}</style><div id="sheet">` +
       column("Paper", "paper") +
-      column(`@ppm/ui · ${theme} · dark`, "dark") +
-      column(`@ppm/ui · ${theme} · light`, "light") +
+      column(`@everyport/ui · ${theme} · dark`, "dark") +
+      column(`@everyport/ui · ${theme} · light`, "light") +
       "</div>",
   );
   await page.evaluate(() => Promise.all([...document.images].map((image) => image.decode())));
@@ -118,7 +118,7 @@ for (const view of VIEWS.filter((view) => view.paper)) {
 }
 
 // The README hero: the list in dark mode, default theme, with a little wallpaper around it.
-if (hero) await shoot(`${base}?shot&theme=${theme}&mode=dark`, ".ppm-panel", `${repo}docs/assets/popover.png`, undefined, 24);
+if (hero) await shoot(`${base}?shot&theme=${theme}&mode=dark`, ".everyport-panel", `${repo}docs/assets/popover.png`, undefined, 24);
 
 await browser.close();
 await server.close();

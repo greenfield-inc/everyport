@@ -6,7 +6,7 @@
 use std::sync::Mutex;
 use std::time::Duration;
 
-use ppm_client::protocol::{Alert, Call, Server};
+use everyport_client::protocol::{Alert, Call, Server};
 use serde::{Deserialize, Serialize};
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
@@ -117,7 +117,7 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         return Ok(window);
     }
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))
-        .title("Port Process Manager")
+        .title("Everyport")
         .inner_size(356.0, 120.0)
         .decorations(false)
         .transparent(true)

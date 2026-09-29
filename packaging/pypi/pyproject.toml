@@ -3,13 +3,13 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "port-process-manager"
+name = "everyport"
 dynamic = ["version"]
 description = "See every dev server on your machine, or any box you can reach"
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
-authors = [{ name = "Greenfield" }]
+authors = [{ name = "Dcouple, Inc." }]
 keywords = ["ports", "dev-server", "localhost", "process", "cli"]
 classifiers = [
   "Environment :: Console",
@@ -19,19 +19,18 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/greenfield-inc/port-process-manager"
-Repository = "https://github.com/greenfield-inc/port-process-manager"
-Issues = "https://github.com/greenfield-inc/port-process-manager/issues"
+Homepage = "https://github.com/greenfield-inc/everyport"
+Repository = "https://github.com/greenfield-inc/everyport"
+Issues = "https://github.com/greenfield-inc/everyport/issues"
 
 [project.scripts]
-ppm = "port_process_manager:main"
-port-process-manager = "port_process_manager:main"
+everyport = "everyport:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-port_process_manager = ["SHA256SUMS"]
+everyport = ["SHA256SUMS"]
 
 # scripts/dist.sh writes VERSION from Cargo.toml.
 [tool.setuptools.dynamic]

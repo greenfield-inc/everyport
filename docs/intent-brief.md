@@ -1,4 +1,4 @@
-# Intent brief: Port Process Manager v1
+# Intent brief: Everyport v1
 
 ## Goal
 
@@ -19,16 +19,16 @@ Developers who run several dev servers at once, often started by coding agents i
 | Decision | Choice |
 |---|---|
 | Stack | Tauri 2, React 19, Tailwind 4. Rust for everything that touches the OS. |
-| Process model | The desktop app never scans in-process. It runs `ppm stdio` as a sidecar locally, and the same binary through a connection command remotely. One code path for every machine. |
-| Protocol | JSON over stdio or HTTP+SSE. Defined once in `crates/ppm-core/src/protocol.rs`, exported to TypeScript. |
-| UI package | `packages/ui` in this repo. React only, no Tauri imports, so Pane can embed it later. Extract to a shared Greenfield package only when a second product needs it. |
+| Process model | The desktop app never scans in-process. It runs `everyport stdio` as a sidecar locally, and the same binary through a connection command remotely. One code path for every machine. |
+| Protocol | JSON over stdio or HTTP+SSE. Defined once in `crates/everyport-core/src/protocol.rs`, exported to TypeScript. |
+| UI package | `packages/ui` in this repo. React only, no Tauri imports, so Pane can embed it later. Extract to a shared Dcouple package only when a second product needs it. |
 | Look | Layout, spacing, type sizes and radii match the Paper design pixel for pixel (`docs/design/`). Colors and the body font come from the active Doozy theme. Numbers stay monospace. Animations are ours. See [design-spec.md](design-spec.md). |
-| Remote | Any command prefix (`ssh`, `docker exec -i`, `kubectl exec -i --`, `wsl --`, custom) or a `ppm serve` URL. Hosts come from `~/.ssh/config`, Pane remote hosts, and manual entry. Remote OSes: Linux, macOS, Windows. |
-| Windows + WSL | First-class. On Windows the app finds every installed WSL distro and adds each one as a machine over `wsl.exe -d <distro> --exec`, with `ppm` installed inside the distro. Ports that Windows sees as `wslrelay.exe` belong to the distro's server, not a separate Windows row. Path, quoting and launch rules follow Pane's (`main/src/utils/wslUtils.ts` in [greenfield-inc/Pane](https://github.com/greenfield-inc/Pane)). |
-| Remote install | The app offers to install `ppm` on first connect. It pipes the binary through the connection, checks SHA-256, and puts it in `~/.local/bin`. |
+| Remote | Any command prefix (`ssh`, `docker exec -i`, `kubectl exec -i --`, `wsl --`, custom) or an `everyport serve` URL. Hosts come from `~/.ssh/config`, Pane remote hosts, and manual entry. Remote OSes: Linux, macOS, Windows. |
+| Windows + WSL | First-class. On Windows the app finds every installed WSL distro and adds each one as a machine over `wsl.exe -d <distro> --exec`, with `everyport` installed inside the distro. Ports that Windows sees as `wslrelay.exe` belong to the distro's server, not a separate Windows row. Path, quoting and launch rules follow Pane's (`main/src/utils/wslUtils.ts` in [greenfield-inc/Pane](https://github.com/greenfield-inc/Pane)). |
+| Remote install | The app offers to install `everyport` on first connect. It pipes the binary through the connection, checks SHA-256, and puts it in `~/.local/bin`. |
 | v1 scope | Core monitor, agent and Vercel links, terminal CLI and TUI, remote machines. Localization and auto-update come after v1. |
 | Privacy | No telemetry. The app is online only for Vercel lookups through `gh`, opt-in. |
-| Names | Product "Port Process Manager", binary `ppm`, repo `greenfield-inc/port-process-manager`, packages `port-process-manager` on npm, crates.io and PyPI. |
+| Names | Product "Everyport", binary `everyport`, repo `greenfield-inc/everyport`, packages `everyport` on npm, crates.io and PyPI. |
 
 ## Budgets
 
@@ -40,7 +40,7 @@ Measure these on an Apple Silicon Mac with 5 servers running, and put the number
 | Cold start to tray icon visible | under 400 ms |
 | Idle memory, app + webview processes + sidecar | under 60 MB |
 | Idle CPU, popover hidden | under 0.3% of one core |
-| Scan cost at the 2 s interval | under 1% of one core in `ppm` |
+| Scan cost at the 2 s interval | under 1% of one core in `everyport` |
 | Snapshot to UI update | under 16 ms of main-thread work |
 
 ## Native feel
@@ -52,7 +52,7 @@ These are what separate "a web page in a window" from an app that belongs in the
 1. **Pre-create the popover window at launch, hidden, and never destroy it.** Toggle it with show and hide. This is the biggest factor in making it open instantly.
 2. **Show only a finished frame.** At launch, keep the window hidden until the web side sends `ready` after its first render with data. Every later open shows the last rendered state at once, and new data swaps in without a flash.
 3. **Hide on blur.** Clicking anywhere else, pressing Escape, or clicking the tray icon again closes it. Reopening restores the same view and scroll position for 60 s, then resets to the list.
-4. **Keep scanning out of the UI process.** `ppm` runs as a sidecar. The UI gets whole snapshots and diffs them with React keys by port. No polling from JS.
+4. **Keep scanning out of the UI process.** `everyport` runs as a sidecar. The UI gets whole snapshots and diffs them with React keys by port. No polling from JS.
 5. **Pause when hidden.** When the popover is hidden, the web side stops animations and chart work, and the sidecar keeps its normal interval but the app skips forwarding snapshots except the tray count and alerts. Resume on show with the latest snapshot.
 6. **Transparent, frameless, fixed-size window** with no taskbar entry: `decorations: false`, `transparent: true`, `resizable: false`, `skipTaskbar: true`, `alwaysOnTop: true`, `visible: false`. The web page draws the panel, its radius and its hairline border. On macOS and Windows the OS draws the shadow.
 7. **App chrome behavior in CSS.** Use `user-select: none` everywhere except copyable values, `cursor: default` (pointer only on links), `overscroll-behavior: none`, and no default context menu (right-click opens our own menu, or nothing). Show focus rings only on `:focus-visible`. Use tabular numbers (`font-variant-numeric: tabular-nums`) and `-webkit-font-smoothing: antialiased`.
@@ -83,17 +83,17 @@ These are what separate "a web page in a window" from an app that belongs in the
 
 ### Windows with WSL
 
-26. **Each distro is a machine.** List distros with `wsl.exe -l -q` (the output is UTF-16LE), and connect with `wsl.exe -d <distro> --exec <path-to-ppm> stdio`. Call `wsl.exe` directly with an args array, never through `cmd.exe` or PowerShell.
+26. **Each distro is a machine.** List distros with `wsl.exe -l -q` (the output is UTF-16LE), and connect with `wsl.exe -d <distro> --exec <path-to-everyport> stdio`. Call `wsl.exe` directly with an args array, never through `cmd.exe` or PowerShell.
 27. **No duplicate rows.** A port whose Windows owner is `wslrelay.exe` or the WSL VM shows once, under its distro, with the Linux process tree.
 28. **Paths cross the boundary correctly.** Linux paths show as Linux paths. Opening a folder uses `\\wsl.localhost\<distro>\...`, the editor uses `code --remote wsl+<distro> <linux path>`, and "resume in terminal" uses `wt.exe -p <distro>` or `wsl.exe -d <distro> --cd <dir>`. Quote for bash inside WSL, as Pane's `escapeForBash` does.
 29. **Open URL works unchanged.** WSL2 forwards `localhost`, so `http://localhost:<port>` opens from Windows. Mirrored-networking mode works the same way.
 
 ### Linux
 
-30. **Tray** is a StatusNotifierItem (libayatana-appindicator). Many desktops send left-click to the menu instead of the app, so the menu's first item is "Open Port Process Manager". Where clicks do arrive (KDE, XFCE), toggle the popover directly.
+30. **Tray** is a StatusNotifierItem (libayatana-appindicator). Many desktops send left-click to the menu instead of the app, so the menu's first item is "Open Everyport". Where clicks do arrive (KDE, XFCE), toggle the popover directly.
 31. **Positioning:** on X11, place it near the tray like on Windows. Wayland doesn't allow absolute positioning, so show it as a small undecorated window, centered at the top of the active output.
 32. **No blur.** Use a solid `--popover` background. Avoid `backdrop-filter`, which is slow in WebKitGTK.
-33. **WebKitGTK quirks:** if the window renders blank on NVIDIA, relaunch with `WEBKIT_DISABLE_DMABUF_RENDERER=1`, and document the fallback in `ppm doctor`.
+33. **WebKitGTK quirks:** if the window renders blank on NVIDIA, relaunch with `WEBKIT_DISABLE_DMABUF_RENDERER=1`, and document the fallback in `everyport doctor`.
 
 ## Disk work
 
@@ -120,4 +120,4 @@ Budget: after startup, a scan with no file changes does zero file reads. Measure
 - Every README claim works as written, on all three OSes, including the install commands.
 - The budgets above are met and measured.
 - Screenshots of every view in light and dark mode sit next to their Paper frames.
-- `ppm` watches a Linux VM over SSH, a Docker container, a Windows machine over SSH, and WSL distros from the Windows app.
+- `everyport` watches a Linux VM over SSH, a Docker container, a Windows machine over SSH, and WSL distros from the Windows app.

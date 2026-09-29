@@ -1,6 +1,6 @@
 // What each view says about a server, derived from protocol data. Times are
 // relative to the snapshot's `taken_at`, so a snapshot always reads the same.
-import type { CleanUpReason, Server, WorkspaceKind } from "@ppm/protocol";
+import type { CleanUpReason, Server, WorkspaceKind } from "@everyport/protocol";
 import { duration, parentFolder, shortDuration, total } from "./format.ts";
 
 /** Default `Config.alert_memory`: 2 GB. */

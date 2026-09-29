@@ -3,7 +3,7 @@
 #
 #   scripts/dist.sh <artifacts dir>
 #
-# The artifacts dir holds the ppm binaries (ppm-<target>) and any desktop
+# The artifacts dir holds the everyport binaries (everyport-<target>) and any desktop
 # bundles. Writes:
 #   dist/release   files for the GitHub release, with SHA256SUMS
 #   dist/packages  npm tarball, Python wheel and sdist (both carrying
@@ -19,7 +19,7 @@ release="$root/dist/release"
 packages="$root/dist/packages"
 
 version="$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Cargo.toml" |
-  jq -r '.packages[] | select(.name == "port-process-manager") | .version')"
+  jq -r '.packages[] | select(.name == "everyport") | .version')"
 
 strict=false
 if [ "${GITHUB_REF_TYPE:-}" = tag ]; then
@@ -42,13 +42,15 @@ render() {
     text="${text//@SHA256:$name@/$hash}"
   done < "$release/SHA256SUMS"
   if grep -q '@SHA256:' <<< "$text"; then
-    echo "skipped $(basename "$template"): missing $(grep -o '@SHA256:[^@]*@' <<< "$text" | cut -d : -f 2 | tr -d @ | xargs)" >&2
+    echo "skipped ${template#"$root"/packaging/}: missing $(grep -o '@SHA256:[^@]*@' <<< "$text" | cut -d : -f 2 | tr -d @ | xargs)" >&2
     $strict && exit 1
     return 0
   fi
-  printf '%s\n' "$text" > "$packages/$(basename "$template")"
+  local out="$packages/${template#"$root"/packaging/}"
+  mkdir -p "$(dirname "$out")"
+  printf '%s\n' "$text" > "$out"
 }
-for template in "$root"/packaging/homebrew/*.rb "$root"/packaging/winget/*.yaml; do
+for template in "$root"/packaging/homebrew/*/*.rb "$root"/packaging/winget/*.yaml; do
   render "$template"
 done
 
@@ -60,7 +62,7 @@ trap 'rm -rf "$stage"' EXIT
 cp -R "$root/packaging/npm" "$root/packaging/pypi" "$stage/"
 cp "$root/LICENSE" "$release/SHA256SUMS" "$stage/npm/"
 cp "$root/LICENSE" "$stage/pypi/"
-cp "$release/SHA256SUMS" "$stage/pypi/src/port_process_manager/"
+cp "$release/SHA256SUMS" "$stage/pypi/src/everyport/"
 jq --arg version "$version" '{name, version: $version} + .' "$root/packaging/npm/package.json" > "$stage/npm/package.json"
 echo "$version" > "$stage/pypi/VERSION"
 npm pack --silent "$stage/npm" --pack-destination "$packages" > /dev/null

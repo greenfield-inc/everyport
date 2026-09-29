@@ -36,7 +36,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with: { toolchain: stable }
       # No target cache: cargo reuses a cached build of a registry crate with the
-      # same version, so a cached ppm-core 0.1.0 would hide changes to it.
+      # same version, so a cached everyport-core 0.1.0 would hide changes to it.
       - run: scripts/publish-crates.sh --dry-run
 
   changes:

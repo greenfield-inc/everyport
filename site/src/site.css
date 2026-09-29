@@ -1,4 +1,4 @@
-/* The landing page. The popover brings its own styles from @ppm/ui; these
+/* The landing page. The popover brings its own styles from @everyport/ui; these
    only place it and draw everything around it. */
 
 @property --glow {
@@ -74,7 +74,7 @@ button {
 }
 
 /* The popover draws its own focus. */
-:focus-visible:not(.ppm-root *) {
+:focus-visible:not(.everyport-root *) {
   outline: 2px solid var(--green);
   outline-offset: 2px;
   border-radius: 6px;
@@ -828,7 +828,7 @@ footer nav a,
 }
 
 /* The leaking server's dots breathe. */
-.screen [style*="0 0 5px var(--ppm-warn)"] {
+.screen [style*="0 0 5px var(--everyport-warn)"] {
   animation: breathe 1.8s ease-in-out infinite;
 }
 
@@ -1144,29 +1144,29 @@ footer nav a,
 }
 
 /* Native materials: vibrancy on macOS, Mica-ish on Windows, solid on GNOME. */
-.screen[data-os="macos"] .ppm-root {
-  --ppm-tint: 72%;
+.screen[data-os="macos"] .everyport-root {
+  --everyport-tint: 72%;
 }
 
-.screen[data-os="macos"] .ppm-panel {
+.screen[data-os="macos"] .everyport-panel {
   backdrop-filter: blur(30px) saturate(1.8);
 }
 
-.screen[data-os="windows"] .ppm-root {
-  --ppm-tint: 80%;
+.screen[data-os="windows"] .everyport-root {
+  --everyport-tint: 80%;
 }
 
-.screen[data-os="windows"] .ppm-panel {
+.screen[data-os="windows"] .everyport-panel {
   border-radius: 8px;
   backdrop-filter: blur(60px) saturate(1.5);
   background-image: linear-gradient(#4f86c512, #4f86c512);
 }
 
-.screen[data-os="windows"] .popover-slot .ppm-panel {
+.screen[data-os="windows"] .popover-slot .everyport-panel {
   transform-origin: bottom right;
 }
 
-.screen[data-os="linux"] .ppm-panel {
+.screen[data-os="linux"] .everyport-panel {
   border-radius: 14px;
 }
 
@@ -1495,8 +1495,8 @@ footer nav a {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 26px;
-  padding: 40px 0 0;
+  gap: 24px;
+  padding: 32px 0 0;
   overflow: hidden;
   background: radial-gradient(90% 80% at 50% 0%, #1a261e, var(--bg) 70%);
 }
@@ -1505,9 +1505,19 @@ footer nav a {
   text-align: center;
 }
 
+.og-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  font: 600 30px var(--display);
+  letter-spacing: -0.01em;
+}
+
 .og-head h1 {
   margin: 0;
-  font: 650 58px/1.05 var(--display);
+  font: 650 52px/1.05 var(--display);
   letter-spacing: -0.035em;
 }
 

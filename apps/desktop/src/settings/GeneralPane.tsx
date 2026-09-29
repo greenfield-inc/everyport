@@ -1,4 +1,4 @@
-import { type Appearance, DEFAULT_THEME, Themed, themeList } from "@ppm/ui";
+import { type Appearance, DEFAULT_THEME, Themed, themeList } from "@everyport/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useState } from "react";
 import { Row, Section, Segmented, Select, Toggle, count } from "./controls";
@@ -11,7 +11,7 @@ const APPEARANCES = [
   { value: "dark", label: "Dark" },
 ] as const satisfies readonly { value: Appearance; label: string }[];
 
-const DOCS_URL = "https://github.com/greenfield-inc/port-process-manager#documentation";
+const DOCS_URL = "https://github.com/greenfield-inc/everyport#documentation";
 
 const INTERVALS = [1, 2, 5, 10].map((s) => ({ value: s * 1000, label: count(s, "second") }));
 
@@ -32,7 +32,7 @@ export function GeneralPane({ settings }: { settings: Settings }) {
         <Row label="Launch at login">
           {launchAtLogin !== null && <Toggle label="Launch at login" checked={launchAtLogin} onChange={(on) => void toggleLogin(on)} />}
         </Row>
-        <Row label="Open Port Process Manager" caption="Works from any app">
+        <Row label="Open Everyport" caption="Works from any app">
           <ShortcutField value={app.shortcut} onChange={(shortcut) => saveApp({ shortcut })} />
         </Row>
         <Row label="Scan every">

@@ -1,7 +1,7 @@
 // Measures warning and destructive contrast in every theme and mode, as
 // Chrome renders them: warning and danger text on the panel, and white text
 // on the danger fill. Fails below 4.5:1 (WCAG AA).
-//   pnpm --filter @ppm/ui contrast
+//   pnpm --filter @everyport/ui contrast
 import { readFileSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { createServer } from "vite";
@@ -17,9 +17,9 @@ const rows = [];
 for (const theme of themes) {
   for (const mode of ["light", "dark"]) {
     await page.goto(`${server.resolvedUrls.local[0]}?shot&scenario=empty&theme=${theme}&mode=${mode}`);
-    await page.waitForSelector(".ppm-panel");
+    await page.waitForSelector(".everyport-panel");
     const ratios = await page.evaluate(() => {
-      const root = document.querySelector(".ppm-root");
+      const root = document.querySelector(".everyport-root");
       const context = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
       // Resolve a variable to sRGB by painting it.
       const rgb = (variable) => {
@@ -39,9 +39,9 @@ for (const theme of themes) {
       };
       const panel = rgb("--popover");
       return {
-        warning: ratio(rgb("--ppm-warn"), panel),
-        danger: ratio(rgb("--ppm-danger"), panel),
-        "white on danger": ratio([255, 255, 255], rgb("--ppm-danger-fill")),
+        warning: ratio(rgb("--everyport-warn"), panel),
+        danger: ratio(rgb("--everyport-danger"), panel),
+        "white on danger": ratio([255, 255, 255], rgb("--everyport-danger-fill")),
       };
     });
     rows.push({ theme, mode, ...ratios });

@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
-// The dev playground: `pnpm --filter @ppm/ui dev`.
+// The dev playground: `pnpm --filter @everyport/ui dev`.
 export default defineConfig({
   root: fileURLToPath(new URL("playground", import.meta.url)),
   plugins: [react(), tailwindcss()],

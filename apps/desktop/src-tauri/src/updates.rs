@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use ppm_client::protocol::ProcRef;
+use everyport_client::protocol::ProcRef;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
@@ -147,7 +147,7 @@ fn tail(old: &Value, new: &Value) -> Vec<Value> {
 mod tests {
     use super::*;
     use crate::machines::MachineState;
-    use ppm_client::protocol::{Sample, Snapshot};
+    use everyport_client::protocol::{Sample, Snapshot};
 
     fn fixture() -> Snapshot {
         serde_json::from_str(include_str!(

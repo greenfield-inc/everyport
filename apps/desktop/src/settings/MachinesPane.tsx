@@ -1,4 +1,4 @@
-import type { Machine } from "@ppm/protocol";
+import type { Machine } from "@everyport/protocol";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
@@ -14,8 +14,8 @@ type MachineSettings = {
 const STATUS: Record<Machine["state"], string> = {
   available: "Not connected",
   connecting: "Connecting…",
-  install: "ppm isn't installed",
-  installing: "Installing ppm…",
+  install: "Everyport isn't installed",
+  installing: "Installing Everyport…",
   connected: "Connected",
   error: "Can't connect",
 };
@@ -101,15 +101,15 @@ function MachineRow({ name, detail, machine, children }: { name: string; detail:
       <Row label={name} caption={caption || undefined}>
         {offer && !confirming && (
           <button type="button" className="settings-button" onClick={() => setConfirming(true)}>
-            Install ppm…
+            Install Everyport…
           </button>
         )}
         {children}
       </Row>
       {offer && confirming && (
-        <div className="settings-confirm" role="alertdialog" aria-label={`Install ppm on ${name}`}>
+        <div className="settings-confirm" role="alertdialog" aria-label={`Install Everyport on ${name}`}>
           <span>
-            Install ppm {offer.version} at {offer.path} on {name}? The app copies it over the same connection and checks
+            Install Everyport {offer.version} at {offer.path} on {name}? The app copies it over the same connection and checks
             its checksum.
           </span>
           <button type="button" className="settings-button" onClick={() => setConfirming(false)}>
@@ -120,7 +120,7 @@ function MachineRow({ name, detail, machine, children }: { name: string; detail:
             className="settings-button settings-primary"
             onClick={() => {
               setConfirming(false);
-              void invoke("install_ppm", { machineId: machine!.id });
+              void invoke("install_everyport", { machineId: machine!.id });
             }}
           >
             Install
@@ -131,7 +131,7 @@ function MachineRow({ name, detail, machine, children }: { name: string; detail:
   );
 }
 
-/** A name, and a command prefix or a `ppm://` code from `ppm serve`. */
+/** A name, and a command prefix or an `everyport://` code from `everyport serve`. */
 function AddMachine({ onAdd }: { onAdd: (name: string, target: string) => Promise<boolean> }) {
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
@@ -148,7 +148,7 @@ function AddMachine({ onAdd }: { onAdd: (name: string, target: string) => Promis
       <input aria-label="Name" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
       <input
         aria-label="Command or code"
-        placeholder="ssh devbox, or a ppm:// code"
+        placeholder="ssh devbox, or an everyport:// code"
         value={target}
         onChange={(e) => setTarget(e.target.value)}
       />

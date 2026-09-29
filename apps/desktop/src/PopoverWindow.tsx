@@ -1,8 +1,8 @@
-import { Popover } from "@ppm/ui";
+import { Popover } from "@everyport/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
-import type { TauriPpmClient } from "./client";
+import type { TauriEveryportClient } from "./client";
 import { useFitWindow } from "./fit";
 import { useSettings } from "./settings/useSettings";
 
@@ -11,7 +11,7 @@ const RESET_AFTER_MS = 60_000;
 
 type ServerRef = { machineId: string; port: number };
 
-export function PopoverWindow({ client }: { client: TauriPpmClient }) {
+export function PopoverWindow({ client }: { client: TauriEveryportClient }) {
   // A new key remounts the view: back to the list, or onto `initialServer`.
   const [view, setView] = useState<{ key: number; initialServer?: ServerRef }>({ key: 0 });
   const ref = useFitWindow<HTMLDivElement>();
@@ -25,7 +25,7 @@ export function PopoverWindow({ client }: { client: TauriPpmClient }) {
         clearTimeout(reset);
         if (!visible) reset = window.setTimeout(() => setView((v) => ({ key: v.key + 1 })), RESET_AFTER_MS);
         // Keys go to the panel; keep focus where it was, or give it to the panel.
-        else if (document.activeElement === document.body) document.querySelector<HTMLElement>(".ppm-panel")?.focus();
+        else if (document.activeElement === document.body) document.querySelector<HTMLElement>(".everyport-panel")?.focus();
       }),
       listen<ServerRef>("popover:open-server", ({ payload }) =>
         setView((v) => ({ key: v.key + 1, initialServer: payload })),

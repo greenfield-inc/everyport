@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // Other machines through a rendered <Popover>: the README's "The app offers
-// to install ppm on a machine the first time you connect", and discovered
+// to install everyport on a machine the first time you connect", and discovered
 // hosts that connect once picked.
-import { fixtureSnapshot, type Machine, type PpmClient } from "@ppm/protocol";
+import { fixtureSnapshot, type Machine, type EveryportClient } from "@everyport/protocol";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -26,8 +26,8 @@ function render(remote: Machine) {
     call: vi.fn(async () => {}),
     openUrl: vi.fn(async () => {}),
     connectMachine: vi.fn(async () => {}),
-    installPpm: vi.fn(async () => {}),
-  } satisfies PpmClient;
+    installEveryport: vi.fn(async () => {}),
+  } satisfies EveryportClient;
   const host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -37,35 +37,35 @@ function render(remote: Machine) {
 }
 
 describe("another machine", () => {
-  it("asks before installing ppm, and installs on yes", () => {
+  it("asks before installing everyport, and installs on yes", () => {
     const { client, host, button } = render({
       id: "devbox",
       label: "devbox",
       host: null,
       state: "install",
-      install: { version: "0.1.0", path: "/home/me/.local/bin/ppm" },
+      install: { version: "0.1.0", path: "/home/me/.local/bin/everyport" },
       snapshot: null,
     });
-    expect(host.textContent).toContain("ppm isn't on devbox yet. Install ppm 0.1.0 to /home/me/.local/bin/ppm?");
-    expect(client.installPpm).not.toHaveBeenCalled();
-    act(() => button("Install ppm")!.click());
-    expect(client.installPpm).toHaveBeenCalledWith("devbox");
+    expect(host.textContent).toContain("Everyport isn't on devbox yet. Install Everyport 0.1.0 to /home/me/.local/bin/everyport?");
+    expect(client.installEveryport).not.toHaveBeenCalled();
+    act(() => button("Install Everyport")!.click());
+    expect(client.installEveryport).toHaveBeenCalledWith("devbox");
   });
 
-  it("gives the reason instead, when an install failed or ppm there is incompatible", () => {
+  it("gives the reason instead, when an install failed or everyport there is incompatible", () => {
     const { host, button } = render({
       id: "devbox",
       label: "devbox",
       host: null,
       state: "install",
-      error: "Couldn't install ppm: no space left on device",
-      install: { version: "0.1.0", path: "/home/me/.local/bin/ppm" },
+      error: "Couldn't install everyport: no space left on device",
+      install: { version: "0.1.0", path: "/home/me/.local/bin/everyport" },
       snapshot: null,
     });
-    expect(host.textContent).toContain("Install ppm 0.1.0 to /home/me/.local/bin/ppm?");
+    expect(host.textContent).toContain("Install Everyport 0.1.0 to /home/me/.local/bin/everyport?");
     expect(host.textContent).not.toContain("isn't on devbox yet");
-    expect(host.textContent).toContain("Couldn't install ppm: no space left on device");
-    expect(button("Install ppm")).toBeDefined();
+    expect(host.textContent).toContain("Couldn't install everyport: no space left on device");
+    expect(button("Install Everyport")).toBeDefined();
   });
 
   it("connects a discovered host when picked", () => {
@@ -77,7 +77,7 @@ describe("another machine", () => {
 
   it("offers nothing to click while installing", () => {
     const { host, button } = render({ id: "devbox", label: "devbox", host: null, state: "installing", snapshot: null });
-    expect(host.textContent).toContain("Installing ppm on devbox…");
-    expect(button("Install ppm")).toBeUndefined();
+    expect(host.textContent).toContain("Installing Everyport on devbox…");
+    expect(button("Install Everyport")).toBeUndefined();
   });
 });

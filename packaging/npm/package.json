@@ -1,20 +1,20 @@
 {
-  "name": "port-process-manager",
+  "name": "everyport",
   "description": "See every dev server on your machine, or any box you can reach",
   "license": "MIT",
-  "homepage": "https://github.com/greenfield-inc/port-process-manager",
+  "author": "Dcouple, Inc.",
+  "homepage": "https://github.com/greenfield-inc/everyport",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/greenfield-inc/port-process-manager.git",
+    "url": "git+https://github.com/greenfield-inc/everyport.git",
     "directory": "packaging/npm"
   },
   "bugs": {
-    "url": "https://github.com/greenfield-inc/port-process-manager/issues"
+    "url": "https://github.com/greenfield-inc/everyport/issues"
   },
   "keywords": ["ports", "dev-server", "localhost", "process", "cli"],
   "bin": {
-    "ppm": "bin/ppm.js",
-    "port-process-manager": "bin/ppm.js"
+    "everyport": "bin/everyport.js"
   },
   "files": ["bin", "SHA256SUMS", "README.md", "LICENSE"],
   "engines": {

@@ -1,5 +1,5 @@
 {
-  "name": "@ppm/desktop",
+  "name": "@everyport/desktop",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -14,8 +14,8 @@
     "bench": "node perf/bench.mjs"
   },
   "dependencies": {
-    "@ppm/protocol": "workspace:*",
-    "@ppm/ui": "workspace:*",
+    "@everyport/protocol": "workspace:*",
+    "@everyport/ui": "workspace:*",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "react": "^19.1.0",

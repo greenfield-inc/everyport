@@ -3,7 +3,7 @@
 
 use std::process::Command;
 
-use ppm_client::protocol::{AgentKind, AgentSession};
+use everyport_client::protocol::{AgentKind, AgentSession};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 
@@ -246,7 +246,7 @@ fn terminal(name: &str, directory: &str, command: &str) -> std::io::Result<()> {
     let script = format!("#!/bin/zsh -l\ncd {}\n{command}\n", sh_quote(directory));
     // Terminals run a `.command` file they're asked to open, without prompting.
     let name: String = name.chars().filter(char::is_ascii_alphanumeric).collect();
-    let file = std::env::temp_dir().join(format!("ppm-resume-{name}.command"));
+    let file = std::env::temp_dir().join(format!("everyport-resume-{name}.command"));
     std::fs::write(&file, script)?;
     std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))?;
     let app = [

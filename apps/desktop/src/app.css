@@ -1,7 +1,7 @@
 /* App chrome: behave like a native window, not a web page. */
 :root {
   color-scheme: light dark;
-  --ppm-shadow: none; /* the OS draws the window shadow */
+  --everyport-shadow: none; /* the OS draws the window shadow */
   font: 13px/1.4 system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   font-variant-numeric: tabular-nums;

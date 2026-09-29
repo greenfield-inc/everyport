@@ -1,4 +1,4 @@
-import { DEFAULT_THEME, warningColor } from "@ppm/ui";
+import { DEFAULT_THEME, warningColor } from "@everyport/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { AppSettings, Settings } from "./settings/useSettings";

@@ -128,13 +128,13 @@
   margin-bottom: 14px;
   padding: 8px 12px;
   border-radius: 8px;
-  color: var(--ppm-danger);
-  background: color-mix(in oklab, var(--ppm-danger) 10%, transparent);
+  color: var(--everyport-danger);
+  background: color-mix(in oklab, var(--everyport-danger) 10%, transparent);
   overflow-wrap: anywhere;
 }
 
 .settings .settings-error-text {
-  color: var(--ppm-danger);
+  color: var(--everyport-danger);
 }
 
 /* ---------------------------------------------------------------- controls */
@@ -233,7 +233,7 @@
 
 .settings-keys {
   min-width: 96px;
-  font-family: var(--ppm-mono);
+  font-family: var(--everyport-mono);
   text-align: center;
 }
 
@@ -293,7 +293,7 @@
 
 .settings-swatch-port {
   flex: 1;
-  font: 11px/14px var(--ppm-mono);
+  font: 11px/14px var(--everyport-mono);
   color: var(--foreground);
 }
 
@@ -301,7 +301,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--ppm-warn);
+  background: var(--everyport-warn);
 }
 
 .settings-swatch-bar {
@@ -341,7 +341,7 @@
   padding: 0 4px 0 8px;
   border-radius: 6px;
   background: var(--settings-hover);
-  font-family: var(--ppm-mono);
+  font-family: var(--everyport-mono);
   font-size: 12px;
 }
 

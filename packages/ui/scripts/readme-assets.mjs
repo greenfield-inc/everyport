@@ -1,5 +1,5 @@
 // Builds the README images from the view screenshots.
-//   pnpm --filter @ppm/ui screenshots && pnpm --filter @ppm/ui readme-assets
+//   pnpm --filter @everyport/ui screenshots && pnpm --filter @everyport/ui readme-assets
 // Writes docs/assets/{banner,hero,logo}.png and docs/assets/screens/*.png.
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -35,7 +35,7 @@ const pages = {
     <div class="dots"></div>
     <div class="ports">:3000 <b>next dev</b><br>:5173 <b>vite</b><br>:6006 <i>storybook</i><br>:8000 uvicorn<br>:5432 postgres</div>
     <img class="logo" src="${svg("socket-app")}" width="190" height="190">
-    <div><h1>Port Process Manager</h1><p>Every dev server on every machine, one click from your menu bar.</p></div>`,
+    <div><h1>Everyport</h1><p>Every dev server on every machine, one click from your menu bar.</p></div>`,
   },
   hero: {
     size: [1600, 820],

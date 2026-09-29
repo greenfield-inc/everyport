@@ -1,9 +1,9 @@
-import type { Os } from "@ppm/protocol";
+import type { Os } from "@everyport/protocol";
 import { useEffect, useRef, useState } from "react";
 import { usePill } from "./pill.ts";
 import { OS_NAMES, RELEASES, REPO, type SectionId } from "./sections.ts";
 
-const RAW = "https://github.com/greenfield-inc/port-process-manager/releases/latest/download";
+const RAW = "https://github.com/greenfield-inc/everyport/releases/latest/download";
 
 /** The one-line app install, served from the site root. */
 const APP_COMMAND: Record<Os, string> = {
@@ -14,9 +14,9 @@ const APP_COMMAND: Record<Os, string> = {
 
 /** CLI-only installs from the README. */
 const CLI_COMMANDS: Record<Os, string[]> = {
-  macos: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/ppm"],
-  windows: [`irm ${RAW}/install.ps1 | iex`, "npx port-process-manager"],
-  linux: [`curl -fsSL ${RAW}/install.sh | sh`, "npx port-process-manager"],
+  macos: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/everyport"],
+  windows: [`irm ${RAW}/install.ps1 | iex`, "npx everyport"],
+  linux: [`curl -fsSL ${RAW}/install.sh | sh`, "npx everyport"],
 };
 
 type Download = { id: string; os: Os; label: string; detail: string; arch: "aarch64" | "x86_64"; ext: string };
@@ -31,7 +31,7 @@ const DOWNLOADS: Download[] = [
   { id: "rpm", os: "linux", label: "Linux", detail: ".rpm", arch: "x86_64", ext: "rpm" },
 ];
 
-const href = ({ arch, ext }: Download) => `${RAW}/port-process-manager-${__PPM_VERSION__}-${arch}.${ext}`;
+const href = ({ arch, ext }: Download) => `${RAW}/everyport-${__EVERYPORT_VERSION__}-${arch}.${ext}`;
 
 /**
  * Apple Silicon unless the browser says Intel. Chromium tells through
@@ -130,10 +130,10 @@ function Install({ os, onOs }: { os: Os; onOs: (os: Os) => void }) {
 }
 
 const TERMINAL_COMMANDS = [
-  ["ppm", "The terminal UI"],
-  ["ppm list --json", "For scripts and agents"],
-  ["ppm --on devbox", "Another machine"],
-  ["ppm clean", "Stop what Clean up suggests"],
+  ["everyport", "The terminal UI"],
+  ["everyport list --json", "For scripts and agents"],
+  ["everyport --on devbox", "Another machine"],
+  ["everyport clean", "Stop what Clean up suggests"],
 ];
 
 /** Each section's words. The stage beside them shows what they say. */
@@ -178,7 +178,7 @@ export function SectionCopy({ id, os, onOs, onNavigate }: { id: SectionId; os: O
           <p className="eyebrow">Machines</p>
           <h2>Every machine you work on.</h2>
           <p className="lede">
-            Your laptop, a devbox over SSH, a WSL distro, a Docker container. Each gets the same list, charts and Stop button, one chip away. The first time, ppm
+            Your laptop, a devbox over SSH, a WSL distro, a Docker container. Each gets the same list, charts and Stop button, one chip away. The first time, everyport
             asks, then installs itself over the connection.
           </p>
           <ul className="chips">
@@ -226,7 +226,7 @@ export function SectionCopy({ id, os, onOs, onNavigate }: { id: SectionId; os: O
           <p className="eyebrow">Terminal</p>
           <h2>Same servers, in your terminal.</h2>
           <p className="lede">
-            <code>ppm</code> is one binary for macOS, Windows and Linux. Click the window and try it: arrow keys, Enter, Esc and q.
+            <code>everyport</code> is one binary for macOS, Windows and Linux. Click the window and try it: arrow keys, Enter, Esc and q.
           </p>
           <dl className="commands">
             {TERMINAL_COMMANDS.map(([command, text]) => (
@@ -255,7 +255,7 @@ export function Credit() {
   return (
     <p className="credit">
       Built on <a href="https://whattheport.dev">WhatThePort</a> by Tomjohn Design, under the{" "}
-      <a href="https://github.com/tomjohndesign/what-the-port/blob/main/LICENSE">MIT license</a>. Made by <a href="https://greenfield.to">Greenfield</a>, the team
+      <a href="https://github.com/tomjohndesign/what-the-port/blob/main/LICENSE">MIT license</a>. Made by Dcouple, Inc., the team
       behind Pane.
     </p>
   );

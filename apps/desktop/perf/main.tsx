@@ -1,9 +1,9 @@
 // The popover fed 50 servers every "scan", timed per update. bench.mjs drives it.
 //   ?mode=full   every update carries every server in full, as before updates.rs
 //   ?mode=delta  updates as updates.rs builds them, applied by MachineUpdates
-import { fixtureSnapshot, type Machine, type PpmClient, type Server } from "@ppm/protocol";
-import { Popover } from "@ppm/ui";
-import "@ppm/ui/styles.css";
+import { fixtureSnapshot, type Machine, type EveryportClient, type Server } from "@everyport/protocol";
+import { Popover } from "@everyport/ui";
+import "@everyport/ui/styles.css";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { MachineUpdates, type Update } from "../src/updates";
@@ -91,7 +91,7 @@ seq = 0;
 updates.resync();
 
 const noop = async () => {};
-const client: PpmClient = {
+const client: EveryportClient = {
   machines: () => (DELTA ? updates.machines : latest),
   subscribe: (listener) => (listeners.add(listener), () => void listeners.delete(listener)),
   call: noop,

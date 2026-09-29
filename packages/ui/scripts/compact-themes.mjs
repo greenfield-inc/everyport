@@ -1,6 +1,6 @@
 // Writes src/themes/themes.json from registry.json (the Doozy themes, in the
-// shadcn registry format), keeping only what @ppm/ui reads. Run it after
-// copying a new registry.json: `pnpm --filter @ppm/ui themes`.
+// shadcn registry format), keeping only what @everyport/ui reads. Run it after
+// copying a new registry.json: `pnpm --filter @everyport/ui themes`.
 import { readFileSync, writeFileSync } from "node:fs";
 
 const dir = new URL("../src/themes/", import.meta.url);
@@ -23,7 +23,7 @@ const COLORS = [
   "warning",
 ];
 
-// Doozy's `var(--font-*)` app fonts become Sora, which @ppm/ui bundles.
+// Doozy's `var(--font-*)` app fonts become Sora, which @everyport/ui bundles.
 const sans = (stack) => stack.replace(/var\(--font-[\w-]+\)/g, "Sora");
 // Numbers fall back to the bundled Geist Mono before the generic monospace.
 const mono = (stack) =>

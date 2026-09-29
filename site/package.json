@@ -1,5 +1,5 @@
 {
-  "name": "@ppm/site",
+  "name": "@everyport/site",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -11,8 +11,8 @@
     "og": "node scripts/og.mjs"
   },
   "dependencies": {
-    "@ppm/protocol": "workspace:*",
-    "@ppm/ui": "workspace:*",
+    "@everyport/protocol": "workspace:*",
+    "@everyport/ui": "workspace:*",
     "react": "^19.1.0",
     "react-dom": "^19.3.0"
   },

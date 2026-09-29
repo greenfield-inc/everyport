@@ -1,13 +1,13 @@
-import type { AgentSession, Call, Machine, PpmClient } from "@ppm/protocol";
+import type { AgentSession, Call, Machine, EveryportClient } from "@everyport/protocol";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { type Base, MachineUpdates, type Update } from "./updates";
 
 /**
- * PpmClient over the app's Rust side, which runs `ppm stdio` through the
+ * EveryportClient over the app's Rust side, which runs `everyport stdio` through the
  * sidecar and sends every machine's state as `machines` updates.
  */
-export class TauriPpmClient implements PpmClient {
+export class TauriEveryportClient implements EveryportClient {
   #listeners = new Set<(machines: Machine[]) => void>();
   #updates = new MachineUpdates(
     () => invoke<Base>("machines_sync"),
@@ -62,8 +62,8 @@ export class TauriPpmClient implements PpmClient {
     return invoke<void>("connect_machine", { machineId });
   }
 
-  installPpm(machineId: string) {
-    return invoke<void>("install_ppm", { machineId });
+  installEveryport(machineId: string) {
+    return invoke<void>("install_everyport", { machineId });
   }
 
   openSettings() {

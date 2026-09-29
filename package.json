@@ -1,11 +1,11 @@
 {
-  "name": "port-process-manager-workspace",
+  "name": "everyport-workspace",
   "private": true,
   "packageManager": "pnpm@11.10.0",
   "scripts": {
-    "dev": "pnpm --filter @ppm/desktop dev",
-    "dev:web": "pnpm --filter @ppm/desktop dev:web",
-    "generate": "pnpm --filter @ppm/protocol generate",
+    "dev": "pnpm --filter @everyport/desktop dev",
+    "dev:web": "pnpm --filter @everyport/desktop dev:web",
+    "generate": "pnpm --filter @everyport/protocol generate",
     "typecheck": "pnpm -r typecheck",
     "check": "pnpm typecheck && pnpm -r --if-present test && node apps/desktop/scripts/sidecar.mjs && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
   }

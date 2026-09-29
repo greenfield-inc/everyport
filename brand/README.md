@@ -57,8 +57,8 @@ All motion stops under `prefers-reduced-motion: reduce`. The app's `Socket` comp
 ## Regenerate
 
 ```bash
-pnpm --filter @ppm/desktop tauri icon ../../brand/socket-app.svg   # app icons (delete the android/ and ios/ output)
-pnpm --filter @ppm/ui screenshots && pnpm --filter @ppm/ui readme-assets   # docs/assets
+pnpm --filter @everyport/desktop tauri icon ../../brand/socket-app.svg   # app icons (delete the android/ and ios/ output)
+pnpm --filter @everyport/ui screenshots && pnpm --filter @everyport/ui readme-assets   # docs/assets
 ```
 
 The tray icons are drawn in code from the same geometry (`apps/desktop/src-tauri/src/tray.rs`), so the attention state can use the theme's warning color.

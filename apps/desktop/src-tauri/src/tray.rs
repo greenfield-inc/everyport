@@ -36,17 +36,11 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
-            &MenuItem::with_id(app, "open", "Open Port Process Manager", true, None::<&str>)?,
+            &MenuItem::with_id(app, "open", "Open Everyport", true, None::<&str>)?,
             &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
             &launch_at_login,
             &PredefinedMenuItem::separator(app)?,
-            &MenuItem::with_id(
-                app,
-                "quit",
-                "Quit Port Process Manager",
-                true,
-                Some("CmdOrCtrl+Q"),
-            )?,
+            &MenuItem::with_id(app, "quit", "Quit Everyport", true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     app.manage(LoginItem(launch_at_login));
@@ -63,7 +57,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id(ID)
         .icon(first)
         .icon_as_template(true)
-        .tooltip("Port Process Manager")
+        .tooltip("Everyport")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id.as_ref() {
@@ -155,11 +149,11 @@ fn redraw(app: &AppHandle) {
     };
     let Some(tray) = get(app) else { return };
     let (count, label) = match state {
-        State::Idle => (None, "Port Process Manager, no servers".to_string()),
+        State::Idle => (None, "Everyport, no servers".to_string()),
         State::Running(n) | State::Attention(n) => (
             Some(n.to_string()),
             format!(
-                "Port Process Manager, {n} server{}{}",
+                "Everyport, {n} server{}{}",
                 if n == 1 { "" } else { "s" },
                 if matches!(state, State::Attention(_)) {
                     ", needs attention"

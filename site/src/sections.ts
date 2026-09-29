@@ -1,6 +1,6 @@
-import type { Os } from "@ppm/protocol";
+import type { Os } from "@everyport/protocol";
 
-export const REPO = "https://github.com/greenfield-inc/port-process-manager";
+export const REPO = "https://github.com/greenfield-inc/everyport";
 export const RELEASES = `${REPO}/releases/latest`;
 
 /** What the popover shows while a section is on screen. */

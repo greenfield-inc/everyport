@@ -1,4 +1,4 @@
-import { Socket, Themed } from "@ppm/ui";
+import { Socket, Themed } from "@everyport/ui";
 import { useEffect, useState } from "react";
 import { CleanUpPane } from "./CleanUpPane";
 import { GeneralPane } from "./GeneralPane";
