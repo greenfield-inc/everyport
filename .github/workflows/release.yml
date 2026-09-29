@@ -1,0 +1,112 @@
+# A v* tag push builds, signs and publishes a release. Run it by hand on a
+# branch for a dry run: everything builds unsigned and is kept as workflow
+# artifacts, and nothing is published. Run it by hand on a tag with unsigned
+# for a test release.
+name: Release
+on:
+  push: { tags: ["v*"] }
+  workflow_dispatch:
+    inputs:
+      unsigned:
+        description: On a tag, publish without signing and notarization (test releases only)
+        type: boolean
+        default: false
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      bundles: true
+      sign: ${{ github.ref_type == 'tag' && !inputs.unsigned }}
+    secrets: inherit
+
+  github:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with: { name: release, path: release }
+      - run: gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        env: { GH_TOKEN: "${{ github.token }}" }
+
+  crates:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with: { toolchain: stable }
+      - run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::notice::Skipping crates.io publish: CARGO_REGISTRY_TOKEN is not set."
+            exit 0
+          fi
+          scripts/publish-crates.sh
+        env: { CARGO_REGISTRY_TOKEN: "${{ secrets.CARGO_REGISTRY_TOKEN }}" }
+
+  npm:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    permissions: { contents: read, id-token: write }
+    steps:
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version: 22, registry-url: "https://registry.npmjs.org" }
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with: { name: packages, path: packages }
+      - run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::notice::Skipping npm publish: NPM_TOKEN is not set."
+            exit 0
+          fi
+          npm publish packages/port-process-manager-*.tgz --provenance --access public
+        env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+
+  pypi:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    steps:
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with: { name: packages, path: packages }
+      - run: |
+          if [ -z "$UV_PUBLISH_TOKEN" ]; then
+            echo "::notice::Skipping PyPI publish: PYPI_API_TOKEN is not set."
+            exit 0
+          fi
+          uv publish packages/port_process_manager-*
+        env: { UV_PUBLISH_TOKEN: "${{ secrets.PYPI_API_TOKEN }}" }
+
+  homebrew:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with: { name: packages, path: packages }
+      - run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::notice::Skipping the Homebrew tap update: HOMEBREW_TAP_TOKEN is not set."
+            exit 0
+          fi
+          git clone "https://x-access-token:$TAP_TOKEN@github.com/greenfield-inc/homebrew-tap.git" tap
+          mkdir -p tap/Formula tap/Casks
+          cp packages/ppm.rb tap/Formula/
+          cp packages/port-process-manager.rb tap/Casks/
+          cd tap
+          git add Formula Casks
+          if git diff --cached --quiet; then
+            echo "The tap already has these files."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "ppm and port-process-manager $GITHUB_REF_NAME"
+          git push
+        env: { TAP_TOKEN: "${{ secrets.HOMEBREW_TAP_TOKEN }}" }
