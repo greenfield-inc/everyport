@@ -282,12 +282,14 @@ See [AGENTS.md](AGENTS.md) for the repo layout and checks.
 ## Documentation
 
 - [Website](https://everyport.dev): try the popover and the terminal UI in your browser
+- [Docs](https://everyport.dev/docs): the pages below, with search
 - [Getting started](docs/getting-started.md)
 - [Remote machines](docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, `everyport serve` and Tailscale
 - [Settings and clean up](docs/settings.md)
 - [CLI reference](docs/cli.md)
-- [Troubleshooting](docs/troubleshooting.md): `everyport doctor`, the Linux tray and blank windows
+- [Troubleshooting](docs/troubleshooting.md): `everyport doctor`, Windows installs and SmartScreen, the Linux tray and blank windows
 - [The Everyport protocol](docs/protocol.md)
+- [FAQ](docs/faq.md)
 
 For coding agents, [llms.txt](llms.txt) links every page.
 

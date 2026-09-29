@@ -55,6 +55,28 @@ Pass `--protected` to `everyport stop` or `everyport restart` to go ahead, or `-
 
 The app shows the error at the top of Settings and keeps the last settings it could read. `everyport doctor` prints `Settings:` with the error. Fix or delete the file named in the error. See [The settings files](settings.md#the-settings-files).
 
+## Windows
+
+### Installing from Windows PowerShell 5.1
+
+The install command works in Windows PowerShell 5.1, the one Windows ships with, and in PowerShell 7. Paste it into PowerShell, not Command Prompt:
+
+```powershell
+irm https://everyport.dev/install.ps1 | iex
+```
+
+To pass options, such as `-Cli` for the CLI only, use the script block form:
+
+```powershell
+& ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
+```
+
+If the download fails with a TLS or connection error, update to a current Windows 10 or 11 build, or install [PowerShell 7](https://aka.ms/powershell) and run the command in `pwsh`.
+
+### SmartScreen asks before the installer runs
+
+Windows builds aren't signed yet, so when you download the `.msi` in a browser and open it, SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. The install command above doesn't trigger SmartScreen, since a download through PowerShell isn't marked as coming from the internet.
+
 ## Linux
 
 ### No tray icon on GNOME
