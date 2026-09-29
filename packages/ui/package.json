@@ -1,0 +1,11 @@
+{
+  "name": "@ppm/ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts", "./styles.css": "./src/styles.css" },
+  "scripts": { "typecheck": "tsc --noEmit" },
+  "dependencies": { "@ppm/protocol": "workspace:*" },
+  "peerDependencies": { "react": "^19" },
+  "devDependencies": { "@types/react": "^19.1.8", "react": "^19.1.0", "typescript": "~6.0.3" }
+}

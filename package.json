@@ -1,0 +1,12 @@
+{
+  "name": "port-process-manager-workspace",
+  "private": true,
+  "packageManager": "pnpm@11.10.0",
+  "scripts": {
+    "dev": "pnpm --filter @ppm/desktop dev",
+    "dev:web": "pnpm --filter @ppm/desktop dev:web",
+    "generate": "pnpm --filter @ppm/protocol generate",
+    "typecheck": "pnpm -r typecheck",
+    "check": "pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+  }
+}

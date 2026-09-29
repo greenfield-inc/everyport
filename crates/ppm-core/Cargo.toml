@@ -1,0 +1,12 @@
+[package]
+name = "ppm-core"
+description = "Scanner engine and wire protocol for Port Process Manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true

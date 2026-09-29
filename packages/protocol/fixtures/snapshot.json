@@ -1,0 +1,768 @@
+{
+  "taken_at": 1790195040000,
+  "system": {
+    "memory_total": 17179869184,
+    "memory_used": 12777527706,
+    "memory_other_apps": 7516192768,
+    "cpu_percent": 18
+  },
+  "servers": [
+    {
+      "addresses": [
+        "127.0.0.1",
+        "::1"
+      ],
+      "cwd_exists": true,
+      "connections": 4,
+      "protected": false,
+      "status": "running",
+      "clean_up": null,
+      "workspace": {
+        "kind": "conductor",
+        "name": "providence"
+      },
+      "agent": {
+        "kind": "claude_code",
+        "id": "68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c",
+        "title": "Dot-grid menu bar icon",
+        "started_at": 1790183040000,
+        "transcript_path": "/Users/dev/.claude/projects/providence/68c8fda6.jsonl",
+        "directory": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+        "resume_command": "claude --resume 68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c"
+      },
+      "port": 3000,
+      "pid": 48213,
+      "root": {
+        "pid": 48198,
+        "started_at": 1790183520000
+      },
+      "process_name": "node",
+      "cwd": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+      "command": "npm run dev",
+      "launch_dir": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+      "started_at": 1790183520000,
+      "project": {
+        "name": "port-process-manager",
+        "root": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+        "framework": "Next.js",
+        "branch": "menubar-port-monitor",
+        "worktree": "providence",
+        "github": "greenfield-inc/port-process-manager",
+        "vercel": {
+          "project_id": "prj_ppm",
+          "preview_url": "https://port-process-manager-git-menubar-port-monitor.vercel.app"
+        }
+      },
+      "processes": [
+        {
+          "proc": {
+            "pid": 48198,
+            "started_at": 1790183520000
+          },
+          "name": "npm run dev",
+          "depth": 0,
+          "memory": 60817408,
+          "cpu_percent": 0.1
+        },
+        {
+          "proc": {
+            "pid": 48213,
+            "started_at": 1790183520900
+          },
+          "name": "next-server",
+          "depth": 1,
+          "memory": 1095761920,
+          "cpu_percent": 9.8
+        },
+        {
+          "proc": {
+            "pid": 48230,
+            "started_at": 1790183521400
+          },
+          "name": "turbopack",
+          "depth": 2,
+          "memory": 171966464,
+          "cpu_percent": 2.1
+        }
+      ],
+      "memory": 1328545792,
+      "cpu_percent": 12,
+      "history": [
+        {
+          "at": 1790194440000,
+          "memory": 1267015352,
+          "cpu_percent": 3
+        },
+        {
+          "at": 1790194470000,
+          "memory": 1305507759,
+          "cpu_percent": 4
+        },
+        {
+          "at": 1790194500000,
+          "memory": 1285779836,
+          "cpu_percent": 5
+        },
+        {
+          "at": 1790194530000,
+          "memory": 1282840839,
+          "cpu_percent": 3
+        },
+        {
+          "at": 1790194560000,
+          "memory": 1273935323,
+          "cpu_percent": 4
+        },
+        {
+          "at": 1790194590000,
+          "memory": 1226352581,
+          "cpu_percent": 5
+        },
+        {
+          "at": 1790194620000,
+          "memory": 1232953129,
+          "cpu_percent": 3
+        },
+        {
+          "at": 1790194650000,
+          "memory": 1272222895,
+          "cpu_percent": 58
+        },
+        {
+          "at": 1790194680000,
+          "memory": 1272654430,
+          "cpu_percent": 5
+        },
+        {
+          "at": 1790194710000,
+          "memory": 1292294343,
+          "cpu_percent": 3
+        },
+        {
+          "at": 1790194740000,
+          "memory": 1308791490,
+          "cpu_percent": 4
+        },
+        {
+          "at": 1790194770000,
+          "memory": 1260882201,
+          "cpu_percent": 5
+        },
+        {
+          "at": 1790194800000,
+          "memory": 1236290563,
+          "cpu_percent": 3
+        },
+        {
+          "at": 1790194830000,
+          "memory": 1250933845,
+          "cpu_percent": 4
+        },
+        {
+          "at": 1790194860000,
+          "memory": 1240453099,
+          "cpu_percent": 5
+        },
+        {
+          "at": 1790194890000,
+          "memory": 1262947110,
+          "cpu_percent": 58
+        },
+        {
+          "at": 1790194920000,
+          "memory": 1310517060,
+          "cpu_percent": 4
+        },
+        {
+          "at": 1790194950000,
+          "memory": 1293020345,
+          "cpu_percent": 5
+        },
+        {
+          "at": 1790194980000,
+          "memory": 1268251403,
+          "cpu_percent": 3
+        },
+        {
+          "at": 1790195010000,
+          "memory": 1268524523,
+          "cpu_percent": 4
+        },
+        {
+          "at": 1790195040000,
+          "memory": 1233491775,
+          "cpu_percent": 5
+        }
+      ],
+      "last_active": 1790195000000
+    },
+    {
+      "addresses": [
+        "127.0.0.1",
+        "::1"
+      ],
+      "cwd_exists": true,
+      "connections": 1,
+      "protected": false,
+      "status": "running",
+      "clean_up": null,
+      "workspace": null,
+      "agent": null,
+      "port": 3001,
+      "pid": 51022,
+      "root": {
+        "pid": 51010,
+        "started_at": 1790101440000
+      },
+      "process_name": "node",
+      "cwd": "/Users/dev/Sites/greenfield.to",
+      "command": "pnpm dev",
+      "launch_dir": "/Users/dev/Sites/greenfield.to",
+      "started_at": 1790101440000,
+      "project": {
+        "name": "greenfield.to",
+        "root": "/Users/dev/Sites/greenfield.to",
+        "framework": "Next.js",
+        "branch": "main",
+        "worktree": null,
+        "github": "greenfield-inc/greenfield.to",
+        "vercel": null
+      },
+      "processes": [
+        {
+          "proc": {
+            "pid": 51010,
+            "started_at": 1790101440000
+          },
+          "name": "pnpm dev",
+          "depth": 0,
+          "memory": 54525952,
+          "cpu_percent": 0
+        },
+        {
+          "proc": {
+            "pid": 51022,
+            "started_at": 1790101440800
+          },
+          "name": "next-server",
+          "depth": 1,
+          "memory": 587202560,
+          "cpu_percent": 0.4
+        }
+      ],
+      "memory": 641728512,
+      "cpu_percent": 0.4,
+      "history": [
+        {
+          "at": 1790194440000,
+          "memory": 641728512,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194470000,
+          "memory": 644234528,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194500000,
+          "memory": 642950158,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194530000,
+          "memory": 642758817,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194560000,
+          "memory": 642179031,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194590000,
+          "memory": 639081196,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194620000,
+          "memory": 639510919,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194650000,
+          "memory": 642067545,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194680000,
+          "memory": 642095639,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194710000,
+          "memory": 643374280,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194740000,
+          "memory": 644448313,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194770000,
+          "memory": 641329218,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194800000,
+          "memory": 639728200,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194830000,
+          "memory": 640681539,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194860000,
+          "memory": 639999199,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194890000,
+          "memory": 641463652,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194920000,
+          "memory": 644560654,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194950000,
+          "memory": 643421545,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790194980000,
+          "memory": 641808984,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790195010000,
+          "memory": 641826765,
+          "cpu_percent": 0.4
+        },
+        {
+          "at": 1790195040000,
+          "memory": 639545987,
+          "cpu_percent": 0.4
+        }
+      ],
+      "last_active": 1790193840000
+    },
+    {
+      "addresses": [
+        "127.0.0.1",
+        "::1"
+      ],
+      "cwd_exists": true,
+      "connections": 0,
+      "protected": false,
+      "status": "idle",
+      "clean_up": {
+        "kind": "idle",
+        "seconds": 18000
+      },
+      "workspace": {
+        "kind": "pane",
+        "name": "lisbon"
+      },
+      "agent": null,
+      "port": 5173,
+      "pid": 60411,
+      "root": {
+        "pid": 60400,
+        "started_at": 1790169840000
+      },
+      "process_name": "node",
+      "cwd": "/Users/dev/.pane/worktrees/doozy/lisbon/apps/webapp",
+      "command": "vite",
+      "launch_dir": "/Users/dev/.pane/worktrees/doozy/lisbon/apps/webapp",
+      "started_at": 1790169840000,
+      "project": {
+        "name": "doozy-webapp",
+        "root": "/Users/dev/.pane/worktrees/doozy/lisbon",
+        "framework": "Vite",
+        "branch": "feat/export-svg",
+        "worktree": "lisbon",
+        "github": "greenfield-inc/doozy",
+        "vercel": null
+      },
+      "processes": [
+        {
+          "proc": {
+            "pid": 60400,
+            "started_at": 1790169840000
+          },
+          "name": "pnpm dev",
+          "depth": 0,
+          "memory": 50331648,
+          "cpu_percent": 0
+        },
+        {
+          "proc": {
+            "pid": 60411,
+            "started_at": 1790169840600
+          },
+          "name": "vite",
+          "depth": 1,
+          "memory": 142606336,
+          "cpu_percent": 0
+        }
+      ],
+      "memory": 192937984,
+      "cpu_percent": 0,
+      "history": [
+        {
+          "at": 1790194440000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194470000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194500000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194530000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194560000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194590000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194620000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194650000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194680000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194710000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194740000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194770000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194800000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194830000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194860000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194890000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194920000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194950000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790194980000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790195010000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        },
+        {
+          "at": 1790195040000,
+          "memory": 192937984,
+          "cpu_percent": 0
+        }
+      ],
+      "last_active": 1790177040000
+    },
+    {
+      "addresses": [
+        "127.0.0.1",
+        "::1"
+      ],
+      "cwd_exists": true,
+      "connections": 2,
+      "protected": false,
+      "status": "attention",
+      "clean_up": {
+        "kind": "leaking",
+        "bytes": 1191182336
+      },
+      "workspace": null,
+      "agent": null,
+      "port": 6006,
+      "pid": 70102,
+      "root": {
+        "pid": 70090,
+        "started_at": 1790187840000
+      },
+      "process_name": "node",
+      "cwd": "/Users/dev/code/design-system",
+      "command": "storybook dev -p 6006",
+      "launch_dir": "/Users/dev/code/design-system",
+      "started_at": 1790187840000,
+      "project": {
+        "name": "design-system",
+        "root": "/Users/dev/code/design-system",
+        "framework": "Storybook",
+        "branch": "tokens-v2",
+        "worktree": null,
+        "github": "greenfield-inc/design-system",
+        "vercel": null
+      },
+      "processes": [
+        {
+          "proc": {
+            "pid": 70090,
+            "started_at": 1790187840000
+          },
+          "name": "storybook",
+          "depth": 0,
+          "memory": 94371840,
+          "cpu_percent": 1
+        },
+        {
+          "proc": {
+            "pid": 70102,
+            "started_at": 1790187840700
+          },
+          "name": "node",
+          "depth": 1,
+          "memory": 2922381312,
+          "cpu_percent": 14
+        }
+      ],
+      "memory": 3016753152,
+      "cpu_percent": 15,
+      "history": [
+        {
+          "at": 1790194440000,
+          "memory": 1825361101,
+          "cpu_percent": 10
+        },
+        {
+          "at": 1790194470000,
+          "memory": 1828340734,
+          "cpu_percent": 11
+        },
+        {
+          "at": 1790194500000,
+          "memory": 1837279635,
+          "cpu_percent": 12
+        },
+        {
+          "at": 1790194530000,
+          "memory": 1852177803,
+          "cpu_percent": 13
+        },
+        {
+          "at": 1790194560000,
+          "memory": 1873035238,
+          "cpu_percent": 10
+        },
+        {
+          "at": 1790194590000,
+          "memory": 1899851940,
+          "cpu_percent": 11
+        },
+        {
+          "at": 1790194620000,
+          "memory": 1932627909,
+          "cpu_percent": 12
+        },
+        {
+          "at": 1790194650000,
+          "memory": 1971363145,
+          "cpu_percent": 13
+        },
+        {
+          "at": 1790194680000,
+          "memory": 2016057649,
+          "cpu_percent": 10
+        },
+        {
+          "at": 1790194710000,
+          "memory": 2066711419,
+          "cpu_percent": 11
+        },
+        {
+          "at": 1790194740000,
+          "memory": 2123324457,
+          "cpu_percent": 12
+        },
+        {
+          "at": 1790194770000,
+          "memory": 2185896762,
+          "cpu_percent": 13
+        },
+        {
+          "at": 1790194800000,
+          "memory": 2254428334,
+          "cpu_percent": 10
+        },
+        {
+          "at": 1790194830000,
+          "memory": 2328919173,
+          "cpu_percent": 11
+        },
+        {
+          "at": 1790194860000,
+          "memory": 2409369279,
+          "cpu_percent": 12
+        },
+        {
+          "at": 1790194890000,
+          "memory": 2495778652,
+          "cpu_percent": 13
+        },
+        {
+          "at": 1790194920000,
+          "memory": 2588147293,
+          "cpu_percent": 10
+        },
+        {
+          "at": 1790194950000,
+          "memory": 2686475200,
+          "cpu_percent": 11
+        },
+        {
+          "at": 1790194980000,
+          "memory": 2790762375,
+          "cpu_percent": 12
+        },
+        {
+          "at": 1790195010000,
+          "memory": 2901008817,
+          "cpu_percent": 13
+        },
+        {
+          "at": 1790195040000,
+          "memory": 3017214525,
+          "cpu_percent": 10
+        }
+      ],
+      "last_active": 1790195030000
+    },
+    {
+      "addresses": [
+        "127.0.0.1",
+        "::1"
+      ],
+      "cwd_exists": false,
+      "connections": 0,
+      "protected": false,
+      "status": "idle",
+      "clean_up": {
+        "kind": "worktree_deleted"
+      },
+      "workspace": {
+        "kind": "git_worktree",
+        "name": "fix-auth-timeout"
+      },
+      "agent": null,
+      "port": 8000,
+      "pid": 81230,
+      "root": {
+        "pid": 81220,
+        "started_at": 1790011440000
+      },
+      "process_name": "python3",
+      "cwd": "/Users/dev/code/api-worktrees/fix-auth-timeout",
+      "command": "uvicorn app:main --reload --port 8000",
+      "launch_dir": "/Users/dev/code/api-worktrees/fix-auth-timeout",
+      "started_at": 1790011440000,
+      "project": {
+        "name": "api",
+        "root": null,
+        "framework": "FastAPI",
+        "branch": "fix/auth-timeout",
+        "worktree": "fix-auth-timeout",
+        "github": "greenfield-inc/api",
+        "vercel": null
+      },
+      "processes": [
+        {
+          "proc": {
+            "pid": 81220,
+            "started_at": 1790011440000
+          },
+          "name": "uvicorn",
+          "depth": 0,
+          "memory": 41943040,
+          "cpu_percent": 0
+        },
+        {
+          "proc": {
+            "pid": 81230,
+            "started_at": 1790011440500
+          },
+          "name": "python3",
+          "depth": 1,
+          "memory": 58720256,
+          "cpu_percent": 0
+        }
+      ],
+      "memory": 100663296,
+      "cpu_percent": 0,
+      "history": [],
+      "last_active": 1790022240000
+    }
+  ]
+}

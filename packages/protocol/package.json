@@ -1,0 +1,12 @@
+{
+  "name": "@ppm/protocol",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "generate": "cd ../.. && cargo test -p ppm-core --quiet && node packages/protocol/scripts/write-index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": { "typescript": "~6.0.3" }
+}

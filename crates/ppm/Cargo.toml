@@ -1,0 +1,15 @@
+[package]
+name = "port-process-manager"
+description = "See every dev server on your machine, or any box you can reach"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "ppm"
+path = "src/main.rs"
+
+[dependencies]
+ppm-core.workspace = true
+serde_json.workspace = true
