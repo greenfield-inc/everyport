@@ -1,6 +1,5 @@
 {
   "name": "port-process-manager",
-  "version": "0.1.0",
   "description": "See every dev server on your machine, or any box you can reach",
   "license": "MIT",
   "homepage": "https://github.com/greenfield-inc/port-process-manager",
@@ -12,12 +11,12 @@
   "bugs": {
     "url": "https://github.com/greenfield-inc/port-process-manager/issues"
   },
-  "keywords": ["ports", "dev-server", "process", "cli"],
+  "keywords": ["ports", "dev-server", "localhost", "process", "cli"],
   "bin": {
     "ppm": "bin/ppm.js",
     "port-process-manager": "bin/ppm.js"
   },
-  "files": ["bin", "SHA256SUMS", "README.md"],
+  "files": ["bin", "SHA256SUMS", "README.md", "LICENSE"],
   "engines": {
     "node": ">=18"
   },

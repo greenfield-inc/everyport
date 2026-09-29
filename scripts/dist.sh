@@ -20,12 +20,6 @@ packages="$root/dist/packages"
 
 version="$(cargo metadata --no-deps --format-version 1 --manifest-path "$root/Cargo.toml" |
   jq -r '.packages[] | select(.name == "port-process-manager") | .version')"
-check_version() {
-  [ "$2" = "$version" ] || { echo "$1 has version $2, Cargo.toml has $version" >&2; exit 1; }
-}
-check_version apps/desktop/src-tauri/tauri.conf.json "$(jq -r .version "$root/apps/desktop/src-tauri/tauri.conf.json")"
-check_version packaging/npm/package.json "$(jq -r .version "$root/packaging/npm/package.json")"
-check_version packaging/pypi/pyproject.toml "$(sed -n 's/^version = "\(.*\)"$/\1/p' "$root/packaging/pypi/pyproject.toml")"
 
 strict=false
 if [ "${GITHUB_REF_TYPE:-}" = tag ]; then
@@ -59,12 +53,16 @@ for template in "$root"/packaging/homebrew/*.rb "$root"/packaging/winget/*.yaml;
 done
 
 # The npm and PyPI packages carry SHA256SUMS, so they verify the binary
-# without trusting a checksum from the same server.
+# without trusting a checksum from the same server. They take their version
+# from Cargo.toml here.
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 cp -R "$root/packaging/npm" "$root/packaging/pypi" "$stage/"
-cp "$release/SHA256SUMS" "$stage/npm/"
+cp "$root/LICENSE" "$release/SHA256SUMS" "$stage/npm/"
+cp "$root/LICENSE" "$stage/pypi/"
 cp "$release/SHA256SUMS" "$stage/pypi/src/port_process_manager/"
+jq --arg version "$version" '{name, version: $version} + .' "$root/packaging/npm/package.json" > "$stage/npm/package.json"
+echo "$version" > "$stage/pypi/VERSION"
 npm pack --silent "$stage/npm" --pack-destination "$packages" > /dev/null
 uv build --quiet "$stage/pypi" --out-dir "$packages"
 echo "== dist/packages"

@@ -17,7 +17,9 @@ trap 'kill "${servers[@]}" 2>/dev/null || true; rm -rf "$work"' EXIT
 
 # Windows tools need Windows paths; elsewhere this is a no-op.
 native() { if command -v cygpath > /dev/null; then cygpath -w "$1"; else echo "$1"; fi; }
-version="$(node -p 'require(process.argv[1]).version' "$(native "$root/packaging/npm/package.json")")"
+tarball="$(echo "$dist"/packages/port-process-manager-*.tgz)"
+version="${tarball##*/port-process-manager-}"
+version="${version%.tgz}"
 
 serve() {
   uv run --quiet --no-project python -m http.server "$2" --bind 127.0.0.1 --directory "$(native "$1")" > "$work/server-$2.log" 2>&1 &
@@ -39,7 +41,7 @@ serve "$work/tampered" 18766
 good=http://127.0.0.1:18765
 bad=http://127.0.0.1:18766
 
-npm install --silent --global --prefix "$(native "$work/npm")" "$(native "$dist/packages/port-process-manager-$version.tgz")"
+npm install --silent --global --prefix "$(native "$work/npm")" "$(native "$tarball")"
 wheel="$(native "$dist/packages/port_process_manager-$version-py3-none-any.whl")"
 
 # Runs one install method with a fresh home, so nothing is cached.

@@ -57,31 +57,24 @@ jobs:
     steps:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22, registry-url: "https://registry.npmjs.org" }
+      # npm 11.5 publishes through trusted publishing when NPM_TOKEN is not set.
+      - run: npm install --global npm@11
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with: { name: packages, path: packages }
-      - run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::notice::Skipping npm publish: NPM_TOKEN is not set."
-            exit 0
-          fi
-          npm publish packages/port-process-manager-*.tgz --provenance --access public
+      - run: npm publish packages/port-process-manager-*.tgz --provenance --access public
         env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
 
   pypi:
     if: github.ref_type == 'tag'
     needs: github
     runs-on: ubuntu-latest
+    # PyPI trusts this workflow directly (trusted publishing), so there is no token.
+    permissions: { contents: read, id-token: write }
     steps:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with: { name: packages, path: packages }
-      - run: |
-          if [ -z "$UV_PUBLISH_TOKEN" ]; then
-            echo "::notice::Skipping PyPI publish: PYPI_API_TOKEN is not set."
-            exit 0
-          fi
-          uv publish packages/port_process_manager-*
-        env: { UV_PUBLISH_TOKEN: "${{ secrets.PYPI_API_TOKEN }}" }
+      - run: uv publish --trusted-publishing always packages/port_process_manager-*
 
   homebrew:
     if: github.ref_type == 'tag'

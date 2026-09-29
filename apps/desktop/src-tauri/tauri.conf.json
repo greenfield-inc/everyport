@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Port Process Manager",
-  "version": "0.1.0",
   "identifier": "to.greenfield.portprocessmanager",
   "build": {
     "beforeDevCommand": "node scripts/sidecar.mjs && pnpm dev:web",

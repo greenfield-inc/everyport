@@ -80,15 +80,21 @@ jobs:
       - run: chmod +x sidecar/*
         shell: bash
 
+      # The WINDOWS_SIGNING repository variable set to skip ships an unsigned .msi from a signed release.
+      - name: Skip Windows signing
+        if: inputs.sign && runner.os == 'Windows' && vars.WINDOWS_SIGNING == 'skip'
+        run: Write-Output "::warning::WINDOWS_SIGNING is skip, so this release ships an unsigned .msi. macOS is still signed and notarized."
+        shell: pwsh
+
       - name: Import the Windows signing certificate
-        if: inputs.sign && runner.os == 'Windows'
+        if: inputs.sign && runner.os == 'Windows' && vars.WINDOWS_SIGNING != 'skip'
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if (-not $env:WINDOWS_CERTIFICATE -or -not $env:WINDOWS_CERTIFICATE_PASSWORD) {
-            Write-Output "::error::Signed builds need the WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD secrets. For a test release, run Release with unsigned."
+            Write-Output "::error::Signed builds need the WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD secrets. To ship an unsigned .msi, set the WINDOWS_SIGNING repository variable to skip. For a test release, run Release with unsigned."
             exit 1
           }
           $pfx = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
@@ -104,7 +110,7 @@ jobs:
         shell: bash
         env:
           # Not SIGN: the AppImage plugin gpg-signs whenever SIGN is set.
-          PPM_SIGN: ${{ inputs.sign }}
+          PPM_SIGN: ${{ inputs.sign && !(runner.os == 'Windows' && vars.WINDOWS_SIGNING == 'skip') }}
           # apps/desktop/scripts/sidecar.mjs bundles this prebuilt ppm instead of building one.
           PPM_SIDECAR: ${{ github.workspace }}/sidecar/ppm-${{ matrix.sidecar || matrix.target }}${{ matrix.exe }}
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
@@ -162,6 +168,10 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with: { path: artifacts, merge-multiple: true }
       - run: scripts/dist.sh artifacts
+      - name: Check the npm and PyPI packages
+        run: |
+          npm publish --dry-run dist/packages/port-process-manager-*.tgz
+          uvx twine check --strict dist/packages/port_process_manager-*
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: release, path: dist/release, if-no-files-found: error }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
