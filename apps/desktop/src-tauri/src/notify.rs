@@ -9,7 +9,8 @@ use std::time::Duration;
 use ppm_client::protocol::{Alert, Call, Server};
 use serde::{Deserialize, Serialize};
 use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewUrl, WebviewWindow,
+    WebviewWindowBuilder,
 };
 
 use crate::machines;
@@ -75,19 +76,22 @@ pub fn show(app: &AppHandle, machine_id: &str, server: Server, alert: Alert) {
     });
 }
 
-/// Shows the rendered card, if its alert is still current.
-pub fn present(app: &AppHandle) {
-    popover::on_main(app, present_now);
+/// Sizes the rendered card and shows it, if its alert is still current. Both
+/// happen in one main-thread step, so placement sees the new size.
+pub fn present(app: &AppHandle, size: LogicalSize<f64>) {
+    popover::on_main(app, move |app| {
+        let Some(window) = app.get_webview_window(LABEL) else {
+            return;
+        };
+        let _ = window.set_size(size);
+        if state(app).active {
+            show_card(app, &window, size);
+        }
+    });
 }
 
-fn present_now(app: &AppHandle) {
-    let Some(window) = app.get_webview_window(LABEL) else {
-        return;
-    };
-    if !state(app).active {
-        return;
-    }
-    position(app, &window);
+fn show_card(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
+    position(app, window, size);
     #[cfg(target_os = "macos")]
     {
         use tauri_nspanel::ManagerExt;
@@ -126,25 +130,14 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     popover::native_look(&window, 22.0);
     #[cfg(target_os = "macos")]
     {
-        use tauri_nspanel::objc2_app_kit::NSWindowStyleMask;
-        use tauri_nspanel::{CollectionBehavior, PanelLevel, WebviewWindowExt};
-
-        let panel = window.to_panel::<popover::panel::PopoverPanel>()?;
-        panel.set_level(PanelLevel::Status.value());
-        panel.set_collection_behavior(
-            CollectionBehavior::new()
-                .can_join_all_spaces()
-                .full_screen_auxiliary()
-                .stationary()
-                .value(),
-        );
-        let _ = panel.add_style_mask(NSWindowStyleMask::NonactivatingPanel);
+        popover::panel::floating(&window)?;
     }
     Ok(window)
 }
 
-/// Top right of the screen with the tray icon.
-fn position(app: &AppHandle, window: &WebviewWindow) {
+/// Top right of the screen with the tray icon. Takes the size to place rather
+/// than reading it back, since a resize may not have reached the window yet.
+fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
     let monitor = crate::tray::get(app)
         .and_then(|tray| tray.rect().ok().flatten())
         .and_then(|rect| {
@@ -152,9 +145,7 @@ fn position(app: &AppHandle, window: &WebviewWindow) {
             app.monitor_from_point(p.x, p.y).ok().flatten()
         })
         .or_else(|| app.primary_monitor().ok().flatten());
-    let (Some(monitor), Ok(size)) = (monitor, window.outer_size()) else {
-        return;
-    };
+    let Some(monitor) = monitor else { return };
     let work = monitor.work_area();
     let area = Rect {
         x: work.position.x.into(),
@@ -163,7 +154,7 @@ fn position(app: &AppHandle, window: &WebviewWindow) {
         height: work.size.height.into(),
     };
     let margin = MARGIN * monitor.scale_factor();
-    let x = area.x + area.width - f64::from(size.width) - margin;
+    let x = area.x + area.width - size.width * monitor.scale_factor() - margin;
     let _ = window.set_position(PhysicalPosition::new(x as i32, (area.y + margin) as i32));
 }
 

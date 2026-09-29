@@ -78,10 +78,12 @@ pub fn run() {
 /// Sizes the calling window to its page's content and keeps it in place.
 #[tauri::command]
 fn fit_window(app: AppHandle, window: WebviewWindow, width: f64, height: f64) {
-    let _ = window.set_size(LogicalSize::new(width, height));
+    let size = LogicalSize::new(width, height);
     match window.label() {
-        popover::LABEL => popover::reposition(&app),
-        notify::LABEL => notify::present(&app),
-        _ => {}
+        popover::LABEL => popover::fit(&app, size),
+        notify::LABEL => notify::present(&app, size),
+        _ => {
+            let _ = window.set_size(size);
+        }
     }
 }

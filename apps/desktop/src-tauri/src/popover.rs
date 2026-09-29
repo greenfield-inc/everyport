@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewWindow};
 
 use crate::placement::{place, Rect};
 use crate::{machines, tray};
@@ -96,7 +96,9 @@ pub struct ServerRef {
 #[cfg(target_os = "macos")]
 #[allow(clippy::unused_unit)] // panel_event! needs the explicit `-> ()`.
 pub mod panel {
-    use tauri_nspanel::PanelHandle;
+    use tauri::WebviewWindow;
+    use tauri_nspanel::objc2_app_kit::{NSWindowAnimationBehavior, NSWindowStyleMask};
+    use tauri_nspanel::{CollectionBehavior, PanelHandle, PanelLevel, WebviewWindowExt};
 
     tauri_nspanel::tauri_panel! {
         panel!(PopoverPanel {
@@ -109,6 +111,28 @@ pub mod panel {
         panel_event!(PopoverEvents {
             window_did_resign_key(notification: &NSNotification) -> ()
         })
+    }
+
+    /// Makes `window` a non-activating panel above the menu bar, on every
+    /// Space and over full-screen apps. AppKit's own show animation is off,
+    /// since the page animates the open.
+    pub fn floating(window: &WebviewWindow) -> tauri::Result<PanelHandle<tauri::Wry>> {
+        let panel = window.to_panel::<PopoverPanel>()?;
+        panel.set_level(PanelLevel::Status.value());
+        panel.set_collection_behavior(
+            CollectionBehavior::new()
+                .can_join_all_spaces()
+                .full_screen_auxiliary()
+                .stationary()
+                .value(),
+        );
+        if let Err(error) = panel.add_style_mask(NSWindowStyleMask::NonactivatingPanel) {
+            eprintln!("could not make the panel non-activating: {error}");
+        }
+        panel
+            .as_panel()
+            .setAnimationBehavior(NSWindowAnimationBehavior::None);
+        Ok(panel)
     }
 
     /// Calls `hide` when the panel loses key focus, such as on a click elsewhere.
@@ -130,21 +154,7 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
 
     #[cfg(target_os = "macos")]
     {
-        use tauri_nspanel::objc2_app_kit::NSWindowStyleMask;
-        use tauri_nspanel::{CollectionBehavior, PanelLevel, WebviewWindowExt};
-
-        let panel = window.to_panel::<panel::PopoverPanel>()?;
-        panel.set_level(PanelLevel::Status.value());
-        panel.set_collection_behavior(
-            CollectionBehavior::new()
-                .can_join_all_spaces()
-                .full_screen_auxiliary()
-                .stationary()
-                .value(),
-        );
-        if let Err(error) = panel.add_style_mask(NSWindowStyleMask::NonactivatingPanel) {
-            eprintln!("popover: could not make the panel non-activating: {error}");
-        }
+        let panel = panel::floating(&window)?;
         let handle = app.clone();
         panel::hide_on_resign_key(&panel, move || hide(&handle));
     }
@@ -248,7 +258,9 @@ fn show_now(app: &AppHandle, server: Option<ServerRef>) {
     if let Some(server) = server {
         let _ = window.emit_to(LABEL, "popover:open-server", server);
     }
-    position(app, &window);
+    if let (Ok(size), Ok(scale)) = (window.outer_size(), window.scale_factor()) {
+        position(app, &window, size.to_logical(scale));
+    }
     let _ = window.emit_to(LABEL, "popover:visible", true);
     machines::publish(app);
     #[cfg(target_os = "macos")]
@@ -286,16 +298,23 @@ fn hide_now(app: &AppHandle) {
     let _ = window.emit_to(LABEL, "popover:visible", false);
 }
 
-/// Keeps the popover anchored to the tray after its size changes.
-pub fn reposition(app: &AppHandle) {
-    if is_visible(app) {
-        position(app, &window(app));
-    }
+/// Resizes the popover to its page and keeps it anchored to the tray. Both
+/// happen in one main-thread step, so placement sees the new size.
+pub fn fit(app: &AppHandle, size: LogicalSize<f64>) {
+    on_main(app, move |app| {
+        let window = window(app);
+        let _ = window.set_size(size);
+        if is_visible(app) {
+            position(app, &window, size);
+        }
+    });
 }
 
 /// Places the popover next to the tray icon, or the cursor where the tray
 /// can't report its rect (Linux), or the top center of the main screen.
-fn position(app: &AppHandle, window: &WebviewWindow) {
+/// Takes the size to place rather than reading it back, since a resize may not
+/// have reached the window yet.
+fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
     let anchor = tray::get(app)
         .and_then(|tray| tray.rect().ok().flatten())
         .map(|rect| {
@@ -323,9 +342,8 @@ fn position(app: &AppHandle, window: &WebviewWindow) {
                 .flatten()
         })
         .or_else(|| app.primary_monitor().ok().flatten());
-    let (Some(monitor), Ok(size)) = (monitor, window.outer_size()) else {
-        return;
-    };
+    let Some(monitor) = monitor else { return };
+    let scale = monitor.scale_factor();
     let work = monitor.work_area();
     let area = Rect {
         x: work.position.x.into(),
@@ -341,9 +359,9 @@ fn position(app: &AppHandle, window: &WebviewWindow) {
     });
     let (x, y) = place(
         anchor,
-        (size.width.into(), size.height.into()),
+        (size.width * scale, size.height * scale),
         area,
-        GAP * monitor.scale_factor(),
+        GAP * scale,
     );
     let _ = window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
