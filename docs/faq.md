@@ -33,7 +33,7 @@ No. The `everyport` CLI has the same list in a terminal UI, and `everyport list 
 
 ## How do I update?
 
-Run the install command again. It installs the latest release over the old one. If you installed with a package manager, update with it: `brew upgrade`, or `winget upgrade Dcouple.Everyport`.
+Run the install command again. It installs the latest release over the old one. If you installed with Homebrew, run `brew upgrade` instead.
 
 ## How does it relate to WhatThePort?
 

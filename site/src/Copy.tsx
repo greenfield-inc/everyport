@@ -16,8 +16,8 @@ const APP_COMMAND: Record<Os, string> = {
 /** CLI-only installs from the README. */
 const CLI_COMMANDS: Record<Os, string[]> = {
   macos: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/everyport"],
-  windows: [`irm ${RAW}/install.ps1 | iex`, "npx everyport"],
-  linux: [`curl -fsSL ${RAW}/install.sh | sh`, "npx everyport"],
+  windows: [`irm ${RAW}/install.ps1 | iex`],
+  linux: [`curl -fsSL ${RAW}/install.sh | sh`],
 };
 
 type Download = { id: string; os: Os; label: string; detail: string; arch: "aarch64" | "x86_64"; ext: string };
@@ -121,7 +121,7 @@ function Install({ os, onOs }: { os: Os; onOs: (os: Os) => void }) {
         <a href={RELEASES}>All releases</a>
       </p>
       <p className="install-label">
-        CLI only · also npm, PyPI and cargo, <a href={`${REPO}#cli-only`}>see all</a>
+        CLI only · also npm, <a href={`${REPO}#cli-only`}>see all</a>
       </p>
       {CLI_COMMANDS[os].map((text) => (
         <Command key={text} text={text} />

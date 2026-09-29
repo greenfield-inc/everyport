@@ -16,10 +16,10 @@ Or install each one separately:
 | | Desktop app | CLI |
 |---|---|---|
 | macOS | `brew install --cask greenfield-inc/tap/everyport` | `brew install greenfield-inc/tap/everyport` |
-| Windows | `winget install Dcouple.Everyport` | `irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
+| Windows | `.msi` or `-setup.exe` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
 | Linux | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh \| sh` |
 
-See [Install](../README.md#install) for npm, PyPI and Cargo.
+See [CLI only](../README.md#cli-only) for npm.
 
 ## The desktop app
 
