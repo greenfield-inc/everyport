@@ -33,7 +33,7 @@ The version lives only in `Cargo.toml` (`workspace.package`). The desktop app re
 
 ## Secrets
 
-A tag build fails when a signing or notarization secret is missing, unless it was started by hand with **unsigned**. The crates.io and Homebrew steps log a notice and skip when their token is missing. PyPI uses trusted publishing, so it needs no secret. npm uses `NPM_TOKEN` when it is set and trusted publishing otherwise. Builds that aren't from a tag never sign, so they never read the signing secrets.
+A tag build fails when a signing or notarization secret is missing, unless it was started by hand with **unsigned**. To release before there is a Windows certificate, set the `WINDOWS_SIGNING` repository variable to `skip`: tag builds still sign and notarize macOS, and ship an unsigned `.msi` with a warning in the log. Unset or `required`, a tag build fails without the Windows secrets. The crates.io and Homebrew steps log a notice and skip when their token is missing. PyPI uses trusted publishing, so it needs no secret. npm uses `NPM_TOKEN` when it is set and trusted publishing otherwise. Builds that aren't from a tag never sign, so they never read the signing secrets.
 
 | Secret | Used for |
 |---|---|
