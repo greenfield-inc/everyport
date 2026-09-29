@@ -1,54 +1,48 @@
 //! Stop and restart. Every target is checked by ProcRef, so a reused pid is
-//! never signalled.
+//! never signalled. Calls only send the first signal; `scan` finishes them,
+//! so snapshots and alerts keep flowing while a server shuts down.
 
 use super::tree::Table;
 use super::{command, Engine};
+use crate::platform::Listener;
 use crate::protocol::ProcRef;
 use std::fs::File;
 use std::io;
 use std::path::Path;
 use std::process::{Command, Stdio};
-use std::thread::sleep;
-use std::time::{Duration, Instant};
 
 /// How long a server gets to exit after a terminate before it is killed.
-const GRACE: Duration = Duration::from_secs(3);
-/// How long a killed process gets to disappear.
-const KILL_WAIT: Duration = Duration::from_secs(1);
-const POLL: Duration = Duration::from_millis(100);
-/// How long restart waits for the old server to release its port.
-const PORT_WAIT: Duration = Duration::from_secs(5);
+const GRACE_MS: u64 = 3_000;
+/// How long a stop or restart waits in all. A restart then relaunches even
+/// if the port still looks taken.
+const GIVE_UP_MS: u64 = 8_000;
+
+/// A stop or restart whose tree hasn't exited yet.
+pub(super) struct Pending {
+    targets: Vec<ProcRef>,
+    /// When to kill what ignored the terminate. None once killed.
+    kill_at: Option<u64>,
+    give_up_at: u64,
+    relaunch: Option<Relaunch>,
+}
+
+struct Relaunch {
+    port: u16,
+    command: String,
+    dir: String,
+    environment: Option<Vec<(String, String)>>,
+}
 
 impl Engine {
-    /// Terminates the tree under `root`, leaves first, and kills anything
-    /// still running after the grace period. Returns once all of it is gone.
+    /// Whether a stop or restart is still in progress. Each `scan` advances
+    /// it; a one-shot caller scans until this is false.
+    pub fn pending(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
+    /// Terminates the tree under `root`, leaves first, or kills it with `force`.
     pub(super) fn stop(&mut self, root: ProcRef, force: bool) -> Result<(), String> {
-        let table = self.table()?;
-        let targets = targets(&table, root)?;
-        self.signal(&targets, force)?;
-        let mut forced = force;
-        let mut deadline = Instant::now() + if force { KILL_WAIT } else { GRACE };
-        loop {
-            let table = self.table()?;
-            let alive: Vec<ProcRef> = targets
-                .iter()
-                .copied()
-                .filter(|t| table.live(*t).is_some())
-                .collect();
-            if alive.is_empty() {
-                return Ok(());
-            }
-            if Instant::now() >= deadline {
-                if forced {
-                    let pids: Vec<String> = alive.iter().map(|t| t.pid.to_string()).collect();
-                    return Err(format!("still running: pid {}", pids.join(", ")));
-                }
-                self.signal(&alive, true)?;
-                forced = true;
-                deadline = Instant::now() + KILL_WAIT;
-            }
-            sleep(POLL);
-        }
+        self.begin_stop(root, force, None)
     }
 
     /// Stops the server, then reruns its launch command in the folder it
@@ -76,25 +70,70 @@ impl Engine {
             .or_else(|| self.cwd(listener.unwrap_or(root_info), root_info))
             .filter(|dir| Path::new(dir).is_dir())
             .ok_or_else(|| format!("the folder :{port} started from is gone"))?;
-        let environment = self.platform.environment(launcher.proc.pid);
+        let environment = self
+            .platform
+            .environment(launcher.proc.pid)
+            .filter(|env| !env.is_empty());
+        let relaunch = Relaunch {
+            port,
+            command,
+            dir,
+            environment,
+        };
+        self.begin_stop(root, false, Some(relaunch))
+    }
 
-        self.stop(root, false)?;
-        let deadline = Instant::now() + PORT_WAIT;
-        while Instant::now() < deadline && self.is_listening(port) {
-            sleep(POLL);
+    /// Kills what outlived its grace period, and relaunches a restarted
+    /// server once its old tree is gone and its port is free.
+    pub(super) fn advance(&mut self, table: &Table, listeners: &[Listener], now: u64) {
+        for mut pending in std::mem::take(&mut self.pending) {
+            let alive: Vec<ProcRef> = pending
+                .targets
+                .iter()
+                .copied()
+                .filter(|t| table.live(*t).is_some())
+                .collect();
+            if !alive.is_empty() && pending.kill_at.is_some_and(|at| now >= at) {
+                // A refusal here was already reported by the terminate.
+                let _ = self.signal(&alive, true);
+                pending.kill_at = None;
+            }
+            let port_taken = |r: &Relaunch| listeners.iter().any(|l| l.port == r.port);
+            let done = alive.is_empty() && !pending.relaunch.as_ref().is_some_and(port_taken);
+            if !done && now < pending.give_up_at {
+                self.pending.push(pending);
+            } else if let Some(r) = pending.relaunch {
+                if let Err(e) = spawn(&r.command, r.environment, &r.dir, r.port) {
+                    eprintln!(
+                        "ppm: couldn't restart :{} with `{}`: {e}",
+                        r.port, r.command
+                    );
+                }
+            }
         }
-        spawn(&command, environment, &dir, port)
-            .map_err(|e| format!("couldn't start `{command}`: {e}"))
+    }
+
+    fn begin_stop(
+        &mut self,
+        root: ProcRef,
+        force: bool,
+        relaunch: Option<Relaunch>,
+    ) -> Result<(), String> {
+        let targets = targets(&self.table()?, root)?;
+        self.signal(&targets, force)?;
+        let now = self.platform.now_ms();
+        self.pending.push(Pending {
+            targets,
+            kill_at: (!force).then_some(now + GRACE_MS),
+            give_up_at: now + GIVE_UP_MS,
+            relaunch,
+        });
+        Ok(())
     }
 
     fn table(&self) -> Result<Table, String> {
         let processes = self.platform.processes().map_err(|e| e.to_string())?;
         Ok(Table::new(processes))
-    }
-
-    fn is_listening(&self, port: u16) -> bool {
-        let listeners = self.platform.listeners().unwrap_or_default();
-        listeners.iter().any(|l| l.port == port)
     }
 
     /// Signals each target. One that exited or was replaced meanwhile is

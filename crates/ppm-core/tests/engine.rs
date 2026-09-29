@@ -19,7 +19,8 @@ struct World {
     now: u64,
     procs: Vec<Proc>,
     listeners: Vec<Listener>,
-    connections: HashMap<u16, u32>,
+    /// None for a platform that can't count them.
+    connections: Option<HashMap<u16, u32>>,
     used_memory: u64,
     /// Processes that ignore a terminate.
     stubborn: HashSet<u32>,
@@ -40,6 +41,7 @@ impl Fake {
     fn new() -> Self {
         Fake(Arc::new(Mutex::new(World {
             now: T0,
+            connections: Some(HashMap::new()),
             ..World::default()
         })))
     }
@@ -152,7 +154,7 @@ impl Platform for Fake {
         }
         Ok(())
     }
-    fn connections(&self) -> HashMap<u16, u32> {
+    fn connections(&self) -> Option<HashMap<u16, u32>> {
         self.world().connections.clone()
     }
     fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
@@ -442,7 +444,7 @@ fn idle_for_four_hours_is_cleaned_up_unless_connected() {
     engine.scan();
 
     fake.advance(4 * HOUR);
-    fake.world().connections.insert(8000, 1);
+    fake.world().connections = Some(HashMap::from([(8000, 1)]));
     let (snapshot, _) = engine.scan();
 
     let idle = &snapshot.servers[0];
@@ -453,6 +455,22 @@ fn idle_for_four_hours_is_cleaned_up_unless_connected() {
     assert_eq!(connected.connections, 1);
     assert_eq!(connected.status, ServerStatus::Running);
     assert_eq!(connected.clean_up, None);
+}
+
+#[test]
+fn unknown_connections_never_make_a_server_idle() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    fake.world().connections = None;
+    let mut engine = fake.engine();
+    engine.scan();
+
+    fake.advance(4 * HOUR);
+    let (snapshot, _) = engine.scan();
+    let server = only_server(&snapshot);
+
+    assert_eq!(server.status, ServerStatus::Running);
+    assert_eq!(server.clean_up, None);
 }
 
 #[test]
@@ -491,13 +509,18 @@ fn protected_servers_are_never_cleaned_up_or_alerted() {
     );
     fake.set_usage(500, 3000 * MB, 0);
     fake.listen(5432, 500, "127.0.0.1");
+    // Only the listening process decides: a redis child doesn't protect :3000.
+    next_dev(&fake);
+    fake.run(240, 200, "redis-server", &["redis-server"], dir, HOUR);
     let mut engine = fake.engine();
     engine.scan();
 
     fake.advance(5 * HOUR);
     let (snapshot, alerts) = engine.scan();
-    let server = only_server(&snapshot);
+    let (next, server) = (&snapshot.servers[0], &snapshot.servers[1]);
 
+    assert!(!next.protected);
+    assert_eq!(next.clean_up, Some(CleanUpReason::Idle { seconds: 18_000 }));
     assert!(server.protected);
     assert_eq!(server.clean_up, None);
     assert!(alerts.is_empty());
@@ -524,23 +547,32 @@ fn stop_terminates_leaves_first() {
 }
 
 #[test]
-fn stop_kills_what_ignores_terminate_after_three_seconds() {
+fn a_later_scan_kills_what_ignores_terminate_for_three_seconds() {
     let fake = Fake::new();
     next_dev(&fake);
     fake.world().stubborn.insert(220);
     let root = fake.proc_ref(200);
+    let mut engine = fake.engine();
 
-    let started = std::time::Instant::now();
     let stop = Call::Stop {
         port: 3000,
         root,
         force: false,
     };
-    assert_eq!(fake.engine().call(&stop), Ok(()));
+    assert_eq!(engine.call(&stop), Ok(()));
+    let terminated = [(230, false), (220, false), (210, false), (200, false)];
+    assert_eq!(fake.world().signals, terminated);
 
-    assert!(started.elapsed() >= std::time::Duration::from_secs(3));
-    let signals = fake.world().signals.clone();
-    assert_eq!(signals.last(), Some(&(220, true)));
+    fake.advance(2000);
+    engine.scan();
+    assert_eq!(fake.world().signals.len(), 4);
+    assert!(engine.pending());
+
+    fake.advance(1000);
+    engine.scan();
+    assert_eq!(fake.world().signals.last(), Some(&(220, true)));
+    engine.scan();
+    assert!(!engine.pending());
     assert!(fake.world().procs.iter().all(|p| p.info.proc.pid == 100));
 }
 
@@ -577,8 +609,12 @@ fn restart_reruns_the_launch_command_with_its_environment() {
     fake.world().procs[1].env = vec![("PPM_GREETING".into(), "hello".into())];
     let root = fake.proc_ref(200);
 
+    let mut engine = fake.engine();
     let restart = Call::Restart { port: 3000, root };
-    assert_eq!(fake.engine().call(&restart), Ok(()));
+    assert_eq!(engine.call(&restart), Ok(()));
+    // The next scan sees the old tree gone and the port free.
+    engine.scan();
+    assert!(!engine.pending());
 
     let output = dir.join("restarted.txt");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);

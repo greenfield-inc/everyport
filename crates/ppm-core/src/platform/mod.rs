@@ -56,10 +56,11 @@ pub trait Platform: Send + Sync {
     /// Terminate (or kill, with `force`) one process. Must return an error,
     /// without signalling, when `target.started_at` no longer matches.
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()>;
-    /// Established inbound TCP connections, counted by local port. The engine
-    /// uses them to tell an idle server from one in use.
-    fn connections(&self) -> HashMap<u16, u32> {
-        HashMap::new()
+    /// Established inbound TCP connections, counted by local port, or `None`
+    /// when unknown. The engine uses them to tell an idle server from one in
+    /// use, and never calls a server idle while they are unknown.
+    fn connections(&self) -> Option<HashMap<u16, u32>> {
+        None
     }
     /// The full environment of a process, which `restart` launches with.
     fn environment(&self, _pid: u32) -> Option<Vec<(String, String)>> {

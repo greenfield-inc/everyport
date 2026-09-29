@@ -40,6 +40,7 @@ pub struct Engine {
     links: HashMap<ProcRef, (Option<Workspace>, Option<AgentSession>)>,
     tracked: HashMap<(u16, ProcRef), Tracked>,
     alerts: alerts::Alerts,
+    pending: Vec<control::Pending>,
 }
 
 struct Tracked {
@@ -57,6 +58,7 @@ impl Engine {
             links: HashMap::new(),
             tracked: HashMap::new(),
             alerts: alerts::Alerts::default(),
+            pending: Vec::new(),
         }
     }
 
@@ -80,6 +82,7 @@ impl Engine {
         // address that process bound.
         let mut ports: BTreeMap<u16, (u32, Vec<String>)> = BTreeMap::new();
         let listeners = self.platform.listeners().unwrap_or_default();
+        self.advance(&table, &listeners, now);
         for l in listeners.into_iter().filter(|l| range.contains(&l.port)) {
             let (pid, addresses) = ports.entry(l.port).or_insert((l.pid, Vec::new()));
             if *pid == l.pid && !addresses.contains(&l.address) {
@@ -93,7 +96,9 @@ impl Engine {
             let Some(listener) = table.get(pid).filter(|_| pid != own_pid) else {
                 continue;
             };
-            let connections = connections.get(&port).copied().unwrap_or(0);
+            let connections = connections
+                .as_ref()
+                .map(|counts| counts.get(&port).copied().unwrap_or(0));
             let seen = Seen {
                 port,
                 listener,
@@ -194,7 +199,8 @@ impl Engine {
             history: Vec::new(),
             last_active: now,
         });
-        if cpu_percent >= ACTIVE_CPU_PERCENT || seen.connections > 0 {
+        // Unknown connections could hide a server in use, so it stays active.
+        if cpu_percent >= ACTIVE_CPU_PERCENT || seen.connections != Some(0) {
             tracked.last_active = now;
         }
         match tracked.history.last_mut() {
@@ -218,10 +224,8 @@ impl Engine {
         let launcher = self.launcher(&members);
         let launch_dir = self.details(launcher).and_then(|d| d.cwd.clone());
         let (workspace, agent) = self.links(table, listener, root, cwd.as_deref());
-        let protected = members.iter().any(|(p, _)| {
-            let name = tree::stem(&p.name);
-            self.config.protected.iter().any(|n| tree::stem(n) == name)
-        });
+        let name = tree::stem(&listener.name);
+        let protected = self.config.protected.iter().any(|n| tree::stem(n) == name);
 
         let mut server = Server {
             port,
@@ -243,7 +247,7 @@ impl Engine {
             processes,
             memory,
             cpu_percent,
-            connections: seen.connections,
+            connections: seen.connections.unwrap_or(0),
             history,
             last_active,
             protected,
@@ -340,7 +344,7 @@ struct Seen<'a> {
     port: u16,
     listener: &'a ProcInfo,
     addresses: Vec<String>,
-    connections: u32,
+    connections: Option<u32>,
 }
 
 /// Inside an app bundle. Framework Python also runs from a `Python.app`, but
