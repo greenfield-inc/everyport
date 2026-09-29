@@ -367,6 +367,34 @@ fn skips_ports_outside_the_range_app_helpers_and_system_daemons() {
 }
 
 #[test]
+fn servers_started_from_the_filesystem_root_show_unless_the_os_ships_them() {
+    let fake = Fake::new();
+    // A container whose WORKDIR is `/`.
+    fake.run(10, 1, "nc", &["nc", "-lk", "-p", "39010"], "/", HOUR);
+    fake.listen(39010, 10, "0.0.0.0");
+    fake.run(11, 1, "sshd", &["/usr/sbin/sshd", "-D"], "/", HOUR);
+    fake.listen(39022, 11, "0.0.0.0");
+    let resolved = ["/usr/lib/systemd/systemd-resolved"];
+    fake.run(12, 1, "systemd-resolve", &resolved, "/", HOUR);
+    fake.listen(39053, 12, "0.0.0.0");
+    // nginx from a project folder is a dev server even though the OS ships it.
+    fake.run(
+        13,
+        1,
+        "nginx",
+        &["/usr/sbin/nginx", "-c", "nginx.conf"],
+        project_dir(),
+        HOUR,
+    );
+    fake.listen(8080, 13, "127.0.0.1");
+
+    let (snapshot, _) = fake.engine().scan();
+
+    let ports: Vec<u16> = snapshot.servers.iter().map(|s| s.port).collect();
+    assert_eq!(ports, [8080, 39010]);
+}
+
+#[test]
 fn cpu_is_cpu_time_over_wall_time_between_scans() {
     let fake = Fake::new();
     next_dev(&fake);

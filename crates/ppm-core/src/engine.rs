@@ -186,14 +186,14 @@ impl Engine {
         });
         let listener_details = self.details(listener);
         let root_details = self.details(root);
-        // Apps that embed a node or python backend aren't dev servers.
-        let in_app = [&listener_details, &root_details].into_iter().any(|d| {
-            d.as_ref()
-                .and_then(|d| d.args.first())
-                .is_some_and(|exe| is_app_helper(exe))
-        });
         let cwd = self.cwd(listener, root);
-        if in_app || cwd.as_deref() == Some("/") {
+        // Apps that embed a node or python backend aren't dev servers, and
+        // launchd and systemd start OS services from `/`.
+        let hidden = [&listener_details, &root_details]
+            .into_iter()
+            .filter_map(|d| d.as_ref()?.args.first())
+            .any(|exe| is_app_helper(exe) || (cwd.as_deref() == Some("/") && is_os_program(exe)));
+        if hidden {
             return None;
         }
 
@@ -384,6 +384,21 @@ struct Seen<'a> {
 fn is_app_helper(exe: &str) -> bool {
     exe.find(".app/Contents/")
         .is_some_and(|i| !exe[..i].contains(".framework/"))
+}
+
+/// Installed with the OS. A container's servers run from `/` too, but from
+/// `/usr/bin` or the image's own folders.
+fn is_os_program(exe: &str) -> bool {
+    const OS_DIRS: [&str; 7] = [
+        "/System/",
+        "/Library/Apple/",
+        "/usr/libexec/",
+        "/usr/sbin/",
+        "/sbin/",
+        "/usr/lib/systemd/",
+        "/lib/systemd/",
+    ];
+    OS_DIRS.iter().any(|dir| exe.starts_with(dir))
 }
 
 /// For processes whose folder can't be read, such as another user's.
