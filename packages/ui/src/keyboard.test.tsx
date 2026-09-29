@@ -108,10 +108,23 @@ describe("keyboard", () => {
 
 describe("protected servers", () => {
   // :3000 as a protected postgres, to stop or restart only after a confirm.
+  let publish: (machines: Machine[]) => void;
+  const machinesWith = (pid: number): Machine[] => {
+    const servers = fixtureSnapshot.servers.map((server) =>
+      server.port === 3000 ? { ...server, process_name: "postgres", protected: true, root: { ...server.root, pid } } : server,
+    );
+    return [{ id: "local", label: "This Mac", host: null, state: "connected", snapshot: { ...fixtureSnapshot, servers } }];
+  };
   beforeEach(() => {
-    const servers = fixtureSnapshot.servers.map((server) => (server.port === 3000 ? { ...server, process_name: "postgres", protected: true } : server));
-    const machines: Machine[] = [{ id: "local", label: "This Mac", host: null, state: "connected", snapshot: { ...fixtureSnapshot, servers } }];
-    client = { ...client, machines: () => machines };
+    const machines = machinesWith(fixtureSnapshot.servers[0].root.pid);
+    client = {
+      ...client,
+      machines: () => machines,
+      subscribe: (listener) => {
+        publish = listener;
+        return () => {};
+      },
+    };
     act(() => root.unmount());
     root = createRoot(host);
     act(() => root.render(<Popover client={client} />));
@@ -138,6 +151,24 @@ describe("protected servers", () => {
     press("Backspace", { ctrlKey: true });
     press("Backspace", { ctrlKey: true });
     expect(params("stop")).toMatchObject({ port: 3000, confirm_protected: true });
+  });
+
+  it("ignores a held ⌘⌫, and Escape cancels a confirm on any row", () => {
+    press("Backspace", { ctrlKey: true });
+    press("Backspace", { ctrlKey: true, repeat: true });
+    expect(client.call).not.toHaveBeenCalled();
+    press("ArrowDown");
+    expect(press("Escape")).toBe(true);
+    expect(alert()).toBeUndefined();
+  });
+
+  it("drops a confirm when another process takes the port", () => {
+    press("Backspace", { ctrlKey: true });
+    act(() => publish(machinesWith(99999)));
+    expect(alert()).toBeUndefined();
+    press("Backspace", { ctrlKey: true });
+    expect(client.call).not.toHaveBeenCalled();
+    expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
   });
 
   it("keeps the detail open while a restart waits for its confirm", () => {

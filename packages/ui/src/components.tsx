@@ -162,9 +162,9 @@ export function Grow({ leaving = false, children }: { leaving?: boolean; childre
  */
 export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; server: Server; action: Action }) {
   const label = actionLabel[action];
-  const act = (event: MouseEvent, run: (server: Server) => void) => {
+  const act = (event: MouseEvent, run: () => void) => {
     event.stopPropagation();
-    run(server);
+    run();
   };
   return (
     <>
@@ -185,7 +185,7 @@ export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; se
         </button>
         <button
           type="button"
-          onClick={(event) => act(event, ctx.confirm)}
+          onClick={(event) => act(event, () => ctx.confirm(server))}
           className="ppm:rounded-md ppm:bg-danger-fill ppm:px-2.5 ppm:py-1 ppm:text-11 ppm:font-medium ppm:text-on-danger"
         >
           {label}

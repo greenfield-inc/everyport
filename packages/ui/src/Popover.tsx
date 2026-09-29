@@ -177,17 +177,18 @@ function keyHandler({
         ctx.open(target);
       } else if (key === "backspace") {
         handled();
-        if (ctx.stop(target) && route.view === "detail") back();
+        // A held key repeats; only a fresh press may confirm a protected stop.
+        if (!event.repeat && ctx.stop(target) && route.view === "detail") back();
       } else if (key === "r") {
         handled();
-        ctx.restart(target);
+        if (!event.repeat) ctx.restart(target);
       }
       return;
     }
 
-    if (event.key === "Escape" && target && confirmOf(ctx.pending.get(target.port))) {
+    if (event.key === "Escape" && [...ctx.pending.values()].some(confirmOf)) {
       handled();
-      ctx.cancel(target);
+      ctx.cancel();
     } else if (route.view !== "list" && (event.key === "Escape" || event.key === "ArrowLeft")) {
       handled();
       back();
