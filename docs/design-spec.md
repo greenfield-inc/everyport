@@ -36,10 +36,13 @@ Colors and the body font come from the active Doozy theme. The 40 themes are in 
 | Secondary text `rgba(235,235,245,.6)` and `.4` | `--muted-foreground`, at full and at 70% opacity |
 | Row hover and buttons `rgba(255,255,255,.08)` | `--accent` |
 | Hairlines `rgba(255,255,255,.08)` | `--border` |
-| Amber `#FFB224` (leak, attention, threshold) | `--chart-4`, or `--warning` when a theme defines it |
-| Red stop button and destructive fill | `--destructive` |
-| Memory-bar segments and port colors | `--chart-1` to `--chart-5` |
+| Amber `#FFB224` (leak, attention, threshold) | `--warning` when the theme defines it, otherwise a fixed amber: `#FFB224` in dark mode, `#B45309` in light |
+| Red stop button and destructive text | `--destructive` |
+| Red destructive fill with white text | `--destructive`, darkened until white text reads on it |
+| Memory-bar segments and port colors | `--chart-1` to `--chart-5`; servers in attention use the warning color |
 | Primary button (white "Open localhost") | `--primary` / `--primary-foreground` |
+
+Semantic colors (warning, destructive) never come from chart slots. `@ppm/ui` moves their lightness, keeping the hue, until they read on the panel at 4.5:1 in every theme and mode. The tray's attention icon uses the same warning color (`warningColor` in `@ppm/ui`).
 
 Use the theme's `font-sans` for text. Doozy's app font is Sora. Numbers use the theme's `font-mono` and fall back to Geist Mono. Themes never change radii or spacing: ignore the theme's `radius`.
 
