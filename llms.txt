@@ -1,0 +1,26 @@
+# Port Process Manager
+
+> See every dev server running on your machine, or on any machine you can reach. A menu bar and tray app for macOS, Windows and Linux, plus `ppm`, a CLI and terminal UI. Free, open source (MIT), no account, no telemetry.
+
+`ppm` finds servers listening on ports 3000 to 65535 by default. For each one it reports the project, git branch or worktree, framework, the Claude Code or Codex session that started it, and the memory and CPU of its whole process tree. It can stop, restart and clean up servers, and it skips protected processes such as databases unless told otherwise.
+
+For agents and scripts:
+
+- `ppm list --json` prints one snapshot. `ppm watch --jsonl` prints a snapshot on every change.
+- `ppm stop <port>` and `ppm restart <port>` refuse protected servers without `--protected`. `ppm clean` asks first unless you pass `--yes`.
+- `ppm --on <machine> <command>` runs a command on another machine, such as one added with `ppm remote add devbox -- ssh devbox`.
+- `ppm stdio` and `ppm serve` speak a JSON protocol that any client can use.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/README.md): features, install, quick start and privacy
+- [Getting started](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/getting-started.md): the desktop app, the terminal UI and their keys
+- [Remote machines](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, port forwarding, `ppm serve` and Tailscale
+- [Settings and clean up](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/settings.md): every setting, clean up, auto-kill, protected processes and `config.toml`
+- [CLI reference](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/cli.md): every `ppm` command and option
+- [Troubleshooting](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/troubleshooting.md): `ppm doctor`, missing servers, the Linux tray and blank windows
+- [The ppm protocol](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/protocol.md): events and requests over `ppm stdio` and `ppm serve`
+
+## Optional
+
+- [AGENTS.md](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/AGENTS.md): repo layout, rules and checks for contributors

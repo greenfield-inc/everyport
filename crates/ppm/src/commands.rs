@@ -537,7 +537,7 @@ pub fn doctor(config_dir: Option<std::path::PathBuf>) -> ExitCode {
             check(true, format!("Listening ports: {} found", listeners.len()));
             if hidden > 0 {
                 println!(
-                    "  {} belong to other users or the system; ppm shows their port and process name only",
+                    "  {} belong to other users or the system; ppm shows fewer details for them",
                     format::plural(hidden, "port", "ports")
                 );
             }
