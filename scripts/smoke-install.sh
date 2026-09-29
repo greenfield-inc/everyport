@@ -159,7 +159,7 @@ expect_failure() {
   if output="$("$@" 2>&1)"; then
     echo "FAIL  $name succeeded:"; printf '%s\n' "$output"; failures=$((failures + 1))
   elif tr '\n' ' ' <<< "$output" | grep -qE "$pattern"; then
-    echo "ok    $name: $(head -n 2 <<< "$output" | tr '\n' ' ')"
+    echo "ok    $name:"; printf '%s\n' "$output" | sed 's/^/        /'
   else
     echo "FAIL  $name printed:"; printf '%s\n' "$output"; failures=$((failures + 1))
   fi

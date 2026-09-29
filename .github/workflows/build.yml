@@ -184,6 +184,8 @@ jobs:
   install:
     name: install on ${{ matrix.os }}
     needs: dist
+    # Without this, a skipped bundles job skips this job too.
+    if: ${{ !cancelled() && needs.dist.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
