@@ -5,7 +5,8 @@
 use crate::client::install::{self, Probe};
 use crate::client::machines::Via;
 use crate::client::remote;
-use crate::protocol::Os;
+use crate::client::{Connection, Token, Update};
+use crate::protocol::{Event, Os};
 use serde::Serialize;
 use std::net::SocketAddr;
 use std::time::Duration;
@@ -300,9 +301,11 @@ impl Steps {
 pub async fn check(machine: &str, via: &Via, hint: &Hint) -> Report {
     let mut steps = Steps::default();
     let prefix = match via {
-        Via::Url { url, .. } => {
+        Via::Url { url, token } => {
             let target = url_target(url);
-            reach(&mut steps, machine, &target, hint).await;
+            if reach(&mut steps, machine, &target, hint).await.is_some() {
+                serve_answers(&mut steps, machine, url, token).await;
+            }
             return steps.report(None, false);
         }
         Via::Command { command } => command,
@@ -364,6 +367,42 @@ pub async fn check(machine: &str, via: &Via, hint: &Hint) -> Report {
             steps.fail("Couldn't tell the machine's OS".into(), first, error);
             steps.report(None, false)
         }
+    }
+}
+
+/// `everyport serve` accepts the token and says hello, through the same
+/// session the app uses.
+async fn serve_answers(steps: &mut Steps, machine: &str, url: &str, token: &Token) {
+    let connection = Connection::Http {
+        url: url.to_string(),
+        token: token.clone(),
+    };
+    let (_client, mut updates) = crate::client::connect(connection);
+    let first = tokio::time::timeout(Duration::from_secs(15), async {
+        loop {
+            match updates.recv().await {
+                Some(Update::Connecting) => continue,
+                other => break other,
+            }
+        }
+    })
+    .await;
+    match first {
+        Ok(Some(Update::Event(Event::Hello(hello)))) => steps.pass(format!(
+            "everyport serve {} answers and accepts the connection code",
+            hello.everyport_version
+        )),
+        // The session's error already says what to do, such as adding a new code.
+        Ok(Some(Update::Disconnected { error, .. })) => {
+            steps.fail("everyport serve didn't connect".into(), error, "")
+        }
+        _ => steps.fail(
+            "everyport serve doesn't answer".into(),
+            format!(
+                "{machine} didn't say hello within 15 s. Check that `everyport serve` runs there."
+            ),
+            "",
+        ),
     }
 }
 

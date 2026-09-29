@@ -911,7 +911,7 @@ pub async fn check_machine(app: AppHandle, machine_id: String) -> Result<Vec<Ste
     let still_failing = machines(&app)
         .entry(&machine_id)
         .is_some_and(|e| e.run == run_then && e.machine.state == MachineState::Error);
-    if still_failing && report.probe.is_some() {
+    if still_failing && (report.ok() || report.probe.is_some()) {
         run(&app, &machine_id);
     }
     Ok(report.steps)

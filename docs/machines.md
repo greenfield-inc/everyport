@@ -24,7 +24,7 @@ studio-mac (ssh studio-mac.tail1234.ts.net)
     Connection refused (os error 61)
 ```
 
-`everyport doctor` without `--on` checks this computer, then every saved and found machine.
+`everyport doctor` without `--on` checks this computer, then every saved and found machine. For an `everyport serve` machine, it checks the name and port, then that the server accepts the connection code.
 
 | Step | Fix |
 |---|---|
