@@ -8,3 +8,4 @@ target.noindex/
 !.env.example
 apps/desktop/src-tauri/gen/
 worktrees/
+.agent-farm/
