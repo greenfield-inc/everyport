@@ -1,6 +1,7 @@
 # Linux QA
 
-Tested revision: `48c09a7` (main after rebasing during QA), on 2026-09-29.
+Initial matrix: `48c09a7`, on 2026-09-29. Follow-up: rebased onto `a1d3189`
+(includes #13 and #16), with the CLI/TUI fix described below.
 This is a source-build QA run, not verification of a published release.
 
 The host is an Apple Silicon Mac running Docker through Colima. All listeners and
@@ -10,12 +11,10 @@ settings use a separate temporary home directory.
 
 ## Findings
 
-1. **P2: plain listing says nothing is listening when other users own every
-   listener.** Run `su qa -s /bin/sh -c 'ppm list'` while the root fixtures are
+1. **Fixed in this PR: plain listing hid other users’ listeners.** Run `su qa -s /bin/sh -c 'ppm list'` while the root fixtures are
    listening. It prints `Nothing listening on ports 3000-65535.` The same user's
-   `ppm list --json` includes those ports in `other_ports`. Route to the CLI lane:
-   render the other-port rows and consider both collections before showing an
-   empty state. This affects local and remote plain listing through the shared
+   `ppm list --json` includes those ports in `other_ports`. The follow-up adds a read-only `Other ports` section to plain listing and the
+   TUI, and considers both collections before showing an empty state. This affects local and remote plain listing through the shared
    formatter. The local behavior is verified; the remote consequence is inferred
    from that shared code.
 2. **P2: the README promises process names for other users' ports, but Linux
@@ -31,10 +30,339 @@ missing and could not be stopped. PR #16 merged during QA. After rebasing and
 rebuilding on `48c09a7`, all three distros list :39103 and successfully force-stop
 it. That finding is resolved upstream.
 
-No product code changed in this lane. These findings cross presentation and
-permission policy; this report leaves those decisions to their owning lanes
-rather than silently changing established behavior. The report records the
-findings, with repro commands and observed output below.
+## Follow-up: other ports and protected actions
+
+The orchestrator requested the small CLI fix in this lane. Changes are limited to
+`crates/ppm/`: a shared row formatter, the plain list, the TUI list, and one CLI
+integration test. There are no protocol changes or new stop/restart paths.
+The existing #13 confirmation behavior remains in use.
+
+The TUI section is read-only and follows the server rows. Page Up/Down scroll the
+list without selecting an actionable server; Home or the arrow keys restore
+server selection. Other ports do not appear as cleanup targets.
+
+| Follow-up check | Result |
+|---|---|
+| CLI fixture with servers and other ports | Pass; section follows server table |
+| CLI fixture with only other ports | Pass; no false empty message |
+| CLI fixture with neither collection populated | Pass; `Nothing listening` |
+| Known process name and multiple addresses | Pass in CLI integration test |
+| Live Ubuntu ARM64 normal user, plain list and TUI | Pass; port, address and owner displayed |
+| TUI dark and light terminal palettes | Captured and visually inspected |
+| TUI with one owned server and 30 other ports | Pass; Page Down reaches :39159, Home returns to :39122 |
+| Protected `stop` and `restart`, no confirmation | Refused; fixture still returns HTTP 200 |
+| Protected `restart --protected` | Pass; replacement serves HTTP 200 |
+| Protected `stop --protected` | Pass; subsequent curl exits 7 (connection refused) |
+| Protected `stop --force` | Pass |
+| `pnpm check` after rebase and code changes | Pass, exit 0 |
+
+The full check completed successfully after the final code changes. A redundant
+pre-push repeat later stalled at macOS `_dyld_start` before the desktop test
+entrypoint; that repeat and its diagnostic process were stopped by their own
+PIDs. No source changes followed the completed check.
+
+The automated test invokes the built CLI against a local HTTP protocol fixture.
+It covers mixed, other-only and truly empty snapshots, with literal expected
+listener fields. Live checks use a new Ubuntu 24.04 ARM64 container: copy
+`/usr/bin/python3` to `/work/redis-server`, then launch
+`/work/redis-server -m http.server 39121` from `/work`. The snapshot reports
+`protected: true`. All action targets belong to this run and stay in 39000–39999.
+
+The images below render actual tmux ANSI captures at 100 × 28 cells, using the
+terminal's queried foreground/background colors. They are terminal-buffer
+captures, not desktop screenshots. There is no Paper frame for this CLI section.
+
+| Dark | Light |
+|---|---|
+| ![Other ports in a dark terminal](linux-tui/dark.png) | ![Other ports in a light terminal](linux-tui/light.png) |
+
+<details>
+<summary>Follow-up: real protected fixture, listing and TUI</summary>
+
+```text
+$ docker exec ppm-w3-followup-qa sh -c 'test -f /work/redis-server'
+exit: 0
+$ docker exec ppm-w3-followup-qa sha256sum /usr/local/bin/ppm
+d9a74ddd461de24ed84359083f9ba34e9f8bd881d026d27ddd00ba4beecd7df8  /usr/local/bin/ppm
+exit: 0
+$ docker exec ppm-w3-followup-qa ppm list --json
+{
+  "taken_at": 1790677034663,
+  "system": {
+    "memory_total": 2054840320,
+    "memory_used": 639467520,
+    "memory_other_apps": 621344768,
+    "cpu_percent": 1.0
+  },
+  "servers": [
+    {
+      "port": 39121,
+      "pid": 2784,
+      "root": {
+        "pid": 2784,
+        "started_at": 1790677033480
+      },
+      "process_name": "redis-server",
+      "addresses": [
+        "0.0.0.0"
+      ],
+      "cwd": "/work",
+      "cwd_exists": true,
+      "command": "redis-server -m http.server 39121",
+      "launch_dir": "/work",
+      "started_at": 1790677033480,
+      "project": {
+        "name": "work",
+        "root": null,
+        "framework": null,
+        "branch": null,
+        "worktree": null,
+        "github": null,
+        "vercel": null
+      },
+      "workspace": null,
+      "agent": null,
+      "processes": [
+        {
+          "proc": {
+            "pid": 2784,
+            "started_at": 1790677033480
+          },
+          "name": "redis-server -m http.server 39121",
+          "depth": 0,
+          "memory": 18122752,
+          "cpu_percent": 0.0
+        }
+      ],
+      "memory": 18122752,
+      "cpu_percent": 0.0,
+      "connections": 0,
+      "history": [
+        {
+          "at": 1790677034663,
+          "memory": 18122752,
+          "cpu_percent": 0.0
+        }
+      ],
+      "last_active": 1790677034156,
+      "protected": true,
+      "status": "running",
+      "clean_up": null
+    }
+  ],
+  "other_ports": []
+}
+exit: 0
+$ docker exec ppm-w3-followup-qa ppm stop 39121
+ppm: redis-server :39121 is protected. Run `ppm stop 39121 --protected` to stop it anyway.
+exit: 1
+$ docker exec ppm-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
+200exit: 0
+$ docker exec ppm-w3-followup-qa ppm restart 39121
+ppm: redis-server :39121 is protected. Run `ppm restart 39121 --protected` to restart it anyway.
+exit: 1
+$ docker exec ppm-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
+200exit: 0
+$ docker exec ppm-w3-followup-qa ppm restart 39121 --protected
+Restarted :39121 with redis-server -m http.server 39121
+exit: 0
+$ docker exec ppm-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
+200exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'ppm list'
+Other ports
+:39121  0.0.0.0  root
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux new-session -d -s qa-dark -x 100 -y 28'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux set-option -t qa-dark window-style "fg=#eeeeee,bg=#161616"'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-dark "env COLORTERM=truecolor ppm" Enter'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t qa-dark'
+                                              Servers
+
+  0 MB                                                                           CPU (servers)  0%
+  ▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+  ▅ Servers 0 MB   ▂ Other apps 613 MB   ▂ Free 1.3 of 1.9 GB
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  Other ports
+  :39121  0.0.0.0  root
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  pgup pgdn Scroll   ? Keys   q Quit
+
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-dark q'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux kill-session -t qa-dark'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux new-session -d -s qa-light -x 100 -y 28'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux set-option -t qa-light window-style "fg=#202020,bg=#ffffff"'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-light "env COLORTERM=truecolor ppm" Enter'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t qa-light'
+                                              Servers
+
+  0 MB                                                                           CPU (servers)  0%
+  ▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+  ▅ Servers 0 MB   ▂ Other apps 613 MB   ▂ Free 1.3 of 1.9 GB
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+  Other ports
+  :39121  0.0.0.0  root
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  pgup pgdn Scroll   ? Keys   q Quit
+
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-light q'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux kill-session -t qa-light'
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'ppm list'
+PORT    NAME  BRANCH  MEMORY  CPU  UP  SESSION
+:39122  work           15 MB   0%  1m
+
+Other ports
+:39121  0.0.0.0  root
+exit: 0
+$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'ppm stop 39122'
+Stopped work :39122
+exit: 0
+$ docker exec ppm-w3-followup-qa ppm stop 39121 --protected
+Stopped work :39121
+exit: 0
+$ docker exec ppm-w3-followup-qa curl -s --max-time 1 http://127.0.0.1:39121
+exit: 7
+$ docker exec ppm-w3-followup-qa ppm stop 39121 --force
+Stopped work :39121, killed
+exit: 0
+$ docker exec ppm-w3-followup-qa ppm list
+Nothing listening on ports 3000-65535.
+exit: 0
+```
+
+</details>
+
+<details>
+<summary>Follow-up: mixed TUI list and scrolling through other ports</summary>
+
+```text
+$ tmux new-session -d -s scroll -x 100 -y 18 "ppm"
+
+$ tmux capture-pane -p -t scroll
+                                              Servers
+
+  15 MB                                                                          CPU (servers)  0%
+  █▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+  ▅ Servers 15 MB   ▂ Other apps 583 MB   ▂ Free 1.3 of 1.9 GB
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ›:39122 work                                                                    ⠄⠄⠄⠄⠄⠄⠄⠄    15 MB
+         up 1m
+
+  Other ports
+  :39130  127.0.0.1  root
+  :39131  127.0.0.1  root
+  :39132  127.0.0.1  root
+  :39133  127.0.0.1  root
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏎ Details   o Open   s Stop   r Restart   c Clean up   ? Keys   q Quit
+
+
+$ tmux send-keys -t scroll PageDown
+
+$ tmux send-keys -t scroll PageDown
+
+$ tmux send-keys -t scroll PageDown
+
+$ tmux send-keys -t scroll PageDown
+
+$ tmux capture-pane -p -t scroll
+                                              Servers
+
+  15 MB                                                                          CPU (servers)  0%
+  ▅▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+  ▅ Servers 15 MB   ▂ Other apps 583 MB   ▂ Free 1.3 of 1.9 GB
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  :39152  127.0.0.1  root
+  :39153  127.0.0.1  root
+  :39154  127.0.0.1  root
+  :39155  127.0.0.1  root
+  :39156  127.0.0.1  root
+  :39157  127.0.0.1  root
+  :39158  127.0.0.1  root
+  :39159  127.0.0.1  root
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏎ Details   o Open   s Stop   r Restart   c Clean up   ? Keys   q Quit
+
+
+$ tmux send-keys -t scroll Home
+
+$ tmux capture-pane -p -t scroll
+                                              Servers
+
+  15 MB                                                                          CPU (servers)  0%
+  █▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂▂
+  ▅ Servers 15 MB   ▂ Other apps 583 MB   ▂ Free 1.3 of 1.9 GB
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+ ›:39122 work                                                                    ⠄⠄⠄⠄⠄⠄⠄⠄    15 MB
+         up 1m
+
+  Other ports
+  :39130  127.0.0.1  root
+  :39131  127.0.0.1  root
+  :39132  127.0.0.1  root
+  :39133  127.0.0.1  root
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏎ Details   o Open   s Stop   r Restart   c Clean up   ? Keys   q Quit
+
+
+$ tmux send-keys -t scroll q
+```
+
+</details>
+
+The remaining process-name wording finding is assigned to the docs pass. The
+original matrix and transcripts below retain the observations from `48c09a7`;
+F1 is resolved by this follow-up, not an outstanding failure. The follow-up uses
+Ubuntu ARM64 plus the CLI fixture test, without claiming another full three-distro
+run. Both follow-up containers were removed after capture.
 
 ## Claim matrix
 
@@ -90,8 +418,8 @@ and is not counted as a product failure.
 - x86_64: each distro and `rust:1-alpine` fails before startup with
   `exec /bin/sh: exec format error` (Debian reports `/usr/bin/sh`). This Docker
   installation has no working x86_64 emulation. No x86_64 runtime pass is claimed.
-- Protection PR #13 was open at the tested revision. Its new force/protection
-  behavior is not part of this report.
+- The initial matrix predates #13. The follow-up above verifies its protected
+  stop/restart behavior on Ubuntu ARM64.
 - Desktop bundles, tray behavior, GUI themes, signed installers, SSH, Kubernetes,
   WSL, Tailscale, Vercel and agent-session integration require separate coverage.
 - Long-duration history, leak alerts, automatic cleanup and the native desktop
@@ -2346,9 +2674,9 @@ format, Clippy with warnings denied, workspace tests). No contract changes.
 The Linux binary was built from source and exercised above; the desktop was not
 built inside these minimal containers. CI status belongs to the PR checks.
 
-Follow-ups: CLI rendering of `other_ports`, Linux
-permission wording, x86_64 runtime coverage on a capable runner, protected-action
-checks after #13, and the unverified integrations listed above.
+Remaining follow-ups: Linux permission wording, x86_64 runtime coverage on a
+capable runner, and the unverified integrations listed above. The CLI rendering
+and #13 protected-action checks are covered by the follow-up section.
 
 All ten containers created for this run and the temporary build-cache image were
 removed after evidence was copied out. Remote machine entries and forwarding
