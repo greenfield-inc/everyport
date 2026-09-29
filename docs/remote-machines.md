@@ -2,6 +2,8 @@
 
 Everyport shows servers on any machine where it can run a program: a devbox over SSH, a Docker container, a Kubernetes pod or a WSL distro. The app runs `everyport stdio` there through a command you give it, and reads the same protocol it reads from this computer.
 
+For SSH setup, and what to do when a machine can't connect, see [Connect a machine](machines.md).
+
 ## WSL
 
 On Windows, the app adds each installed WSL distro for you. Servers inside WSL show under their distro, with their Linux process tree, and open at `localhost` as usual.
@@ -10,7 +12,7 @@ On Windows, the app adds each installed WSL distro for you. Servers inside WSL s
 
 In the app, open **Settings → Machines**:
 
-- **Found on this computer** lists hosts from `~/.ssh/config`, your Pane remote hosts and WSL distros. Click **Add**.
+- **Found on this computer** lists hosts from `~/.ssh/config`, your Pane remote hosts, online Tailscale peers and WSL distros. Click **Add**.
 - **Add a machine** takes a name and a command that runs a program on the machine:
 
 | Connection | Command |
@@ -48,7 +50,7 @@ everyport --on devbox stop 5173
 everyport --on devbox open 5173         # forwards the port and opens it here
 ```
 
-`--on` works with `list`, `watch`, `stop`, `restart`, `open`, `clean` and the terminal UI. The machine can be a saved one or any host `everyport remote list` discovers.
+`--on` works with `list`, `watch`, `stop`, `restart`, `open`, `clean`, `doctor` and the terminal UI. The machine can be a saved one or any host `everyport remote list` discovers.
 
 The first time, `everyport` asks before installing itself there, and asks again before updating an older copy. Pass `--yes` to skip the question, as in scripts. Without a terminal to ask in, and without `--yes`, `everyport` stops with an error when it's missing, and uses an older copy as it is.
 

@@ -14,7 +14,7 @@ everyport 0.1.0 · protocol 1 · macOS aarch64 · 10 cores
 ✓ Settings folder: /Users/you/Library/Application Support/everyport
 ```
 
-On Linux it also prints a tip for [blank windows on NVIDIA](#the-window-is-blank-on-nvidia). To check another machine, run it there, for example `ssh devbox everyport doctor`.
+On Linux it also prints a tip for [blank windows on NVIDIA](#the-window-is-blank-on-nvidia). It then checks the way to every saved and found machine. `everyport doctor --on devbox` checks one, and stops at the first failed step with its fix. See [Connect a machine](machines.md).
 
 ## `everyport: command not found`
 
