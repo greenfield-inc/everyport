@@ -3,6 +3,7 @@
 //! `protocol` is the contract every client builds on. `platform` is the only
 //! place OS-specific code lives. `engine` and `links` are shared by all OSes.
 
+pub mod config;
 pub mod engine;
 pub mod host;
 pub mod links;

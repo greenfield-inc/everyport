@@ -282,6 +282,8 @@ pub struct Alert {
 pub enum AlertKind {
     OverThreshold,
     Leaking,
+    /// Newly suggested by Clean up, while `Config.auto_kill` is `ask`.
+    CleanUp,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -329,11 +331,13 @@ pub enum Call {
         #[ts(as = "Option<bool>", optional)]
         confirm_protected: bool,
     },
-    /// Replace the scanner config for this connection.
-    Configure(Config),
+    /// Change scanner settings. Fields left out keep their current value.
+    Configure(ConfigChange),
 }
 
+/// Scanner settings. In `config.toml`, keys left out take their defaults.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
 #[ts(export)]
 pub struct Config {
     pub min_port: u16,
@@ -353,6 +357,98 @@ pub struct Config {
     pub long_running_after_secs: u64,
     /// Process names clean up never suggests and stop asks to confirm, such as `postgres`.
     pub protected: Vec<String>,
+    /// What happens when a server newly qualifies for Clean up, unless it's leaking.
+    pub auto_kill: AutoKill,
+    /// Look up Vercel previews through `gh`, which goes online.
+    pub vercel_previews: bool,
+}
+
+/// `configure`'s params: the `Config` fields to change.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default)]
+#[ts(export, optional_fields)]
+pub struct ConfigChange {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub interval_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub alert_memory: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub leak_growth: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub idle_after_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub long_running_after_secs: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protected: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auto_kill: Option<AutoKill>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub vercel_previews: Option<bool>,
+}
+
+impl Config {
+    /// Sets every field `change` holds.
+    pub fn apply(&mut self, change: ConfigChange) {
+        macro_rules! set {
+            ($($field:ident),*) => {$(
+                if let Some(value) = change.$field {
+                    self.$field = value;
+                }
+            )*};
+        }
+        set!(
+            min_port,
+            max_port,
+            interval_ms,
+            alert_memory,
+            leak_growth,
+            idle_after_secs,
+            long_running_after_secs,
+            protected,
+            auto_kill,
+            vercel_previews
+        );
+    }
+}
+
+impl From<Config> for ConfigChange {
+    /// Every field, to replace all of them.
+    fn from(config: Config) -> Self {
+        Self {
+            min_port: Some(config.min_port),
+            max_port: Some(config.max_port),
+            interval_ms: Some(config.interval_ms),
+            alert_memory: Some(config.alert_memory),
+            leak_growth: Some(config.leak_growth),
+            idle_after_secs: Some(config.idle_after_secs),
+            long_running_after_secs: Some(config.long_running_after_secs),
+            protected: Some(config.protected),
+            auto_kill: Some(config.auto_kill),
+            vercel_previews: Some(config.vercel_previews),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum AutoKill {
+    /// Only list it under Clean up.
+    #[default]
+    Off,
+    /// Also raise a `clean_up` alert.
+    Ask,
+    /// Stop it.
+    Act,
 }
 
 impl Default for Config {
@@ -370,6 +466,8 @@ impl Default for Config {
             protected: ["postgres", "redis-server", "mongod", "mysqld", "mysql"]
                 .map(String::from)
                 .to_vec(),
+            auto_kill: AutoKill::Off,
+            vercel_previews: false,
         }
     }
 }

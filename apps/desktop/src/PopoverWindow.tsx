@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type { TauriPpmClient } from "./client";
 import { useFitWindow } from "./fit";
+import { useSettings } from "./settings/useSettings";
 
 /** Hidden this long, the popover reopens on the list instead of where it was. */
 const RESET_AFTER_MS = 60_000;
@@ -14,6 +15,7 @@ export function PopoverWindow({ client }: { client: TauriPpmClient }) {
   // A new key remounts the view: back to the list, or onto `initialServer`.
   const [view, setView] = useState<{ key: number; initialServer?: ServerRef }>({ key: 0 });
   const ref = useFitWindow<HTMLDivElement>();
+  const settings = useSettings();
 
   useEffect(() => {
     let reset: number | undefined;
@@ -45,7 +47,15 @@ export function PopoverWindow({ client }: { client: TauriPpmClient }) {
 
   return (
     <div ref={ref} className="window-content">
-      <Popover key={view.key} client={client} initialServer={view.initialServer} onReady={onReady} />
+      <Popover
+        key={view.key}
+        client={client}
+        initialServer={view.initialServer}
+        onReady={onReady}
+        theme={settings?.app.theme ?? undefined}
+        appearance={settings?.app.appearance}
+        alertMemory={settings?.config.alert_memory}
+      />
     </div>
   );
 }

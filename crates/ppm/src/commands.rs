@@ -7,15 +7,32 @@ use crate::palette::Palette;
 use ppm_client::forward::forward;
 use ppm_core::engine::Engine;
 use ppm_core::platform;
-use ppm_core::protocol::{Call, Config, Event, Os, ProcRef, Server, ServerStatus, Snapshot};
+use ppm_core::protocol::{
+    AutoKill, Call, Config, Event, Os, ProcRef, Server, ServerStatus, Snapshot,
+};
 use std::collections::HashMap;
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::ExitCode;
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
-pub fn engine() -> Engine {
-    Engine::new(platform::native(), Config::default())
+/// The user's settings from `config.toml`, which the desktop app writes.
+pub fn config() -> io::Result<Config> {
+    match ppm_core::config::path() {
+        Some(path) => ppm_core::config::load(&path),
+        None => Ok(Config::default()),
+    }
+}
+
+/// The scanner, with the user's settings. `ppm` never auto-kills on its
+/// own: only a client that asks through `configure`, such as the desktop
+/// app for this computer, turns it on.
+pub fn engine() -> io::Result<Engine> {
+    let config = Config {
+        auto_kill: AutoKill::Off,
+        ..config()?
+    };
+    Ok(Engine::new(platform::native(), config))
 }
 
 /// True when a person can answer a question: stdin and stderr are both a
@@ -72,7 +89,12 @@ pub fn list(mut machine: Machine, json: bool) -> io::Result<ExitCode> {
         serde_json::to_writer_pretty(&mut out, &snapshot)?;
         writeln!(out)?;
     } else if snapshot.servers.is_empty() && snapshot.other_ports.is_empty() {
-        let config = Config::default();
+        // The range this machine scans: its own settings, or the defaults.
+        let config = if machine.name.is_none() {
+            config()?
+        } else {
+            Config::default()
+        };
         writeln!(
             out,
             "Nothing listening on ports {}-{}.",
@@ -545,6 +567,9 @@ pub fn doctor(config_dir: Option<std::path::PathBuf>) -> ExitCode {
         Some(dir) => {
             let writable = std::fs::create_dir_all(&dir).is_ok() && tempfile_check(&dir);
             check(writable, format!("Settings folder: {}", dir.display()));
+            if let Err(error) = config() {
+                check(false, format!("Settings: {error}"));
+            }
         }
         None => check(
             false,

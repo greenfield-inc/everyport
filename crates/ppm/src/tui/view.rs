@@ -10,7 +10,11 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use std::sync::LazyLock;
 use std::time::Instant;
+
+/// The settings the thresholds and the empty list's port range come from.
+static CONFIG: LazyLock<Config> = LazyLock::new(|| crate::commands::config().unwrap_or_default());
 
 const HISTORY_MS: u64 = 10 * 60 * 1000;
 
@@ -428,7 +432,7 @@ impl View<'_> {
             .as_ref()
             .map_or(&[][..], |s| s.other_ports.as_slice());
         if servers.is_empty() && (others.is_empty() || app.cleaning) {
-            let config = Config::default();
+            let config = &*CONFIG;
             block.blank();
             for _ in 0..5 {
                 block.add(self.centered(vec![span("● ● ● ● ●", self.s.faint)]));
@@ -584,7 +588,7 @@ impl View<'_> {
                     self.amber(),
                 )];
             }
-            let threshold = Config::default().alert_memory as f64 / 1_073_741_824.0;
+            let threshold = CONFIG.alert_memory as f64 / 1_073_741_824.0;
             return vec![span(format!("Over {} GB", trim(threshold)), self.amber())];
         }
         let mut line = Vec::new();
@@ -920,7 +924,7 @@ impl View<'_> {
     /// Line chart over the last ten minutes, with the alert threshold dotted in amber.
     fn memory_chart(&self, server: &Server) -> Vec<Spans> {
         const GB: f64 = 1_073_741_824.0;
-        let threshold = Config::default().alert_memory as f64 / GB;
+        let threshold = CONFIG.alert_memory as f64 / GB;
         let top = server
             .history
             .iter()

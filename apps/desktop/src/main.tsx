@@ -8,7 +8,7 @@ import { syncAttentionColor } from "./attention";
 import { TauriPpmClient } from "./client";
 import { NotificationWindow } from "./NotificationWindow";
 import { PopoverWindow } from "./PopoverWindow";
-import { SettingsWindow } from "./SettingsWindow";
+import { SettingsWindow } from "./settings/SettingsWindow";
 
 // Right-click opens our own menus or nothing, never the browser's.
 document.addEventListener("contextmenu", (event) => event.preventDefault());

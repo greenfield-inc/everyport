@@ -1,7 +1,7 @@
 import type { Alert, Server } from "@ppm/protocol";
 import { total } from "../format.ts";
 import { DotGrid } from "../icons.tsx";
-import { DEFAULT_ALERT_MEMORY, growth, historySpan } from "../model.ts";
+import { DEFAULT_ALERT_MEMORY, growth, historySpan, reasonText } from "../model.ts";
 import { type ThemeProps, Themed } from "../theme.tsx";
 
 type Props = ThemeProps & {
@@ -13,10 +13,16 @@ type Props = ThemeProps & {
   onSnooze: () => void;
 };
 
-/** What the alert says: ":6006 design-system is leaking" and one sentence of detail. */
+/** What the alert says, such as ":6006 design-system is leaking", and one sentence of detail. */
 export function alertText(server: Server, alert: Alert, alertMemory = DEFAULT_ALERT_MEMORY) {
   const who = server.project.framework ?? server.project.name;
   const using = total(alert.memory);
+  if (alert.kind === "clean_up" && server.clean_up) {
+    return {
+      title: `:${alert.port} ${server.project.name} can be stopped`,
+      body: `${reasonText(server.clean_up, server, Date.now())}. Stopping it frees ${using}.`,
+    };
+  }
   if (alert.kind === "leaking") {
     const minutes = Math.max(1, Math.round(historySpan(server) / 60));
     return {

@@ -10,10 +10,11 @@ mod tree;
 use crate::links;
 use crate::platform::{Platform, ProcDetails, ProcInfo};
 use crate::protocol::{
-    AgentSession, Alert, Call, CleanUpReason, Config, HostInfo, OtherPort, ProcRef, Project,
-    Sample, Server, ServerProcess, ServerStatus, Snapshot, SystemStats, Workspace,
+    AgentSession, Alert, AlertKind, AutoKill, Call, CleanUpReason, Config, HostInfo, OtherPort,
+    ProcRef, Project, Sample, Server, ServerProcess, ServerStatus, Snapshot, SystemStats,
+    Workspace,
 };
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tree::Table;
@@ -41,6 +42,9 @@ pub struct Engine {
     tracked: HashMap<(u16, ProcRef), Tracked>,
     alerts: alerts::Alerts,
     pending: Vec<control::Pending>,
+    /// Servers that qualify for auto-kill and were already seen doing so.
+    /// None until the first scan.
+    auto_killed: Option<HashSet<(u16, ProcRef)>>,
 }
 
 struct Tracked {
@@ -50,6 +54,7 @@ struct Tracked {
 
 impl Engine {
     pub fn new(platform: Box<dyn Platform>, config: Config) -> Self {
+        links::set_vercel_previews(config.vercel_previews);
         Self {
             platform,
             config,
@@ -59,6 +64,7 @@ impl Engine {
             tracked: HashMap::new(),
             alerts: alerts::Alerts::default(),
             pending: Vec::new(),
+            auto_killed: None,
         }
     }
 
@@ -117,7 +123,8 @@ impl Engine {
         self.chains.retain(|root, _| live_roots.contains(root));
         self.tracked
             .retain(|key, _| servers.iter().any(|s| (s.port, s.root) == *key));
-        let alerts = self.alerts.evaluate(&servers, &self.config, now);
+        let mut alerts = self.alerts.evaluate(&servers, &self.config, now);
+        alerts.extend(self.auto_kill(&servers));
 
         let memory = self.platform.memory();
         let servers_memory: u64 = usage.values().map(|(memory, _)| memory).sum();
@@ -138,8 +145,9 @@ impl Engine {
     /// Run a request. `Err` carries a message for `RequestResult.error`.
     pub fn call(&mut self, call: &Call) -> Result<(), String> {
         match call {
-            Call::Configure(config) => {
-                self.config = config.clone();
+            Call::Configure(change) => {
+                self.config.apply(change.clone());
+                links::set_vercel_previews(self.config.vercel_previews);
                 Ok(())
             }
             Call::Refresh => Ok(()),
@@ -176,6 +184,43 @@ impl Engine {
             }
         }
         ports.into_values().collect()
+    }
+
+    /// Acts on servers that start to qualify for Clean up while `ppm`
+    /// watches, as `Config.auto_kill` says. Servers that already qualified
+    /// on the first scan, or while auto-kill was off, only get listed, so
+    /// turning it on never stops a batch at once. It also skips leaking
+    /// servers, which are usually still in use.
+    fn auto_kill(&mut self, servers: &[Server]) -> Vec<Alert> {
+        // Clean up never suggests a protected server, which covers every
+        // process in its tree.
+        let qualifying: Vec<&Server> = servers
+            .iter()
+            .filter(|s| s.clean_up.is_some() && !is_leaking(s, &self.config))
+            .collect();
+        let first = self.auto_killed.is_none();
+        let seen = self.auto_killed.get_or_insert_with(HashSet::new);
+        seen.retain(|key| qualifying.iter().any(|s| (s.port, s.root) == *key));
+        let fresh: Vec<&Server> = qualifying
+            .into_iter()
+            .filter(|s| seen.insert((s.port, s.root)))
+            .collect();
+        if first || self.config.auto_kill == AutoKill::Off {
+            return Vec::new();
+        }
+        let mut alerts = Vec::new();
+        for server in fresh {
+            if self.config.auto_kill == AutoKill::Ask {
+                alerts.push(Alert {
+                    port: server.port,
+                    kind: AlertKind::CleanUp,
+                    memory: server.memory,
+                });
+            } else if let Err(error) = self.stop(server.port, server.root, false, false) {
+                eprintln!("auto-kill :{}: {error}", server.port);
+            }
+        }
+        alerts
     }
 
     /// Builds the server behind one listening port. `usage` holds each

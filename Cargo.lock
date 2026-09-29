@@ -3470,10 +3470,12 @@ dependencies = [
 name = "ppm-core"
 version = "0.1.0"
 dependencies = [
+ "dirs 6.0.0",
  "libc",
  "notify",
  "serde",
  "serde_json",
+ "toml 0.9.12+spec-1.1.0",
  "ts-rs",
  "windows 0.62.2",
 ]
@@ -3482,9 +3484,12 @@ dependencies = [
 name = "ppm-desktop"
 version = "0.1.0"
 dependencies = [
+ "notify",
  "ppm-client",
+ "ppm-core",
  "serde",
  "serde_json",
+ "shell-words",
  "tauri",
  "tauri-build",
  "tauri-nspanel",
@@ -3493,6 +3498,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tokio",
+ "toml 0.9.12+spec-1.1.0",
  "webview2-com",
  "window-vibrancy",
  "windows 0.62.2",
@@ -4259,6 +4265,12 @@ dependencies = [
  "cpufeatures",
  "digest",
 ]
+
+[[package]]
+name = "shell-words"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc6fe69c597f9c37bfeeeeeb33da3530379845f10be461a66d16d03eca2ded77"
 
 [[package]]
 name = "shlex"

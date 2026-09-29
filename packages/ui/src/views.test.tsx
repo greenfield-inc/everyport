@@ -139,4 +139,12 @@ describe("notification (Paper 04)", () => {
       body: "Storybook grew 1.1 GB in 10 minutes and is now using 2.8 GB.",
     });
   });
+
+  it("asks about a server Clean up newly suggests", () => {
+    const idle = server(5173);
+    expect(alertText(idle, { port: 5173, kind: "clean_up", memory: idle.memory })).toEqual({
+      title: ":5173 doozy-webapp can be stopped",
+      body: "Idle 5h · no connections. Stopping it frees 184 MB.",
+    });
+  });
 });
