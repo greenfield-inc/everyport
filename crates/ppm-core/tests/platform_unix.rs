@@ -105,6 +105,56 @@ fn listeners_include_sockets_we_bind() {
     assert_eq!(listeners[1].address, "::1");
 }
 
+/// Root's listener, as a normal user sees it. Starting it takes passwordless
+/// sudo, which CI's Linux runner has; elsewhere the test says why it skips.
+#[cfg(target_os = "linux")]
+#[test]
+fn another_users_listener_shows_port_and_owner() {
+    use ppm_core::platform::OtherListener;
+    let sudo = || {
+        let mut command = Command::new("sudo");
+        command.arg("-n");
+        command
+    };
+    let can_sudo = sudo().arg("true").status().is_ok_and(|s| s.success());
+    if unsafe { libc::geteuid() } == 0 || !can_sudo {
+        eprintln!("skipped: needs a user other than root with passwordless sudo");
+        return;
+    }
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let serve = format!(
+        "import socket, time; s = socket.socket(); s.bind(('127.0.0.1', {port})); s.listen(); time.sleep(30)"
+    );
+    let mut root = sudo().args(["python3", "-c", &serve]).spawn().unwrap();
+    // sudo runs as root, so only root can stop it.
+    let kill = || sudo().args(["kill", &root.id().to_string()]).status();
+
+    let expected = OtherListener {
+        port,
+        address: "127.0.0.1".into(),
+        owner: Some("root".into()),
+        pid: None,
+    };
+    let platform = native();
+    let mut found = Vec::new();
+    for _ in 0..200 {
+        found = platform.other_listeners().unwrap();
+        if found.contains(&expected) {
+            break;
+        }
+        sleep(Duration::from_millis(50));
+    }
+    let listed = platform.listeners().unwrap();
+    kill().unwrap();
+    root.wait().unwrap();
+    assert!(found.contains(&expected), "{expected:?} not in {found:?}");
+    assert!(listed.iter().all(|l| l.port != port), "{listed:?}");
+}
+
 #[test]
 fn connections_count_accepted_sockets_by_local_port() {
     let server = TcpListener::bind("127.0.0.1:0").unwrap();

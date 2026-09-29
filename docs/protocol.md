@@ -126,6 +126,9 @@ The full state. It's sent after `hello`, after every scan where something other 
       "status": "running",
       "clean_up": null
     }
+  ],
+  "other_ports": [
+    { "port": 5432, "addresses": ["0.0.0.0"], "owner": "root", "process_name": "docker-proxy" }
   ]
 }
 ```
@@ -171,7 +174,16 @@ The full state. It's sent after `hello`, after every scan where something other 
 { "kind": "leaking", "bytes": 1191182336 }
 ```
 
-For processes owned by other users or the system, `ppm` knows only the port and process name, so fields such as `cwd` and `command` are `null`.
+`other_ports` lists the ports that processes of other users or the system hold, such as a Docker-published port or a system database. `ppm` can't inspect those processes, so these ports have no tree and no actions. The list is sorted by port and covers the configured port range. A port in `servers` never appears here.
+
+| Field | Meaning |
+|---|---|
+| `port` | The listening TCP port |
+| `addresses` | Bound addresses, such as `0.0.0.0` and `::` |
+| `owner` | The user the process runs as, such as `root`, or `null` when the OS doesn't say |
+| `process_name` | Name of the process that owns the socket, or `null` when the OS doesn't say. Linux doesn't tell a normal user which process holds another user's socket. |
+
+On macOS and Linux, when `ppm` runs as root, every port is a server and `other_ports` is empty. On macOS it's empty for other users too: macOS lists other users' sockets only to its own tools, such as `netstat`.
 
 ### alert
 

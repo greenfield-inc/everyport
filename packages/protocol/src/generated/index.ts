@@ -10,6 +10,7 @@ export type * from "./Event.ts";
 export type * from "./Hello.ts";
 export type * from "./HostInfo.ts";
 export type * from "./Os.ts";
+export type * from "./OtherPort.ts";
 export type * from "./ProcRef.ts";
 export type * from "./Project.ts";
 export type * from "./Request.ts";

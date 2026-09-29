@@ -1,6 +1,9 @@
 //! macOS implementation of [`Platform`], on libproc, sysctl and Mach host
 //! statistics. Without root, other users' processes and sockets are not
-//! visible, as with `lsof`.
+//! visible, as with `lsof`, so `other_listeners` stays empty. The one other
+//! source, the `net.inet.tcp.pcblist_n` sysctl that `netstat -anv` reads,
+//! lists sockets without root only for Apple's own binaries on macOS 27. Any
+//! other program gets just the header, and so does a `netstat` it starts.
 
 use super::{unix, Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
 use crate::protocol::ProcRef;

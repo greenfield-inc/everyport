@@ -146,7 +146,7 @@ pub fn parse_request(json: &str) -> Result<Request, Event> {
 
 /// Snapshots differ only by `taken_at` when nothing changed.
 fn same_state(a: &Snapshot, b: &Snapshot) -> bool {
-    a.system == b.system && a.servers == b.servers
+    a.system == b.system && a.servers == b.servers && a.other_ports == b.other_ports
 }
 
 /// A scanner that reports the shared fixture snapshot, with a leak alert on

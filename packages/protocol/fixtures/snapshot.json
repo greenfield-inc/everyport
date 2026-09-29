@@ -767,5 +767,9 @@
       "history": [],
       "last_active": 1790022240000
     }
+  ],
+  "other_ports": [
+    { "port": 631, "addresses": ["127.0.0.1", "::1"], "owner": "root", "process_name": null },
+    { "port": 5432, "addresses": ["0.0.0.0"], "owner": "root", "process_name": "docker-proxy" }
   ]
 }

@@ -10,8 +10,8 @@ mod tree;
 use crate::links;
 use crate::platform::{Platform, ProcDetails, ProcInfo};
 use crate::protocol::{
-    AgentSession, Alert, Call, CleanUpReason, Config, HostInfo, ProcRef, Project, Sample, Server,
-    ServerProcess, ServerStatus, Snapshot, SystemStats, Workspace,
+    AgentSession, Alert, Call, CleanUpReason, Config, HostInfo, OtherPort, ProcRef, Project,
+    Sample, Server, ServerProcess, ServerStatus, Snapshot, SystemStats, Workspace,
 };
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -110,6 +110,7 @@ impl Engine {
             }
         }
 
+        let other_ports = self.other_ports(&table, &servers);
         let live_roots: Vec<ProcRef> = servers.iter().map(|s| s.root).collect();
         self.details.retain(|p, _| table.live(*p).is_some());
         self.cpu.retain(|p, _| usage.contains_key(p));
@@ -129,6 +130,7 @@ impl Engine {
                 cpu_percent: self.platform.cpu_percent(),
             },
             servers,
+            other_ports,
         };
         (snapshot, alerts)
     }
@@ -144,6 +146,27 @@ impl Engine {
             Call::Stop { root, force, .. } => self.stop(*root, *force),
             Call::Restart { port, root } => self.restart(*port, *root),
         }
+    }
+
+    /// Ports in range held by processes we can't inspect, one per port.
+    fn other_ports(&self, table: &Table, servers: &[Server]) -> Vec<OtherPort> {
+        let range = self.config.min_port..=self.config.max_port;
+        let mut ports: BTreeMap<u16, OtherPort> = BTreeMap::new();
+        for l in self.platform.other_listeners().unwrap_or_default() {
+            if !range.contains(&l.port) || servers.iter().any(|s| s.port == l.port) {
+                continue;
+            }
+            let port = ports.entry(l.port).or_insert_with(|| OtherPort {
+                port: l.port,
+                addresses: Vec::new(),
+                owner: l.owner,
+                process_name: l.pid.and_then(|pid| table.get(pid)).map(|p| p.name.clone()),
+            });
+            if !port.addresses.contains(&l.address) {
+                port.addresses.push(l.address);
+            }
+        }
+        ports.into_values().collect()
     }
 
     /// Builds the server behind one listening port. `usage` holds each

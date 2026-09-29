@@ -1,10 +1,10 @@
-import type { Server } from "@ppm/protocol";
+import type { OtherPort, Server } from "@ppm/protocol";
 import { useEffect, useRef, useState } from "react";
 import { Sparkline } from "../charts.tsx";
 import { Colon, Grow, Header, useLeaving } from "../components.tsx";
 import type { Pending, ViewContext } from "../context.ts";
 import { memory, memoryParts, percent, total, totalParts } from "../format.ts";
-import { AgentIcon, BranchIcon, BroomIcon, DotGrid, GearIcon, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
+import { AgentIcon, BranchIcon, BroomIcon, Chevron, DotGrid, GearIcon, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
 import { isGone, preselected, rowContext } from "../model.ts";
 import { cleanUpCandidates } from "./CleanUp.tsx";
 
@@ -42,6 +42,7 @@ export function ServerList({ ctx, selected, onOpen, onCleanUp }: Props) {
             <span className="ppm:text-11 ppm:text-fg3">Dev servers show up here when they start.</span>
           </div>
         )}
+        {snapshot.other_ports.length > 0 && <OtherPorts ports={snapshot.other_ports} />}
       </div>
       <div className="ppm:hairline-t ppm:flex ppm:items-center ppm:justify-between ppm:p-3">
         <button
@@ -284,6 +285,44 @@ function Row({
       <span className={`ppm:w-[58px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${attention ? "ppm:text-warn" : "ppm:text-fg/85"}`}>
         {memory(server.memory)}
       </span>
+    </div>
+  );
+}
+
+/** Ports of other users and the system: shown for reference, with no actions. */
+function OtherPorts({ ports }: { ports: OtherPort[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="ppm:px-1.5 ppm:pb-1.5">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="ppm:flex ppm:w-full ppm:items-center ppm:gap-1 ppm:rounded-[9px] ppm:px-2.5 ppm:py-[7px] ppm:hover:bg-accent"
+      >
+        <span className="ppm:text-13 ppm:text-fg2">Other ports</span>
+        <span className="ppm:font-mono ppm:text-13 ppm:text-fg3">· {ports.length}</span>
+        <Chevron direction={open ? "down" : "right"} className="ppm:text-fg3" />
+      </button>
+      <div className="ppm-grow" data-closed={!open || undefined} inert={!open}>
+        {/* `.ppm-grow > *` clips its child, so the scroller sits one level in. */}
+        <div>
+          <div className="ppm-scroll" style={{ maxHeight: VISIBLE_ROWS * 26 }}>
+          {ports.map((other) => (
+            <div
+              key={other.port}
+              aria-label={`Port ${other.port}${other.process_name ? `, ${other.process_name}` : ""}${other.owner ? `, owned by ${other.owner}` : ""}`}
+              className="ppm:flex ppm:items-center ppm:px-2.5 ppm:py-[5px] ppm:text-fg2"
+            >
+              <span className="ppm:w-[9px] ppm:shrink-0" />
+              <span className="selectable ppm:w-[46px] ppm:shrink-0 ppm:font-mono ppm:text-13">{other.port}</span>
+              <span className="selectable ppm:clamp-1 ppm:flex-1 ppm:pr-2.5 ppm:text-13">{other.process_name}</span>
+              <span className="ppm:shrink-0 ppm:text-11 ppm:text-fg3">{other.owner}</span>
+            </div>
+          ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

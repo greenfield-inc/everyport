@@ -2,9 +2,11 @@
 //! WhatThePort's rules and the defaults in `Config`.
 
 use ppm_core::engine::Engine;
-use ppm_core::platform::{Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
+use ppm_core::platform::{
+    Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage,
+};
 use ppm_core::protocol::{
-    AlertKind, Call, CleanUpReason, Config, ProcRef, Server, ServerStatus, Snapshot,
+    AlertKind, Call, CleanUpReason, Config, OtherPort, ProcRef, Server, ServerStatus, Snapshot,
 };
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -19,6 +21,7 @@ struct World {
     now: u64,
     procs: Vec<Proc>,
     listeners: Vec<Listener>,
+    others: Vec<OtherListener>,
     /// None for a platform that can't count them.
     connections: Option<HashMap<u16, u32>>,
     used_memory: u64,
@@ -120,6 +123,9 @@ impl Platform for Fake {
             .filter(|l| alive(l.pid))
             .cloned()
             .collect())
+    }
+    fn other_listeners(&self) -> io::Result<Vec<OtherListener>> {
+        Ok(self.world().others.clone())
     }
     fn processes(&self) -> io::Result<Vec<ProcInfo>> {
         Ok(self.world().procs.iter().map(|p| p.info.clone()).collect())
@@ -244,6 +250,48 @@ fn builds_the_tree_from_the_command_the_user_ran() {
     );
     assert_eq!(server.status, ServerStatus::Running);
     assert_eq!(server.clean_up, None);
+}
+
+#[test]
+fn other_users_ports_show_once_each_with_owner_and_process_name() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    fake.run(900, 1, "docker-proxy", &[], "/", HOUR);
+    let other = |port, address: &str, owner: &str, pid| OtherListener {
+        port,
+        address: address.into(),
+        owner: Some(owner.into()),
+        pid,
+    };
+    fake.world().others = vec![
+        other(5432, "0.0.0.0", "root", Some(900)),
+        other(5432, "::", "root", Some(900)),
+        other(4000, "127.0.0.1", "postgres", None),
+        // Below the default range, and a port already shown as a server.
+        other(631, "127.0.0.1", "root", None),
+        other(3000, "0.0.0.0", "root", None),
+    ];
+
+    let (snapshot, _) = fake.engine().scan();
+
+    assert_eq!(
+        snapshot.other_ports,
+        [
+            OtherPort {
+                port: 4000,
+                addresses: vec!["127.0.0.1".into()],
+                owner: Some("postgres".into()),
+                process_name: None,
+            },
+            OtherPort {
+                port: 5432,
+                addresses: vec!["0.0.0.0".into(), "::".into()],
+                owner: Some("root".into()),
+                process_name: Some("docker-proxy".into()),
+            },
+        ]
+    );
+    assert_eq!(only_server(&snapshot).port, 3000);
 }
 
 #[test]

@@ -37,6 +37,11 @@ const VIEWS = [
   },
   { name: "04-notification", query: "view=notification", paper: "04-spike-detail", selector: "[role=alert]" },
   { name: "05-machines", query: "scenario=machines" },
+  {
+    name: "06-other-ports",
+    query: "",
+    steps: (page) => page.getByRole("button", { name: /Other ports/ }).click(),
+  },
 ];
 
 const server = await createServer({ configFile: `${root}vite.config.ts`, server: { port: 0 }, logLevel: "error" });

@@ -135,3 +135,25 @@ fn stop_checks_the_start_time_before_terminating() {
         std::thread::sleep(Duration::from_millis(50));
     }
 }
+
+/// Every Windows install runs the RPC endpoint mapper on port 135, in an
+/// svchost that runs as NETWORK SERVICE.
+#[test]
+fn a_service_port_is_another_users_with_its_account() {
+    let platform = native();
+    assert!(platform.listeners().unwrap().iter().all(|l| l.port != 135));
+    let rpc = platform
+        .other_listeners()
+        .unwrap()
+        .into_iter()
+        .find(|l| l.port == 135)
+        .expect("port 135 listens");
+    assert_eq!(rpc.owner.as_deref(), Some("NETWORK SERVICE"));
+    let name = platform
+        .processes()
+        .unwrap()
+        .into_iter()
+        .find(|p| Some(p.proc.pid) == rpc.pid)
+        .map(|p| p.name);
+    assert_eq!(name.as_deref(), Some("svchost.exe"));
+}
