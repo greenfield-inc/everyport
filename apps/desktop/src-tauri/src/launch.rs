@@ -155,19 +155,48 @@ fn wsl_command(distro: &str, directory: &str, command: &str) -> Vec<String> {
     .to_vec()
 }
 
-/// Opens `path` in the first installed editor: Cursor, VS Code, Zed, Sublime.
+/// An editor `open_in_editor` can use: its macOS bundle id, and its command
+/// elsewhere.
+pub struct Editor {
+    pub name: &'static str,
+    pub bundle_id: &'static str,
+    pub command: &'static str,
+}
+
+/// The editors `open_in_editor` tries, in order.
+pub const EDITORS: [Editor; 4] = [
+    Editor {
+        name: "Cursor",
+        bundle_id: "com.todesktop.230313mzl4w4u92",
+        command: if cfg!(windows) {
+            "cursor.cmd"
+        } else {
+            "cursor"
+        },
+    },
+    Editor {
+        name: "VS Code",
+        bundle_id: "com.microsoft.VSCode",
+        command: if cfg!(windows) { "code.cmd" } else { "code" },
+    },
+    Editor {
+        name: "Zed",
+        bundle_id: "dev.zed.Zed",
+        command: if cfg!(windows) { "zed.exe" } else { "zed" },
+    },
+    Editor {
+        name: "Sublime Text",
+        bundle_id: "com.sublimetext.4",
+        command: if cfg!(windows) { "subl.exe" } else { "subl" },
+    },
+];
+
+/// Opens `path` in the first installed editor.
 #[cfg(target_os = "macos")]
 fn editor(path: &str) -> bool {
-    [
-        "com.todesktop.230313mzl4w4u92",
-        "com.microsoft.VSCode",
-        "dev.zed.Zed",
-        "com.sublimetext.4",
-    ]
-    .iter()
-    .any(|id| {
+    EDITORS.iter().any(|editor| {
         Command::new("open")
-            .args(["-b", id, path])
+            .args(["-b", editor.bundle_id, path])
             .status()
             .is_ok_and(|s| s.success())
     })
@@ -175,14 +204,9 @@ fn editor(path: &str) -> bool {
 
 #[cfg(not(target_os = "macos"))]
 fn editor(path: &str) -> bool {
-    let editors: &[&str] = if cfg!(windows) {
-        &["cursor.cmd", "code.cmd", "zed.exe", "subl.exe"]
-    } else {
-        &["cursor", "code", "zed", "subl"]
-    };
-    editors
+    EDITORS
         .iter()
-        .any(|editor| Command::new(editor).arg(path).spawn().is_ok())
+        .any(|editor| Command::new(editor.command).arg(path).spawn().is_ok())
 }
 
 /// Opens a distro's folder in Cursor or VS Code through their WSL remote.

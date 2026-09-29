@@ -125,8 +125,8 @@ const onboardingHost: OnboardingHost = {
     { name: "Editor", kind: "editor", found: "Cursor" },
     { name: "GitHub CLI", kind: "gh", found: "gh" },
   ]),
-  cli: later({ path: "~/.local/bin/everyport", installed: null, version: "0.1.0" }),
-  installCli: later({ path: "~/.local/bin/everyport", installed: "0.1.0", version: "0.1.0" }, 1500),
+  cli: later({ path: "~/.local/bin/everyport", installed: false, hint: null }),
+  installCli: later({ path: "~/.local/bin/everyport", installed: true, hint: "If your terminal can't find it, add ~/.local/bin to your PATH." }, 1500),
   machines: later([
     { name: "devbox", source: "SSH config" },
     { name: "Ubuntu", source: "WSL" },

@@ -113,16 +113,19 @@ pub fn setup(app: &AppHandle) {
     }
 }
 
-/// Whether this is the first launch, which it records in `app.toml`. An
-/// unreadable file is never overwritten.
+/// Whether this is the first launch, which it records in `app.toml`. Every
+/// earlier version made the config folder on launch, so an existing folder
+/// without the record is an upgrade, whose launch at login stays as the user
+/// left it. An unreadable file is never overwritten.
 fn first_run(path: &Path) -> Result<bool, String> {
+    let upgrade = path.parent().is_some_and(Path::exists);
     let mut prefs = load_app(path)?;
     if prefs.onboarded {
         return Ok(false);
     }
     prefs.onboarded = true;
     save_app(path, &prefs)?;
-    Ok(true)
+    Ok(!upgrade)
 }
 
 fn watch(app: &AppHandle) -> Result<notify::RecommendedWatcher, String> {
@@ -619,8 +622,9 @@ mod tests {
     #[test]
     fn launch_at_login_turns_on_once_and_never_again() {
         let dir = std::env::temp_dir().join(format!("everyport-first-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         let path = dir.join("app.toml");
-        // First launch: no app.toml yet.
+        // First launch: no config folder yet.
         assert_eq!(first_run(&path), Ok(true));
         // The user turns launch at login off (it lives in the OS, not app.toml)
         // and changes a setting; later launches leave it off.
@@ -632,6 +636,11 @@ mod tests {
         assert_eq!(first_run(&path), Ok(false));
         assert_eq!(first_run(&path), Ok(false));
         assert_eq!(load_app(&path).unwrap().appearance, "dark");
+        // An earlier version made the folder and maybe no app.toml: an
+        // upgrade, not a first launch.
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(first_run(&path), Ok(false));
+        assert!(load_app(&path).unwrap().onboarded);
         // A file with a typo is neither read as a first launch nor overwritten.
         std::fs::write(&path, "appearance = dark\n").unwrap();
         assert!(first_run(&path).is_err());

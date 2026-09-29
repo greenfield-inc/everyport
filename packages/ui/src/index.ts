@@ -3,7 +3,7 @@
 // Import "@everyport/ui/styles.css" once; the host runs Tailwind 4.
 export { Popover, type PopoverProps } from "./Popover.tsx";
 export { NotificationCard, alertText } from "./views/NotificationCard.tsx";
-export { Onboarding, type OnboardingHost, type OnboardingTool, type CliStatus, type FoundMachine } from "./views/Onboarding.tsx";
+export { Onboarding, Switch, type OnboardingHost, type OnboardingTool, type CliStatus, type FoundMachine } from "./views/Onboarding.tsx";
 export { ServerList } from "./views/ServerList.tsx";
 export { ServerDetail } from "./views/ServerDetail.tsx";
 export { CleanUp, cleanUpCandidates } from "./views/CleanUp.tsx";

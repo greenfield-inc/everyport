@@ -15,12 +15,11 @@ export type OnboardingTool = {
 
 /** The `everyport` command in this computer's terminal. */
 export type CliStatus = {
-  /** Where the app installs it, such as `~/.local/bin/everyport`. */
+  /** Where it is, or where installing puts it, such as `~/.local/bin/everyport`. */
   path: string;
-  /** The installed version, or null when it isn't installed. */
-  installed: string | null;
-  /** The version this app installs. */
-  version: string;
+  installed: boolean;
+  /** Set when it's in a folder that terminals may not search. */
+  hint: string | null;
 };
 
 /** A machine discovery found, such as a host in `~/.ssh/config`. */
@@ -108,14 +107,18 @@ export function Onboarding({ host, machines, alertMemory = DEFAULT_ALERT_MEMORY,
   const primary = step === "welcome" ? "Get started" : step === "done" ? "Open Everyport" : "Continue";
   const next = step === "done" ? host.finish : () => go(1);
 
+  // Enter continues, unless a focused control takes it.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Enter" && !(event.target as HTMLElement).closest("button, input")) next();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   return (
     <Themed theme={theme} appearance={appearance} className="everyport-onboarding">
-      <div
-        className="everyport:flex everyport:h-full everyport:flex-col"
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !(event.target as HTMLElement).closest("button, input")) next();
-        }}
-      >
+      <div className="everyport:flex everyport:h-full everyport:flex-col">
         <div className="everyport-scroll everyport:flex everyport:flex-1 everyport:flex-col everyport:items-center everyport:gap-5 everyport:px-8 everyport:pt-9 everyport:pb-5">
           <Hero step={step} />
           <div className="everyport:flex everyport:flex-col everyport:items-center everyport:gap-2 everyport:text-center">
@@ -123,7 +126,7 @@ export function Onboarding({ host, machines, alertMemory = DEFAULT_ALERT_MEMORY,
             <p className="everyport:text-13 everyport:leading-5 everyport:text-fg2">{message(step, host, alertMemory)}</p>
           </div>
           <div key={step} className="everyport-view everyport:flex everyport:w-full everyport:flex-col everyport:items-center everyport:gap-4">
-            <StepCard step={step} host={host} servers={servers} alertMemory={alertMemory} />
+            <StepCard step={step} host={host} servers={servers} />
           </div>
         </div>
         <div className="everyport:hairline-t everyport:flex everyport:items-center everyport:justify-between everyport:px-4 everyport:py-3.5">
@@ -193,7 +196,7 @@ const WHERE: Record<OnboardingHost["platform"], string> = {
   linux: "Everyport lives in your panel. On GNOME, turn on the AppIndicator extension to see it.",
 };
 
-function StepCard({ step, host, servers, alertMemory }: { step: Step; host: OnboardingHost; servers: Server[]; alertMemory: number }) {
+function StepCard({ step, host, servers }: { step: Step; host: OnboardingHost; servers: Server[] }) {
   switch (step) {
     case "welcome":
       return (
@@ -210,7 +213,7 @@ function StepCard({ step, host, servers, alertMemory }: { step: Step; host: Onbo
         </Card>
       );
     case "leaks":
-      return <Leaks servers={servers} alertMemory={alertMemory} />;
+      return <Leaks servers={servers} />;
     case "tools":
       return <Tools host={host} />;
     case "previews":
@@ -230,15 +233,15 @@ function StepCard({ step, host, servers, alertMemory }: { step: Step; host: Onbo
   }
 }
 
-/** This computer's heaviest servers, live, marked amber over the alert line or while leaking. */
-function Leaks({ servers, alertMemory }: { servers: Server[]; alertMemory: number }) {
+/** This computer's heaviest servers, live, marked amber when they need attention. */
+function Leaks({ servers }: { servers: Server[] }) {
   const heaviest = [...servers].sort((a, b) => b.memory - a.memory).slice(0, 3);
   const used = servers.reduce((sum, server) => sum + server.memory, 0);
   return (
     <Card>
       <Summary title={servers.length ? `Watching ${count(servers.length, "server")}` : "Watching for servers"} detail={`${total(used)} in use`} />
       {heaviest.map((server) => {
-        const warn = server.memory > alertMemory || server.clean_up?.kind === "leaking";
+        const warn = server.status === "attention";
         return (
           <Row key={server.port} title={`:${server.port} ${server.project.name}`} divider>
             <Confirmation
@@ -314,21 +317,23 @@ function Terminal({ host }: { host: OnboardingHost }) {
       (reason: unknown) => setInstallError(String(reason)),
     ).finally(() => setInstalling(false));
   };
-  const state: RowState = failed && !cli
-    ? { kind: "none", label: "Unavailable" }
-    : !cli || installing
-      ? { kind: "loading", label: installing ? "Installing…" : "Checking…" }
-      : cli.installed === cli.version
-        ? { kind: "ok", label: cli.installed }
-        : { kind: "action", label: cli.installed ? "Outdated" : "Not installed", button: cli.installed ? "Update" : "Install" };
+  const state: RowState =
+    failed && !cli
+      ? { kind: "none", label: "Unavailable" }
+      : !cli || installing
+        ? { kind: "loading", label: installing ? "Installing…" : "Checking…" }
+        : cli.installed
+          ? { kind: "ok", label: "Installed" }
+          : { kind: "action", label: "Not installed", button: "Install" };
   return (
     <>
       <Card>
         <Row title="everyport command" caption={cli ? (cli.installed ? `In ${cli.path}` : `Adds ${cli.path}`) : undefined} icon={<ToolIcon kind="terminal" />}>
-          <Confirmation state={state} monospaced onAction={install} />
+          <Confirmation state={state} onAction={install} />
         </Row>
       </Card>
       {error && <p className="everyport:text-center everyport:text-11 everyport:text-warn">{error}</p>}
+      {cli?.hint && <p className="everyport:text-center everyport:text-11 everyport:text-fg2">{cli.hint}</p>}
     </>
   );
 }
@@ -558,7 +563,8 @@ function Pill({ primary = false, label, onClick, children }: { primary?: boolean
   );
 }
 
-function Switch({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (on: boolean) => void }) {
+/** An on/off switch. */
+export function Switch({ label, checked, disabled = false, onChange }: { label: string; checked: boolean; disabled?: boolean; onChange: (on: boolean) => void }) {
   return (
     <input
       type="checkbox"

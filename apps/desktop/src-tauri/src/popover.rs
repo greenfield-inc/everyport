@@ -8,9 +8,9 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, WebviewWindow};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewWindow};
 
-use crate::placement::{place, Rect};
+use crate::placement::{clock_end, on_taskbar, place, Rect};
 use crate::{machines, tray};
 
 pub const LABEL: &str = "popover";
@@ -329,7 +329,7 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
                 height: size.height,
             }
         })
-        .filter(|rect| on_taskbar(app, rect))
+        .filter(|icon| !cfg!(windows) || icon_on_taskbar(app, *icon))
         .or_else(|| {
             cfg!(target_os = "linux")
                 .then(|| app.cursor_position().ok())
@@ -350,23 +350,10 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
         .or_else(|| app.primary_monitor().ok().flatten());
     let Some(monitor) = monitor else { return };
     let scale = monitor.scale_factor();
-    let work = monitor.work_area();
-    let area = Rect {
-        x: work.position.x.into(),
-        y: work.position.y.into(),
-        width: work.size.width.into(),
-        height: work.size.height.into(),
-    };
+    let area = work_area(&monitor);
     let anchor = anchor.unwrap_or_else(|| {
         if cfg!(windows) {
-            let bounds = monitor.position();
-            let full = monitor.size();
-            Rect {
-                x: f64::from(bounds.x) + f64::from(full.width),
-                y: f64::from(bounds.y) + f64::from(full.height),
-                width: 0.0,
-                height: 0.0,
-            }
+            clock_end(bounds(&monitor), area)
         } else {
             Rect {
                 x: area.x + area.width / 2.0,
@@ -385,24 +372,31 @@ fn position(app: &AppHandle, window: &WebviewWindow, size: LogicalSize<f64>) {
     let _ = window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32));
 }
 
-/// Whether a tray icon's rect is on the taskbar, outside its screen's work
-/// area. On Windows an icon in the ^ overflow reports a rect inside the
-/// flyout, which is hidden by the time the popover shows.
-fn on_taskbar(app: &AppHandle, rect: &Rect) -> bool {
-    if !cfg!(windows) {
-        return true;
+fn icon_on_taskbar(app: &AppHandle, icon: Rect) -> bool {
+    let (x, y) = (icon.x + icon.width / 2.0, icon.y + icon.height / 2.0);
+    app.monitor_from_point(x, y)
+        .ok()
+        .flatten()
+        .is_some_and(|monitor| on_taskbar(icon, bounds(&monitor), work_area(&monitor)))
+}
+
+fn bounds(monitor: &Monitor) -> Rect {
+    Rect {
+        x: monitor.position().x.into(),
+        y: monitor.position().y.into(),
+        width: monitor.size().width.into(),
+        height: monitor.size().height.into(),
     }
-    let (x, y) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
-    let Some(monitor) = app.monitor_from_point(x, y).ok().flatten() else {
-        return false;
-    };
+}
+
+fn work_area(monitor: &Monitor) -> Rect {
     let work = monitor.work_area();
-    let (left, top) = (f64::from(work.position.x), f64::from(work.position.y));
-    let (right, bottom) = (
-        left + f64::from(work.size.width),
-        top + f64::from(work.size.height),
-    );
-    !(left..right).contains(&x) || !(top..bottom).contains(&y)
+    Rect {
+        x: work.position.x.into(),
+        y: work.position.y.into(),
+        width: work.size.width.into(),
+        height: work.size.height.into(),
+    }
 }
 
 /// The page rendered its first data: show it if someone already asked.

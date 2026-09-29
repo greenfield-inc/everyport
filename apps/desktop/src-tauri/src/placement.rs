@@ -44,6 +44,52 @@ pub fn place(anchor: Rect, size: (f64, f64), area: Rect, gap: f64) -> (f64, f64)
     )
 }
 
+/// Whether a tray icon at `icon` sits on the taskbar, outside the work area.
+/// On Windows an icon in the ^ overflow reports a rect inside the flyout,
+/// which is hidden by the time the popover shows. A taskbar that hides itself
+/// leaves the work area the whole screen, so any rect counts.
+pub fn on_taskbar(icon: Rect, bounds: Rect, area: Rect) -> bool {
+    let (x, y) = (icon.x + icon.width / 2.0, icon.y + icon.height / 2.0);
+    area == bounds || !(area.x..area.right()).contains(&x) || !(area.y..area.bottom()).contains(&y)
+}
+
+/// The clock end of the taskbar, as an anchor for `place`: the right end of a
+/// top or bottom taskbar, the bottom end of a side one, or the bottom right
+/// corner when the taskbar hides itself.
+pub fn clock_end(bounds: Rect, area: Rect) -> Rect {
+    let (top, bottom) = (area.y - bounds.y, bounds.bottom() - area.bottom());
+    let (left, right) = (area.x - bounds.x, bounds.right() - area.right());
+    if top > 0.0 {
+        Rect {
+            x: bounds.right() - top,
+            y: bounds.y,
+            width: top,
+            height: top,
+        }
+    } else if left > 0.0 {
+        Rect {
+            x: bounds.x,
+            y: bounds.bottom() - left,
+            width: left,
+            height: left,
+        }
+    } else if right > 0.0 {
+        Rect {
+            x: area.right(),
+            y: bounds.bottom() - right,
+            width: right,
+            height: right,
+        }
+    } else {
+        Rect {
+            x: bounds.right() - bottom,
+            y: area.bottom(),
+            width: bottom,
+            height: bottom,
+        }
+    }
+}
+
 /// Like `f64::clamp`, but keeps the low edge when the window is bigger than
 /// the space.
 fn clamp(value: f64, low: f64, high: f64) -> f64 {
@@ -125,6 +171,73 @@ mod tests {
         };
         // Vertically centered on the icon (912 - 260 = 652), clamped to 1080 - 520 - 12.
         assert_eq!(place(icon, (400.0, 520.0), area, 12.0), (60.0, 548.0));
+    }
+
+    // 1920x1080 at 1x, flyout 400x520, 12 px gap.
+    const SCREEN: Rect = Rect {
+        x: 0.0,
+        y: 0.0,
+        width: 1920.0,
+        height: 1080.0,
+    };
+
+    #[test]
+    fn an_overflow_icon_opens_above_the_clock() {
+        // A 48 px bottom taskbar; the icon reports a rect in the ^ flyout above it.
+        let area = Rect {
+            height: 1032.0,
+            ..SCREEN
+        };
+        let flyout = Rect {
+            x: 1700.0,
+            y: 950.0,
+            width: 24.0,
+            height: 24.0,
+        };
+        assert!(!on_taskbar(flyout, SCREEN, area));
+        // The clock end is the taskbar's last 48 px: centered on 1896, clamped
+        // to 1920 - 400 - 12. Above the taskbar: 1032 - 520 - 12.
+        let anchor = clock_end(SCREEN, area);
+        assert_eq!(place(anchor, (400.0, 520.0), area, 12.0), (1508.0, 500.0));
+    }
+
+    #[test]
+    fn the_clock_end_follows_the_taskbar_edge() {
+        let top = Rect {
+            y: 48.0,
+            height: 1032.0,
+            ..SCREEN
+        };
+        // Below a top taskbar, at the right.
+        assert_eq!(
+            place(clock_end(SCREEN, top), (400.0, 520.0), top, 12.0),
+            (1508.0, 60.0)
+        );
+        let left = Rect {
+            x: 60.0,
+            width: 1860.0,
+            ..SCREEN
+        };
+        // Beside a left taskbar, at the bottom.
+        assert_eq!(
+            place(clock_end(SCREEN, left), (400.0, 520.0), left, 12.0),
+            (72.0, 548.0)
+        );
+    }
+
+    #[test]
+    fn an_auto_hide_taskbar_trusts_the_icon_and_opens_at_the_bottom_right() {
+        let icon = Rect {
+            x: 1700.0,
+            y: 1050.0,
+            width: 24.0,
+            height: 24.0,
+        };
+        assert!(on_taskbar(icon, SCREEN, SCREEN));
+        assert_eq!(
+            place(clock_end(SCREEN, SCREEN), (400.0, 520.0), SCREEN, 12.0),
+            (1508.0, 548.0)
+        );
     }
 
     #[test]

@@ -26,8 +26,12 @@ function render(platform: OnboardingHost["platform"] = "macos") {
     previews: true,
     setPreviews: vi.fn(),
     tools: vi.fn(async () => [{ name: "GitHub CLI", kind: "gh" as const, found: "gh" }]),
-    cli: vi.fn(async () => ({ path: "~/.local/bin/everyport", installed: null, version: "0.1.0" })),
-    installCli: vi.fn(async () => ({ path: "~/.local/bin/everyport", installed: "0.1.0", version: "0.1.0" })),
+    cli: vi.fn(async () => ({ path: "~/.local/bin/everyport", installed: false, hint: null })),
+    installCli: vi.fn(async () => ({
+      path: "~/.local/bin/everyport",
+      installed: true,
+      hint: "If your terminal can't find it, add ~/.local/bin to your PATH.",
+    })),
     machines: vi.fn(async () => [{ name: "devbox", source: "SSH config" }]),
     openMachineSettings: vi.fn(),
     finish: vi.fn(),
@@ -84,6 +88,7 @@ describe("onboarding", () => {
     await click("Install");
     expect(host.installCli).toHaveBeenCalledOnce();
     expect(element.textContent).toContain("In ~/.local/bin/everyport");
+    expect(element.textContent).toContain("add ~/.local/bin to your PATH");
   });
 
   it("says where the tray icon lives on Windows", async () => {

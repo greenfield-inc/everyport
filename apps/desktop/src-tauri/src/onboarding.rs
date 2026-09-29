@@ -9,6 +9,7 @@ use everyport::client::install;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
+use crate::launch::EDITORS;
 use crate::popover;
 
 pub const LABEL: &str = "onboarding";
@@ -60,11 +61,14 @@ pub async fn onboarding_tools() -> Vec<Tool> {
 }
 
 fn tools() -> Vec<Tool> {
-    let home =
-        std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from);
+    let home = home();
     let agents = everyport::links::AgentDirs::from_env();
+    let pane = std::env::var_os("PANE_DIR")
+        .map(PathBuf::from)
+        .or_else(|| home.as_ref().map(|h| h.join(".pane")));
     let dir =
         |path: Option<PathBuf>, shown: &str| path.filter(|p| p.is_dir()).map(|_| shown.to_string());
+    let installed = |found: bool| found.then(|| "Installed".to_string());
     let mut list = vec![
         Tool {
             name: "Claude Code",
@@ -84,108 +88,120 @@ fn tools() -> Vec<Tool> {
         list.push(Tool {
             name: "Conductor",
             kind: "conductor",
-            found: (mac_app(home.as_deref(), "Conductor") || support.is_some_and(|p| p.is_dir()))
-                .then(|| "Installed".into()),
+            found: installed(has_app("com.conductor.app") || support.is_some_and(|p| p.is_dir())),
         });
     }
     list.push(Tool {
         name: "Pane",
         kind: "pane",
-        found: dir(home.as_ref().map(|h| h.join(".pane")), "~/.pane")
-            .or_else(|| mac_app(home.as_deref(), "Pane").then(|| "Installed".into())),
+        found: dir(pane, "~/.pane").or_else(|| installed(has_app("com.dcouple.pane"))),
     });
     list.push(Tool {
         name: "Editor",
         kind: "editor",
-        found: editor(home.as_deref()).map(String::from),
+        found: EDITORS
+            .iter()
+            .find(|editor| {
+                if cfg!(target_os = "macos") {
+                    has_app(editor.bundle_id)
+                } else {
+                    on_path(editor.command).is_some()
+                }
+            })
+            .map(|editor| editor.name.to_string()),
     });
     list.push(Tool {
         name: "GitHub CLI",
         kind: "gh",
-        found: on_path(if cfg!(windows) { "gh.exe" } else { "gh" }).then(|| "gh".into()),
+        found: on_path(if cfg!(windows) { "gh.exe" } else { "gh" }).map(|_| "gh".into()),
     });
     list
 }
 
-/// The first editor `launch::open_in_editor` would use.
-fn editor(home: Option<&Path>) -> Option<&'static str> {
-    let editors: &[(&str, &str, &str)] = &[
-        ("Cursor", "Cursor", "cursor"),
-        ("VS Code", "Visual Studio Code", "code"),
-        ("Zed", "Zed", "zed"),
-        ("Sublime Text", "Sublime Text", "subl"),
-    ];
-    editors.iter().find_map(|&(name, app, command)| {
-        let found = if cfg!(target_os = "macos") {
-            mac_app(home, app)
-        } else if cfg!(windows) {
-            on_path(&format!("{command}.cmd")) || on_path(&format!("{command}.exe"))
-        } else {
-            on_path(command)
-        };
-        found.then_some(name)
-    })
+fn home() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
 }
 
-/// An app bundle in /Applications or ~/Applications.
-fn mac_app(home: Option<&Path>, name: &str) -> bool {
-    let bundle = format!("{name}.app");
-    Path::new("/Applications").join(&bundle).exists()
-        || home.is_some_and(|h| h.join("Applications").join(&bundle).exists())
+/// Whether macOS knows an app with this bundle id, wherever it's installed.
+#[cfg(target_os = "macos")]
+fn has_app(bundle_id: &str) -> bool {
+    use tauri_nspanel::objc2_app_kit::NSWorkspace;
+    use tauri_nspanel::objc2_foundation::NSString;
+    NSWorkspace::sharedWorkspace()
+        .URLForApplicationWithBundleIdentifier(&NSString::from_str(bundle_id))
+        .is_some()
 }
 
-/// On `PATH`, or in Homebrew's folders, which an app opened from the Dock may
-/// not have on its `PATH`.
-fn on_path(file: &str) -> bool {
+#[cfg(not(target_os = "macos"))]
+fn has_app(_bundle_id: &str) -> bool {
+    false
+}
+
+/// Where `file` is on `PATH`, or in Homebrew's folders, which an app opened
+/// from the Dock may not have on its `PATH`.
+fn on_path(file: &str) -> Option<PathBuf> {
     let path = std::env::var_os("PATH").unwrap_or_default();
     std::env::split_paths(&path)
         .chain(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from))
-        .any(|dir| dir.join(file).is_file())
+        .map(|dir| dir.join(file))
+        .find(|file| file.is_file())
 }
 
 /// The `everyport` command on this computer, as the terminal step shows it.
 #[derive(Serialize)]
 pub struct Cli {
+    /// Where it is, or where Install puts it.
     path: String,
-    installed: Option<String>,
-    version: &'static str,
+    installed: bool,
+    /// Set when it's in a folder that terminals may not search.
+    hint: Option<String>,
 }
 
-impl From<install::Probe> for Cli {
-    fn from(probe: install::Probe) -> Self {
-        Cli {
-            path: tilde(&probe.install_path),
-            installed: probe.installed,
-            version: install::VERSION,
-        }
+fn tilde(path: &Path) -> String {
+    match home() {
+        Some(home) => match path.strip_prefix(&home) {
+            Ok(rest) => format!("~/{}", rest.display()),
+            Err(_) => path.display().to_string(),
+        },
+        None => path.display().to_string(),
     }
 }
 
-fn tilde(path: &str) -> String {
-    match std::env::var("HOME") {
-        Ok(home) if !home.is_empty() && path.starts_with(&home) => {
-            format!("~{}", &path[home.len()..])
-        }
-        _ => path.to_string(),
-    }
-}
-
-/// Checks this computer the way Settings → Machines checks another one: the
-/// same probe, through no command prefix.
+/// Finds `everyport` where the probe that checks other machines looks (the
+/// install folder, then `PATH`), and where Homebrew puts it.
 #[tauri::command]
 pub async fn cli_status() -> Result<Cli, String> {
-    install::probe(&[])
-        .await
-        .map(Cli::from)
-        .map_err(|e| format!("{e:#}"))
+    let probe = install::probe(&[]).await.map_err(|e| format!("{e:#}"))?;
+    let ours = PathBuf::from(&probe.install_path);
+    let found = match probe.installed {
+        Some(_) if probe.everyport_path == probe.install_path => Some(ours.clone()),
+        Some(_) => Some(PathBuf::from(&probe.everyport_path)),
+        None => on_path(if cfg!(windows) {
+            "everyport.exe"
+        } else {
+            "everyport"
+        }),
+    };
+    let dir = ours.parent().map(tilde).unwrap_or_default();
+    Ok(Cli {
+        path: tilde(found.as_deref().unwrap_or(&ours)),
+        installed: found.is_some(),
+        hint: (found.as_ref() == Some(&ours))
+            .then(|| format!("If your terminal can't find it, add {dir} to your PATH.")),
+    })
 }
 
-/// Installs the `everyport` command with the code that installs it on other machines.
+/// Installs `everyport` with the code that installs it on other machines,
+/// one install at a time.
 #[tauri::command]
 pub async fn cli_install() -> Result<Cli, String> {
+    static INSTALLING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _one = INSTALLING.lock().await;
     let probe = install::probe(&[]).await.map_err(|e| format!("{e:#}"))?;
-    install::install(&[], &probe)
-        .await
-        .map_err(|e| format!("{e:#}"))?;
+    if probe.installed.is_none() {
+        install::install(&[], &probe)
+            .await
+            .map_err(|e| format!("{e:#}"))?;
+    }
     cli_status().await
 }
