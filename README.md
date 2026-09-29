@@ -171,7 +171,7 @@ Every command and option is in the [CLI reference](docs/cli.md).
 
 - **Linux:** the port and its owner. Linux shows which process holds the port only to root, so run `sudo ppm` to see it.
 - **Windows:** the port, its owner and the process name. Without admin rights, the owner can be missing.
-- **macOS:** not shown yet.
+- **macOS:** the port, its owner and the process name. A new one can take up to 10 seconds to appear.
 
 Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on, and to download `ppm` from GitHub Releases when you install it on another machine. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `port-process-manager`).
 

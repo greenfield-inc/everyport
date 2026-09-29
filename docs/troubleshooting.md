@@ -29,7 +29,7 @@ Over SSH, the shell may skip your profile, so call it by its full path: `ssh dev
 ## A server is missing
 
 - ppm shows ports 3000 to 65535. To change the range, set `min_port` and `max_port` in [`config.toml`](settings.md#the-settings-files).
-- A server run by another user or the system shows with fewer details, or not at all on macOS. See [Other users' servers](#other-users-servers).
+- A server run by another user or the system shows with fewer details. On macOS it can take up to 10 seconds to appear. See [Other users' servers](#other-users-servers).
 
 ## Other users' servers
 
@@ -38,7 +38,7 @@ Without admin rights, ppm sees full details only for processes your user owns.
 | OS | Ports owned by other users or the system |
 |---|---|
 | Linux | Listed with port, address and owner. Linux shows which process holds the port only to root, so run `sudo ppm` to see it. |
-| macOS | Not shown yet |
+| macOS | Listed with port, owner and process name, read from `nettop`. A new one can take up to 10 seconds to appear. |
 | Windows | Listed with port, owner and process name. Without admin rights, the owner can be missing. |
 
 ## Stop or restart asks first, or refuses in the terminal
