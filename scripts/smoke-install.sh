@@ -53,7 +53,7 @@ install_with() {
   shift 2
   home="$work/home-$name-${url##*:}"
   mkdir -p "$home"
-  env PPM_DOWNLOAD_URL="$url" PPM_INSTALL_DIR="$(native "$home/bin")" \
+  env PPM_DOWNLOAD_URL="$url" PPM_ALLOW_INSECURE=1 PPM_INSTALL_DIR="$(native "$home/bin")" \
     PPM_APP_DIR="$(native "$home/app")" HOME="$home" XDG_CACHE_HOME="$home/.cache" \
     XDG_DATA_HOME="$home/.local/share" LOCALAPPDATA="$(native "$home")" "$@"
 }

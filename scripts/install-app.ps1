@@ -15,7 +15,8 @@
 #   PPM_VERSION       release to install, such as 0.2.0 (default: latest)
 #   PPM_APP_DIR       where the app goes (default: %LOCALAPPDATA%\Port Process Manager)
 #   PPM_INSTALL_DIR   where ppm.exe goes (default: ~\.local\bin)
-#   PPM_DOWNLOAD_URL  folder that holds the release files (default: the GitHub release)
+#   PPM_DOWNLOAD_URL  folder that holds the release files, for mirrors and testing (default: the GitHub release)
+#   PPM_ALLOW_INSECURE set to 1 to allow a PPM_DOWNLOAD_URL that is not https://, for testing
 param([switch]$Cli, [switch]$NoOpen)
 
 # A child scope keeps these settings out of the caller's session when run through iex.
@@ -29,6 +30,10 @@ param([switch]$Cli, [switch]$NoOpen)
   $base = if ($env:PPM_DOWNLOAD_URL) { $env:PPM_DOWNLOAD_URL }
     elseif ($env:PPM_VERSION) { "$repo/releases/download/v$($env:PPM_VERSION.TrimStart('v'))" }
     else { "$repo/releases/latest/download" }
+  # SHA256SUMS comes from the same place as the files, so only https protects them.
+  if (-not $base.StartsWith('https://') -and $env:PPM_ALLOW_INSECURE -ne '1') {
+    throw "Port Process Manager install: $base is not an https:// URL. For testing, set PPM_ALLOW_INSECURE=1."
+  }
 
   $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ppm-" + [guid]::NewGuid())
   New-Item -ItemType Directory -Path $tmp | Out-Null

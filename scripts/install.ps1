@@ -5,7 +5,8 @@
 # Environment:
 #   PPM_VERSION       release to install, such as 0.2.0 (default: latest)
 #   PPM_INSTALL_DIR   where to put ppm.exe (default: ~\.local\bin)
-#   PPM_DOWNLOAD_URL  folder that holds the release files (default: the GitHub release)
+#   PPM_DOWNLOAD_URL  folder that holds the release files, for mirrors and testing (default: the GitHub release)
+#   PPM_ALLOW_INSECURE set to 1 to allow a PPM_DOWNLOAD_URL that is not https://, for testing
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
@@ -22,6 +23,10 @@ $asset = "ppm-$arch-pc-windows-msvc.exe"
 $base = if ($env:PPM_DOWNLOAD_URL) { $env:PPM_DOWNLOAD_URL }
   elseif ($env:PPM_VERSION) { "$repo/releases/download/v$($env:PPM_VERSION.TrimStart('v'))" }
   else { "$repo/releases/latest/download" }
+# SHA256SUMS comes from the same place as the binary, so only https protects it.
+if (-not $base.StartsWith('https://') -and $env:PPM_ALLOW_INSECURE -ne '1') {
+  throw "ppm install: $base is not an https:// URL. For testing, set PPM_ALLOW_INSECURE=1."
+}
 
 $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("ppm-" + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $tmp | Out-Null
@@ -49,9 +54,18 @@ try {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
 
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if (-not (($userPath -split ';') -contains $installDir)) {
-  [Environment]::SetEnvironmentVariable('Path', (@($installDir, $userPath) | Where-Object { $_ }) -join ';', 'User')
-  $env:Path = "$installDir;$env:Path"
-  Write-Host "Added $installDir to your PATH. Open a new terminal to use ppm."
+# Read the user PATH as stored, so entries like %USERPROFILE%\bin stay unexpanded.
+$environment = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment')
+try {
+  $userPath = $environment.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+  if (-not (($userPath -split ';') -contains $installDir)) {
+    $environment.SetValue('Path', ((@($userPath.TrimEnd(';'), $installDir) | Where-Object { $_ }) -join ';'), [Microsoft.Win32.RegistryValueKind]::ExpandString)
+    # Setting any user variable tells running apps, such as Explorer, to reload the environment.
+    [Environment]::SetEnvironmentVariable('PPM_INSTALL_REFRESH', '1', 'User')
+    [Environment]::SetEnvironmentVariable('PPM_INSTALL_REFRESH', $null, 'User')
+    $env:Path = "$env:Path;$installDir"
+    Write-Host "Added $installDir to your PATH. Open a new terminal to use ppm."
+  }
+} finally {
+  $environment.Close()
 }
