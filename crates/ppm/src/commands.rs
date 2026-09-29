@@ -126,6 +126,17 @@ pub fn watch() -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Scans until every stop and restart has finished, and returns the last snapshot.
+fn finish(engine: &mut Engine) -> Snapshot {
+    loop {
+        let (snapshot, _) = engine.scan();
+        if !engine.pending() {
+            return snapshot;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
 fn find(snapshot: &Snapshot, port: u16) -> Option<&Server> {
     snapshot.servers.iter().find(|server| server.port == port)
 }
@@ -154,11 +165,13 @@ pub fn stop(port: u16, force: bool) -> ExitCode {
     let Some(server) = find(&snapshot, port) else {
         return nothing_on(port);
     };
-    let result = engine.call(&Call::Stop {
-        port,
-        root: server.root,
-        force,
-    });
+    let root = server.root;
+    let result = engine
+        .call(&Call::Stop { port, root, force })
+        .and_then(|()| match find(&finish(&mut engine), port) {
+            Some(server) if server.root == root => Err(format!(":{port} is still running")),
+            _ => Ok(()),
+        });
     outcome(result, format!("Stopped {} :{port}", server.project.name))
 }
 
@@ -172,6 +185,9 @@ pub fn restart(port: u16) -> ExitCode {
         port,
         root: server.root,
     });
+    if result.is_ok() {
+        finish(&mut engine);
+    }
     let command = server.command.as_deref().unwrap_or("its command");
     outcome(result, format!("Restarted :{port} with {command}"))
 }
@@ -236,6 +252,7 @@ pub fn clean(yes: bool) -> io::Result<ExitCode> {
             failed = true;
         }
     }
+    finish(&mut engine);
     println!("Stopped {count}, freeing {}.", format::bytes(memory));
     Ok(if failed {
         ExitCode::FAILURE
