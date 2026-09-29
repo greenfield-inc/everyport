@@ -14,7 +14,8 @@
     "themes": "node scripts/compact-themes.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "test": "vitest run",
-    "contrast": "node scripts/contrast.mjs"
+    "contrast": "node scripts/contrast.mjs",
+    "readme-assets": "node scripts/readme-assets.mjs"
   },
   "dependencies": {
     "@ppm/protocol": "workspace:*"
