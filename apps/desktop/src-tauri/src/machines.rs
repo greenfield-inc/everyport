@@ -150,9 +150,10 @@ fn update_tray(app: &AppHandle) {
     );
 }
 
-/// Sends every machine to the page, if it's showing.
+/// Sends every machine to the page, if it's showing or still waiting for
+/// its first data.
 pub fn publish(app: &AppHandle) {
-    if !popover::is_visible(app) {
+    if !popover::wants_data(app) {
         return;
     }
     let list = machines(app).list.clone();

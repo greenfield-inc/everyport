@@ -147,8 +147,14 @@ fn state(app: &AppHandle) -> std::sync::MutexGuard<'_, State> {
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-pub fn is_visible(app: &AppHandle) -> bool {
+fn is_visible(app: &AppHandle) -> bool {
     state(app).visible
+}
+
+/// Showing, or not yet ready: the page needs data to render its first frame.
+pub fn wants_data(app: &AppHandle) -> bool {
+    let state = state(app);
+    state.visible || !state.ready
 }
 
 /// Runs `f` on the main thread, which AppKit requires for window calls.

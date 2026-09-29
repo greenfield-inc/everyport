@@ -105,9 +105,12 @@ struct Look {
     amber: [u8; 3],
 }
 
+/// Most snapshots change nothing the tray shows, so it redraws only on change.
 pub fn set_state(app: &AppHandle, state: State) {
-    look(app).state = state;
-    redraw(app);
+    let changed = std::mem::replace(&mut look(app).state, state) != state;
+    if changed {
+        redraw(app);
+    }
 }
 
 /// Sets the attention color from the page's theme.
