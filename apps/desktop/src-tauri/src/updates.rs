@@ -1,34 +1,58 @@
-//! Keeps the popover's `machines` updates small. A server the page hasn't
-//! seen, or a new process on a port, goes in full. After that, an update
-//! carries only its `port` and the fields that changed. `history` carries
-//! only the samples from the page's newest one on, and `processes` lists each
-//! process by its `proc`, with a new one in full and a known one with only the
-//! fields that changed. updates.ts merges them back.
+//! Keeps the popover's `machines` updates small. Each update has a `seq`,
+//! one more than the last, so the page can tell when it missed one. Each
+//! server is `{"full": server}` when the page hasn't seen it or a new process
+//! took its port, and otherwise `{"patch": ...}` with its `port` and the fields
+//! that changed. In a patch, `history` carries only the samples from the
+//! page's newest one on, and `processes` lists each process by its `proc`,
+//! with a new one in full and a known one with only the fields that changed.
+//! updates.ts applies them.
 
 use std::collections::HashMap;
 
 use ppm_client::protocol::ProcRef;
-use serde_json::{Map, Value};
+use serde::Serialize;
+use serde_json::{json, Map, Value};
 
 use crate::machines::Machine;
 
 /// A server as the engine tracks it: by machine, port and root process.
 type Key = (String, u16, ProcRef);
 
-/// Each server as the page last got it.
+/// What the page has: each server as it last got it, and the last `seq`.
 #[derive(Default)]
-pub struct Sent(HashMap<Key, Map<String, Value>>);
+pub struct Sent {
+    servers: HashMap<Key, Map<String, Value>>,
+    seq: u64,
+}
+
+/// An update, and what the page has once it's delivered.
+pub struct Update {
+    pub payload: Value,
+    servers: HashMap<Key, Map<String, Value>>,
+}
+
+/// Every machine in full, and the `seq` the next update follows.
+#[derive(Serialize)]
+pub struct Base {
+    pub seq: u64,
+    pub machines: Vec<Machine>,
+}
 
 impl Sent {
-    /// The page starts over, so the next update sends every server in full.
-    pub fn clear(&mut self) {
-        self.0.clear();
+    /// The page starts over from `machines`, so the next update sends every
+    /// server in full.
+    pub fn base(&mut self, machines: Vec<Machine>) -> Base {
+        self.servers.clear();
+        Base {
+            seq: self.seq,
+            machines,
+        }
     }
 
-    /// The machines as an update to what the page has, which it then has.
-    pub fn update<'a>(&mut self, machines: impl IntoIterator<Item = &'a Machine>) -> Value {
+    /// The machines as an update to what the page has.
+    pub fn update<'a>(&self, machines: impl IntoIterator<Item = &'a Machine>) -> Update {
         let mut sent = HashMap::new();
-        let machines = machines
+        let machines: Vec<Value> = machines
             .into_iter()
             .map(|machine| {
                 let mut value = serde_json::to_value(machine).expect("machines serialize");
@@ -45,19 +69,26 @@ impl Sent {
                     let Value::Object(full) = json.take() else {
                         unreachable!("a server serializes to an object")
                     };
-                    *json = match self.0.get(&key) {
-                        Some(old) => Value::Object(changes(old, &full, "port")),
-                        None => Value::Object(full.clone()),
+                    *json = match self.servers.get(&key) {
+                        Some(old) => json!({ "patch": changes(old, &full, "port") }),
+                        None => json!({ "full": full }),
                     };
                     sent.insert(key, full);
                 }
                 value
             })
             .collect();
-        // Servers that stopped, or whose machine disconnected, go in full if
-        // they come back.
-        self.0 = sent;
-        Value::Array(machines)
+        Update {
+            payload: json!({ "seq": self.seq + 1, "machines": machines }),
+            servers: sent,
+        }
+    }
+
+    /// The page got `update`. Servers that stopped, or whose machine
+    /// disconnected, go in full if they come back.
+    pub fn delivered(&mut self, update: Update) {
+        self.servers = update.servers;
+        self.seq += 1;
     }
 }
 
@@ -117,7 +148,6 @@ mod tests {
     use super::*;
     use crate::machines::MachineState;
     use ppm_client::protocol::{Sample, Snapshot};
-    use serde_json::json;
 
     fn fixture() -> Snapshot {
         serde_json::from_str(include_str!(
@@ -138,18 +168,28 @@ mod tests {
         }
     }
 
-    fn servers(update: &Value) -> &Vec<Value> {
-        update[0]["snapshot"]["servers"].as_array().unwrap()
+    fn servers(update: &Update) -> &Vec<Value> {
+        update.payload["machines"][0]["snapshot"]["servers"]
+            .as_array()
+            .unwrap()
+    }
+
+    /// Sends `snapshot` and marks it delivered.
+    fn deliver(sent: &mut Sent, snapshot: &Snapshot) -> Value {
+        let update = sent.update(&[machine(snapshot.clone())]);
+        let payload = update.payload.clone();
+        sent.delivered(update);
+        payload
     }
 
     #[test]
     fn sends_a_server_in_full_once_then_what_changed() {
         let mut sent = Sent::default();
         let first = fixture();
-        assert_eq!(
-            servers(&sent.update(&[machine(first.clone())]))[0],
-            serde_json::to_value(&first.servers[0]).unwrap()
-        );
+        let update = sent.update(&[machine(first.clone())]);
+        assert_eq!(update.payload["seq"], 1);
+        assert_eq!(servers(&update)[0], json!({ "full": first.servers[0] }));
+        sent.delivered(update);
 
         // The next scan: next-server under :3000 grew by 1 MB, its newest
         // sample took the new memory, and a new sample started 10 s later.
@@ -171,9 +211,10 @@ mod tests {
             panic!("the fixture's :3000 runs three processes")
         };
         let n = server.history.len();
+        assert_eq!(update.payload["seq"], 2);
         assert_eq!(
             servers(&update)[0],
-            json!({
+            json!({ "patch": {
                 "port": 3000,
                 "memory": server.memory,
                 "processes": [
@@ -182,31 +223,65 @@ mod tests {
                     { "proc": turbopack.proc },
                 ],
                 "history": server.history[n - 2..],
-            })
+            }})
         );
         // Unchanged servers carry only their port.
-        assert_eq!(servers(&update)[1], json!({ "port": next.servers[1].port }));
-        assert_eq!(update[0]["snapshot"]["taken_at"], json!(next.taken_at));
+        assert_eq!(
+            servers(&update)[1],
+            json!({ "patch": { "port": next.servers[1].port } })
+        );
+        assert_eq!(
+            update.payload["machines"][0]["snapshot"]["taken_at"],
+            json!(next.taken_at)
+        );
+    }
+
+    #[test]
+    fn an_update_that_never_arrived_is_sent_again() {
+        let mut sent = Sent::default();
+        let first = fixture();
+        deliver(&mut sent, &first);
+
+        // :3001 moves to another branch, but the emit fails.
+        let mut checkout = first.clone();
+        checkout.servers[1].project.branch = Some("fix/login".into());
+        let lost = sent.update(&[machine(checkout.clone())]);
+        assert_eq!(lost.payload["seq"], 2);
+
+        // The next scan repeats the change under the same seq.
+        let mut next = checkout.clone();
+        next.servers[1].connections += 1;
+        let payload = deliver(&mut sent, &next);
+        assert_eq!(payload["seq"], 2);
+        assert_eq!(
+            payload["machines"][0]["snapshot"]["servers"][1],
+            json!({ "patch": {
+                "port": 3001,
+                "project": next.servers[1].project,
+                "connections": next.servers[1].connections,
+            }})
+        );
     }
 
     #[test]
     fn a_new_process_on_a_port_or_a_page_that_starts_over_gets_it_in_full() {
         let mut sent = Sent::default();
-        sent.update(&[machine(fixture())]);
+        deliver(&mut sent, &fixture());
 
         let mut restarted = fixture();
         restarted.servers[0].root.pid += 1;
-        let update = sent.update(&[machine(restarted.clone())]);
-        assert_eq!(
-            servers(&update)[0],
-            serde_json::to_value(&restarted.servers[0]).unwrap()
-        );
+        let payload = deliver(&mut sent, &restarted);
+        let servers = &payload["machines"][0]["snapshot"]["servers"];
+        assert_eq!(servers[0], json!({ "full": restarted.servers[0] }));
+        assert_eq!(servers[1]["patch"]["port"], 3001);
 
-        sent.clear();
-        let update = sent.update(&[machine(restarted.clone())]);
+        let base = sent.base(vec![machine(restarted.clone())]);
+        assert_eq!(base.seq, 2);
+        let payload = deliver(&mut sent, &restarted);
+        assert_eq!(payload["seq"], 3);
         assert_eq!(
-            servers(&update)[1],
-            serde_json::to_value(&restarted.servers[1]).unwrap()
+            payload["machines"][0]["snapshot"]["servers"][1],
+            json!({ "full": restarted.servers[1] })
         );
     }
 }
