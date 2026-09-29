@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: Greenfield.PortProcessManager
+PackageVersion: "@VERSION@"
+InstallerType: wix
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/greenfield-inc/port-process-manager/releases/download/v@VERSION@/port-process-manager-@VERSION@-x86_64.msi
+    InstallerSha256: "@SHA256:port-process-manager-@VERSION@-x86_64.msi@"
+ManifestType: installer
+ManifestVersion: 1.6.0
