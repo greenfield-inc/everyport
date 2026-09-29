@@ -2,20 +2,29 @@
 
 use tauri::WebviewWindow;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
-use windows::core::{Interface, BOOL};
+use windows::core::{w, Interface, BOOL};
 use windows::Win32::Graphics::Dwm::{
     DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND,
 };
-use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi};
+use windows::Win32::UI::HiDpi::{GetDpiForSystem, GetDpiForWindow, GetSystemMetricsForDpi};
 use windows::Win32::UI::WindowsAndMessaging::{
-    SystemParametersInfoW, SM_CXSMICON, SPI_GETCLIENTAREAANIMATION,
+    FindWindowW, SystemParametersInfoW, SM_CXSMICON, SPI_GETCLIENTAREAANIMATION,
     SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
 };
 
-/// The notification area's icon size in pixels: 16 at 100% scaling, 32 at 200%.
+/// The notification area's icon size in pixels: 16 at 100% scaling, 32 at
+/// 200%. It follows the scale of the taskbar's monitor, which can differ from
+/// the system's when monitors have different scales.
 pub fn tray_icon_size() -> usize {
-    // SAFETY: plain queries that take and return integers.
-    let size = unsafe { GetSystemMetricsForDpi(SM_CXSMICON, GetDpiForSystem()) };
+    // SAFETY: plain queries on a window handle Windows just returned, or none.
+    let size = unsafe {
+        let dpi = FindWindowW(w!("Shell_TrayWnd"), None)
+            .map(|taskbar| GetDpiForWindow(taskbar))
+            .ok()
+            .filter(|&dpi| dpi != 0)
+            .unwrap_or_else(|| GetDpiForSystem());
+        GetSystemMetricsForDpi(SM_CXSMICON, dpi)
+    };
     size.max(16) as usize
 }
 
