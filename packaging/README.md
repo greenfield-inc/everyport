@@ -35,7 +35,7 @@ The version lives only in `Cargo.toml` (`workspace.package`). The desktop app re
 
 ## Secrets
 
-A tag build fails when a signing or notarization secret is missing, unless it was started by hand with **unsigned**. To release before there is a Windows certificate, set the `WINDOWS_SIGNING` repository variable to `skip`: tag builds still sign and notarize macOS, and ship an unsigned `.msi` with a warning in the log. Unset or `required`, a tag build fails without the Windows secrets. crates.io, npm and PyPI use trusted publishing, so they need no secret. The Homebrew step logs a notice and skips when its token is missing. Builds that aren't from a tag never sign, so they never read the signing secrets.
+A tag build fails when a signing or notarization secret is missing, unless it was started by hand with **unsigned**. To release before there is a Windows certificate, set the `WINDOWS_SIGNING` repository variable to `skip`: tag builds still sign and notarize macOS, and ship an unsigned `.msi` with a warning in the log. Unset or `required`, a tag build fails without the Windows secrets. crates.io, npm and PyPI use trusted publishing, so they need no secret. Each registry's `everyport` package needs a trusted publisher with owner `greenfield-inc`, repository `everyport`, workflow `release.yml` and no environment. A missing one fails only that publish job, after the GitHub release exists. The Homebrew step logs a notice and skips when its token is missing. Builds that aren't from a tag never sign, so they never read the signing secrets.
 
 | Secret | Used for |
 |---|---|
