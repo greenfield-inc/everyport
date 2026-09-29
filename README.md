@@ -134,7 +134,9 @@ Or install it another way:
 | Windows 10/11 | `winget install Dcouple.Everyport`, or the `.msi` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) |
 | Linux (x86_64) | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) |
 
-macOS builds are signed and notarized, and Windows builds are signed. On GNOME, the tray icon needs the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
+macOS builds are signed and notarized. Windows builds are not signed yet, so SmartScreen asks you to confirm when you install the .msi by hand; the one-command install doesn't trigger it.
+
+On GNOME, the tray icon needs the [AppIndicator extension](https://extensions.gnome.org/extension/615/appindicator-support/).
 
 ### CLI only
 

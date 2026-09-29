@@ -35,9 +35,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with: { toolchain: stable }
-      # No target cache: cargo reuses a cached build of a registry crate with the
-      # same version, so a cached everyport-core 0.1.0 would hide changes to it.
-      - run: scripts/publish-crates.sh --dry-run
+      - run: cargo publish -p everyport --locked --dry-run
 
   changes:
     runs-on: ubuntu-latest
