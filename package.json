@@ -7,6 +7,6 @@
     "dev:web": "pnpm --filter @ppm/desktop dev:web",
     "generate": "pnpm --filter @ppm/protocol generate",
     "typecheck": "pnpm -r typecheck",
-    "check": "pnpm typecheck && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
+    "check": "pnpm typecheck && pnpm -r --if-present test && cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace"
   }
 }

@@ -1,0 +1,76 @@
+import type { Alert, Server } from "@ppm/protocol";
+import { total } from "../format.ts";
+import { DotGrid } from "../icons.tsx";
+import { DEFAULT_ALERT_MEMORY, growth, historySpan } from "../model.ts";
+import { type ThemeProps, Themed } from "../theme.tsx";
+
+type Props = ThemeProps & {
+  server: Server;
+  alert: Alert;
+  alertMemory?: number;
+  onDetails: () => void;
+  onStop: () => void;
+  onSnooze: () => void;
+};
+
+/** What the alert says: ":6006 design-system is leaking" and one sentence of detail. */
+export function alertText(server: Server, alert: Alert, alertMemory = DEFAULT_ALERT_MEMORY) {
+  const who = server.project.framework ?? server.project.name;
+  const using = total(alert.memory);
+  if (alert.kind === "leaking") {
+    const minutes = Math.max(1, Math.round(historySpan(server) / 60));
+    return {
+      title: `:${alert.port} ${server.project.name} is leaking`,
+      body: `${who} grew ${total(growth(server))} in ${minutes} ${minutes === 1 ? "minute" : "minutes"} and is now using ${using}.`,
+    };
+  }
+  return {
+    title: `:${alert.port} ${server.project.name} is over ${total(alertMemory)}`,
+    body: `${who} is using ${using}.`,
+  };
+}
+
+/**
+ * The memory alert, for hosts that draw their own notification: Details,
+ * Stop and Snooze 1h. Renders its own themed root.
+ */
+export function NotificationCard({ server, alert, alertMemory, onDetails, onStop, onSnooze, theme, appearance }: Props) {
+  const { title, body } = alertText(server, alert, alertMemory);
+  const action = "flex flex-1 justify-center rounded-lg bg-accent py-[5px] text-13 font-medium";
+  return (
+    <Themed theme={theme} appearance={appearance}>
+      <div
+        role="alert"
+        className="flex w-[356px] flex-col gap-2.5 rounded-[22px] py-3 pr-3.5 pl-3"
+        style={{
+          background: "color-mix(in oklab, var(--popover) var(--ppm-tint), transparent)",
+          boxShadow: "inset 0 0 0 0.5px var(--border), var(--ppm-shadow, 0 12px 40px rgb(0 0 0 / 0.45))",
+        }}
+      >
+        <div className="flex items-start gap-2.5">
+          <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-[#15171D] text-white shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
+            <DotGrid size={24} />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-px">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="clamp-1 text-13 font-medium text-fg">{title}</span>
+              <span className="shrink-0 text-11 text-fg3">now</span>
+            </div>
+            <p className="text-13 leading-[18px] text-fg2">{body}</p>
+          </div>
+        </div>
+        <div className="flex gap-1.5 pl-11">
+          <button type="button" onClick={onDetails} className={`${action} text-fg`}>
+            Details
+          </button>
+          <button type="button" onClick={onStop} className={`${action} text-danger`}>
+            Stop
+          </button>
+          <button type="button" onClick={onSnooze} className={`${action} text-fg`}>
+            Snooze 1h
+          </button>
+        </div>
+      </div>
+    </Themed>
+  );
+}

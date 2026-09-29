@@ -3,9 +3,36 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts", "./styles.css": "./src/styles.css" },
-  "scripts": { "typecheck": "tsc --noEmit" },
-  "dependencies": { "@ppm/protocol": "workspace:*" },
-  "peerDependencies": { "react": "^19" },
-  "devDependencies": { "@types/react": "^19.1.8", "react": "^19.1.0", "typescript": "~6.0.3" }
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "themes": "node scripts/compact-themes.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ppm/protocol": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "playwright-core": "^1.63.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.3.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
 }
