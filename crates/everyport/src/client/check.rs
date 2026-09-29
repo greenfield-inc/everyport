@@ -95,7 +95,7 @@ impl Failure {
             Self::ChangedHostKey
         } else if has("Host key verification failed") {
             Self::NewHostKey
-        } else if has("Permission denied (") || has("Too many authentication failures") {
+        } else if ssh_denied(error) || has("Too many authentication failures") {
             Self::KeyRejected
         } else if has("Connection refused") {
             Self::SshOff
@@ -166,13 +166,13 @@ impl Failure {
                 "SSH is off on {machine}. On {machine}, turn on System Settings > General > Sharing > Remote Login."
             ),
             (Self::SshOff, Some(Os::Linux)) => format!(
-                "SSH is off on {machine}. On {machine}, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch)."
+                "SSH is off on {machine}. On {machine}, run `sudo systemctl enable --now ssh` (sshd on Fedora and Arch)."
             ),
             (Self::SshOff, Some(Os::Windows)) => format!(
                 "SSH is off on {machine}. On {machine}, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
             ),
             (Self::SshOff, None) => format!(
-                "SSH is off on {machine}. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch). On Windows, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
+                "SSH is off on {machine}. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (sshd on Fedora and Arch). On Windows, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
             ),
             (Self::ServeOff, _) => format!(
                 "everyport serve isn't running on {machine}. Start it there with `everyport serve`."
@@ -184,13 +184,13 @@ impl Failure {
                 "{machine}'s host key changed since you last connected. If you expect that, run `ssh-keygen -R {known_as}`, then `ssh {dest}` to accept the new key."
             ),
             (Self::KeyRejected, Some(Os::Windows)) => format!(
-                "{machine} didn't accept your key. Add your public key to {WINDOWS_KEYS} on it."
+                "{machine} didn't accept your key. Add your public key to {WINDOWS_KEYS} on it. If your key has a passphrase, run `ssh-add` first."
             ),
             (Self::KeyRejected, Some(_)) => format!(
-                "{machine} didn't accept your key. Run `{copy_key}` to add it."
+                "{machine} didn't accept your key. Run `{copy_key}` to add it. If your key has a passphrase, run `ssh-add` first."
             ),
             (Self::KeyRejected, None) => format!(
-                "{machine} didn't accept your key. Run `{copy_key}` to add it. For Windows, add your public key to {WINDOWS_KEYS}."
+                "{machine} didn't accept your key. Run `{copy_key}` to add it. If your key has a passphrase, run `ssh-add` first. For Windows, add your public key to {WINDOWS_KEYS}."
             ),
         };
         if hint.pane && matches!(self, Self::SshOff | Self::NoAnswer) {
@@ -200,6 +200,22 @@ impl Failure {
         }
         fix
     }
+}
+
+/// ssh's own `user@host: Permission denied (publickey,password).`, never a
+/// file error such as `Permission denied (os error 13)`.
+fn ssh_denied(error: &str) -> bool {
+    error.split(": Permission denied (").skip(1).any(|rest| {
+        [
+            "publickey",
+            "password",
+            "keyboard-interactive",
+            "hostbased",
+            "gssapi",
+        ]
+        .iter()
+        .any(|method| rest.starts_with(method))
+    })
 }
 
 const WINDOWS_SSHD: &str = "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic";
@@ -572,6 +588,14 @@ Host key verification failed.";
         assert_eq!(Failure::of(DENIED), Some(Failure::KeyRejected));
         assert_eq!(Failure::of(TOO_MANY_KEYS), Some(Failure::KeyRejected));
         assert_eq!(Failure::of("bash: everyport: command not found"), None);
+        assert_eq!(
+            Failure::of("Couldn't run /Applications/Everyport.app/Contents/MacOS/everyport-sidecar: Permission denied (os error 13)"),
+            None
+        );
+        assert_eq!(
+            Failure::of("me@box: Permission denied (keyboard-interactive)."),
+            Some(Failure::KeyRejected)
+        );
     }
 
     #[test]
@@ -609,7 +633,7 @@ Host key verification failed.";
         );
         assert_eq!(
             Failure::SshOff.fix("Mini", &target(), Some(Os::Linux), &none),
-            "SSH is off on Mini. On Mini, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch)."
+            "SSH is off on Mini. On Mini, run `sudo systemctl enable --now ssh` (sshd on Fedora and Arch)."
         );
         assert!(Failure::SshOff
             .fix("Mini", &target(), Some(Os::Windows), &none)
@@ -623,7 +647,7 @@ Host key verification failed.";
         };
         assert_eq!(
             Failure::KeyRejected.fix("Mini", &target(), Some(Os::Linux), &none),
-            format!("Mini didn't accept your key. Run `{copy_key}` to add it.")
+            format!("Mini didn't accept your key. Run `{copy_key}` to add it. If your key has a passphrase, run `ssh-add` first.")
         );
         assert!(Failure::KeyRejected
             .fix("Mini", &target(), Some(Os::Windows), &none)
@@ -687,7 +711,7 @@ Host key verification failed.";
         );
         assert_eq!(
             report.steps[1].fix.as_deref(),
-            Some("SSH is off on box. On box, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch).")
+            Some("SSH is off on box. On box, run `sudo systemctl enable --now ssh` (sshd on Fedora and Arch).")
         );
         assert!(report.probe.is_none() && !report.waits_for_user && !report.ok());
     }

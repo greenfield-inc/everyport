@@ -432,17 +432,16 @@ fn load_machines(path: &Path) -> Result<Vec<saved::Machine>, String> {
 #[tauri::command]
 pub async fn settings_machines() -> Result<MachineSettings, String> {
     let list = load_machines(&machines_file()?)?;
-    let found = discover::all()
-        .await
+    let found = discover::unsaved(&list, &discover::all().await)
         .into_iter()
-        .filter(|f| !list.iter().any(|m| m.name == f.machine.name))
         .filter_map(|f| {
+            let source = f.label();
             let Via::Command { command } = f.machine.via else {
                 return None;
             };
             Some(Found {
                 name: f.machine.name,
-                source: f.source.label(),
+                source,
                 command: shell_words::join(&command),
             })
         })

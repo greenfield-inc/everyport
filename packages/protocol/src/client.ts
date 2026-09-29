@@ -1,5 +1,8 @@
 import type { AgentSession, Call, Event, HostInfo, Snapshot } from "./generated/index.ts";
 
+/** The id of this computer, which the host app runs itself and reconnects on its own. */
+export const LOCAL_MACHINE = "local";
+
 /** One machine the UI shows: this computer, or a remote connection. */
 export interface Machine {
   id: string;

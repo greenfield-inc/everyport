@@ -1,8 +1,8 @@
 //! When to try a machine again: after a wait that doubles up to a minute,
-//! or as soon as this computer's network changes.
+//! or as soon as this computer joins a network.
 
 use std::collections::BTreeSet;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 const FIRST: Duration = Duration::from_secs(1);
@@ -36,24 +36,33 @@ impl Backoff {
     }
 }
 
-/// Sleeps for `wait`, or less when this computer's addresses change, such as
-/// after joining Wi-Fi or a VPN.
+/// Sleeps for `wait`, or less when this computer gets a new address, such
+/// as after joining Wi-Fi or a VPN. The address must still be there a look
+/// later, so a flapping interface doesn't cut every wait short.
 pub async fn wait(wait: Duration) {
     let before = addresses();
+    let mut new_last_look = BTreeSet::new();
     let deadline = tokio::time::Instant::now() + wait;
     while tokio::time::Instant::now() < deadline {
         tokio::time::sleep_until(deadline.min(tokio::time::Instant::now() + LOOK)).await;
-        if addresses() != before {
+        let new: BTreeSet<Ipv4Addr> = addresses().difference(&before).copied().collect();
+        if new.intersection(&new_last_look).next().is_some() {
             return;
         }
+        new_last_look = new;
     }
 }
 
-fn addresses() -> BTreeSet<IpAddr> {
+/// This computer's routable IPv4 addresses. IPv6 is left out, since
+/// temporary addresses rotate on their own, and so are link-local ones.
+fn addresses() -> BTreeSet<Ipv4Addr> {
     if_addrs::get_if_addrs()
         .unwrap_or_default()
         .into_iter()
-        .map(|interface| interface.ip())
+        .filter_map(|interface| match interface.ip() {
+            IpAddr::V4(ip) if !ip.is_loopback() && !ip.is_link_local() => Some(ip),
+            _ => None,
+        })
         .collect()
 }
 

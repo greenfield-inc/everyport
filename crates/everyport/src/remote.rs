@@ -60,12 +60,11 @@ pub fn doctor(name: Option<&str>) -> io::Result<ExitCode> {
     let saved = machines::load(&machines_path().map_err(other)?).map_err(other)?;
     let reports = RUNTIME.block_on(async {
         let found = discover::all().await;
-        let mut known: Vec<Machine> = saved;
-        for f in &found {
-            if !known.iter().any(|m| m.name == f.machine.name) {
-                known.push(f.machine.clone());
-            }
-        }
+        let mut known: Vec<Machine> = discover::unsaved(&saved, &found)
+            .into_iter()
+            .map(|f| f.machine)
+            .collect();
+        known.splice(0..0, saved);
         if let Some(name) = name {
             known.retain(|m| m.name == name);
         }
@@ -110,19 +109,16 @@ pub fn doctor(name: Option<&str>) -> io::Result<ExitCode> {
     })
 }
 
-/// Saved machines, then discovered ones not saved under the same name, each
+/// Saved machines, then discovered ones not saved already, each
 /// with the everyport version installed there.
 pub fn list() -> io::Result<ExitCode> {
     let saved = machines::load(&machines_path().map_err(other)?).map_err(other)?;
     let rows = RUNTIME.block_on(async {
         let found = discover::all().await;
+        let offered = discover::unsaved(&saved, &found);
         let mut rows: Vec<(Machine, String)> =
             saved.into_iter().map(|m| (m, "saved".into())).collect();
-        for found in found {
-            if !rows.iter().any(|(m, _)| m.name == found.machine.name) {
-                rows.push((found.machine, found.source.label()));
-            }
-        }
+        rows.extend(offered.into_iter().map(|f| (f.machine.clone(), f.label())));
         let probes: Vec<_> = rows
             .iter()
             .map(|(machine, _)| tokio::spawn(installed(machine.via.clone())))

@@ -23,6 +23,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::{notify, onboarding, popover, settings, tray, updates};
 
+/// `LOCAL_MACHINE` in @everyport/protocol.
 pub const LOCAL: &str = "local";
 const SNOOZE: Duration = Duration::from_secs(3600);
 /// Run numbers start at 1, so a new entry's 0 matches no task.
@@ -171,7 +172,7 @@ struct Listed {
 }
 
 /// Saved machines first, then discovered ones that aren't saved already
-/// (by name or connection). Saved machines and WSL distros connect on their
+/// (by name, connection or host). Saved machines and WSL distros connect on their
 /// own; ssh, Pane and Tailscale hosts wait until the user picks one.
 fn roster(saved: Vec<saved::Machine>, found: Vec<Found>) -> Vec<Listed> {
     let distro = |via: &Via, found: &[Found]| {
@@ -189,19 +190,15 @@ fn roster(saved: Vec<saved::Machine>, found: Vec<Found>) -> Vec<Listed> {
             auto: true,
         })
         .collect();
-    for f in found.iter().cloned() {
-        let known = list
-            .iter()
-            .any(|l| l.machine.name == f.machine.name || l.machine.via == f.machine.via);
-        if !known {
-            let wsl = f.source == Source::Wsl;
-            list.push(Listed {
-                distro: wsl.then(|| f.machine.name.clone()),
-                hint: discover::hint(&found, &f.machine.via),
-                machine: f.machine,
-                auto: wsl,
-            });
-        }
+    let saved: Vec<saved::Machine> = list.iter().map(|l| l.machine.clone()).collect();
+    for f in discover::unsaved(&saved, &found) {
+        let wsl = f.source == Source::Wsl;
+        list.push(Listed {
+            distro: wsl.then(|| f.machine.name.clone()),
+            hint: f.hint,
+            machine: f.machine,
+            auto: wsl,
+        });
     }
     list
 }
@@ -937,7 +934,7 @@ mod tests {
     }
 
     fn found(source: Source, machine: saved::Machine) -> Found {
-        Found { machine, source }
+        Found::new(machine, source)
     }
 
     #[test]

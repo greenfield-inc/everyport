@@ -98,7 +98,9 @@ async fn supervise(
         if session.greeted {
             backoff.reset();
         }
-        let waits = Failure::of(&error).is_some_and(Failure::waits_for_user);
+        // Only ssh's own failures can wait for the user; the sidecar always retries.
+        let ssh = matches!(&connection, Connection::Command { argv_prefix, .. } if remote::program(argv_prefix) == "ssh");
+        let waits = ssh && Failure::of(&error).is_some_and(Failure::waits_for_user);
         let retry_in = (!waits).then(|| backoff.next_wait());
         if updates
             .send(Update::Disconnected { error, retry_in })

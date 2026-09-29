@@ -1,5 +1,7 @@
-import type { CheckStep, Machine, EveryportClient } from "@everyport/protocol";
-import { Fragment, useState } from "react";
+import { LOCAL_MACHINE, type CheckStep, type Machine, type EveryportClient } from "@everyport/protocol";
+import { Fragment, useEffect, useState } from "react";
+import { copy } from "../context.ts";
+import { CheckIcon, CopyIcon } from "../icons.tsx";
 
 const stateLabel: Record<Machine["state"], string> = {
   available: "Not connected",
@@ -56,20 +58,50 @@ export function MachineSwitcher({
   );
 }
 
-/** Text with each `command` shown as code the user can select and copy. */
+/** A command the user copies with a click. */
+function CopyCode({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const onCopy = () => {
+    copy(code);
+    setCopied(true);
+  };
+  // Inline code rather than a button, so a long command wraps with the sentence.
+  return (
+    <code
+      role="button"
+      tabIndex={0}
+      title="Copy"
+      onClick={onCopy}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onCopy();
+      }}
+      className="everyport:cursor-pointer everyport:rounded everyport:bg-accent everyport:px-1 everyport:font-mono everyport:text-11 everyport:text-fg everyport:[box-decoration-break:clone] everyport:hover:bg-accent/70"
+    >
+      {code}
+      <span className="everyport:ml-1 everyport:inline-flex everyport:items-center everyport:gap-0.5 everyport:align-middle everyport:font-sans everyport:text-fg3">
+        {copied ? (
+          <>
+            <CheckIcon /> Copied
+          </>
+        ) : (
+          <CopyIcon />
+        )}
+      </span>
+    </code>
+  );
+}
+
+/** Text with each `command` as code the user copies with a click. */
 function WithCode({ text }: { text: string }) {
   return (
-    <>
-      {text.split("`").map((part, i) =>
-        i % 2 ? (
-          <code key={i} className="everyport:select-text everyport:rounded everyport:bg-accent everyport:px-1 everyport:font-mono everyport:text-11 everyport:text-fg">
-            {part}
-          </code>
-        ) : (
-          <Fragment key={i}>{part}</Fragment>
-        ),
-      )}
-    </>
+    <>{text.split("`").map((part, i) => (i % 2 ? <CopyCode key={i} code={part} /> : <Fragment key={i}>{part}</Fragment>))}</>
   );
 }
 
@@ -127,7 +159,7 @@ export function MachineStatus({ machine, client }: { machine: Machine; client: E
             ? (machine.error ?? `Can't connect to ${machine.label}`)
             : `Connecting to ${machine.label}…`;
   const button =
-    (machine.state === "available" || machine.state === "error") && client.connectMachine
+    (machine.state === "available" || (machine.state === "error" && machine.id !== LOCAL_MACHINE)) && client.connectMachine
       ? { label: machine.state === "error" ? "Check again" : "Connect", onClick: run(client.connectMachine.bind(client)) }
       : machine.state === "install" && client.installEveryport
         ? { label: "Install Everyport", onClick: run(client.installEveryport.bind(client)) }

@@ -70,7 +70,7 @@ export const scenarios: Record<string, () => Machine[]> = {
         {
           label: "Nothing listens on port 1",
           ok: false,
-          fix: "SSH is off on studio-mac. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch). On Windows, in PowerShell as administrator, run `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic`.",
+          fix: "SSH is off on studio-mac. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (sshd on Fedora and Arch). On Windows, in PowerShell as administrator, run `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic`.",
           detail: "Connection refused (os error 61)",
         },
       ],
@@ -87,7 +87,7 @@ export const scenarios: Record<string, () => Machine[]> = {
         {
           label: "Your key isn't accepted",
           ok: false,
-          fix: "build-box didn't accept your key. Run `ssh-copy-id -p 39022 127.0.0.1` to add it. For Windows, add your public key to `C:\\Users\\<you>\\.ssh\\authorized_keys`, or `C:\\ProgramData\\ssh\\administrators_authorized_keys` if you're an administrator there.",
+          fix: "build-box didn't accept your key. Run `ssh-copy-id -p 39022 127.0.0.1` to add it. If your key has a passphrase, run `ssh-add` first. For Windows, add your public key to `C:\\Users\\<you>\\.ssh\\authorized_keys`, or `C:\\ProgramData\\ssh\\administrators_authorized_keys` if you're an administrator there.",
           detail: "`exit` failed: parsas@127.0.0.1: Permission denied (publickey).",
         },
       ],

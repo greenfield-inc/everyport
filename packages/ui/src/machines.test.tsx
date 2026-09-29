@@ -102,11 +102,44 @@ describe("another machine", () => {
     expect(client.connectMachine).toHaveBeenCalledWith("mini");
   });
 
+  it("copies a command in the fix with a click", () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const { host } = render({
+      id: "box",
+      label: "box",
+      host: null,
+      state: "error",
+      check: [{ label: "Nothing listens on port 22", ok: false, fix: "SSH is off on box. On box, run `sudo systemctl enable --now ssh`." }],
+      snapshot: null,
+    });
+    const code = [...host.querySelectorAll('[role="button"]')].find((b) => b.textContent?.startsWith("sudo systemctl")) as HTMLElement;
+    act(() => code.click());
+    expect(writeText).toHaveBeenCalledWith("sudo systemctl enable --now ssh");
+    expect(code.textContent).toBe("sudo systemctl enable --now ssh Copied");
+  });
+
   it("tries a failed machine again when its chip is picked", () => {
     const { client, host } = render({ id: "mini", label: "mini", host: null, state: "error", error: "timed out", snapshot: null });
     const chip = [...host.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent === "mini") as HTMLElement;
     act(() => chip.click());
     expect(client.connectMachine).toHaveBeenCalledWith("mini");
+  });
+
+  it("offers no Check again for this computer, which reconnects on its own", () => {
+    const client = {
+      machines: (): Machine[] => [{ id: "local", label: "This Mac", host: null, state: "error", error: "everyport-sidecar exited", snapshot: null }],
+      subscribe: () => () => {},
+      call: vi.fn(async () => {}),
+      openUrl: vi.fn(async () => {}),
+      connectMachine: vi.fn(async () => {}),
+    } satisfies EveryportClient;
+    const host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<Popover client={client} />));
+    expect(host.textContent).toContain("everyport-sidecar exited");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent === "Check again")).toBe(false);
   });
 
   it("offers nothing to click while installing", () => {

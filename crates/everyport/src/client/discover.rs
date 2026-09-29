@@ -14,87 +14,156 @@ use std::time::Duration;
 pub enum Source {
     SshConfig,
     Pane,
-    /// An online Tailscale peer, and the OS Tailscale reports for it.
-    Tailscale(Os),
+    Tailscale,
     Wsl,
-}
-
-impl Source {
-    /// Where the machine came from, such as `Tailscale (Windows)`.
-    pub fn label(self) -> String {
-        match self {
-            Self::SshConfig => "SSH config".into(),
-            Self::Pane => "Pane".into(),
-            Self::Tailscale(os) => format!(
-                "Tailscale ({})",
-                match os {
-                    Os::Macos => "macOS",
-                    Os::Linux => "Linux",
-                    Os::Windows => "Windows",
-                }
-            ),
-            Self::Wsl => "WSL".into(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Found {
     pub machine: Machine,
     pub source: Source,
+    /// Whether Pane lists it, and its OS when Tailscale reports one, from
+    /// every source that found the same host.
+    pub hint: Hint,
+    /// Lowercase names of the host it reaches: the ssh destination, its
+    /// `HostName`, and Tailscale's names and IPs.
+    names: Vec<String>,
 }
 
-/// Everything found on this machine, in source order.
+impl Found {
+    pub fn new(machine: Machine, source: Source) -> Self {
+        Self {
+            names: names_of(&machine.via),
+            hint: Hint {
+                os: None,
+                pane: source == Source::Pane,
+            },
+            machine,
+            source,
+        }
+    }
+
+    /// Where it came from, such as `Tailscale (Windows)`.
+    pub fn label(&self) -> String {
+        let os = match self.hint.os {
+            Some(Os::Macos) => "macOS",
+            Some(Os::Linux) => "Linux",
+            Some(Os::Windows) => "Windows",
+            None => "",
+        };
+        match self.source {
+            Source::SshConfig => "SSH config".into(),
+            Source::Pane => "Pane".into(),
+            Source::Tailscale => format!("Tailscale ({os})"),
+            Source::Wsl => "WSL".into(),
+        }
+    }
+
+    fn same_host(&self, names: &[String]) -> bool {
+        self.names.iter().any(|name| names.contains(name))
+    }
+}
+
+/// Lowercase names of the host behind `via`: the ssh destination without
+/// its user, or the URL's host.
+fn names_of(via: &Via) -> Vec<String> {
+    let host = match via {
+        Via::Command { command } if command.first().is_some_and(|c| c == "ssh") => command
+            .last()
+            .map(|dest| dest.rsplit('@').next().unwrap_or(dest)),
+        Via::Url { url, .. } => Some(url_host(url)),
+        Via::Command { .. } => None,
+    };
+    host.filter(|h| !h.is_empty())
+        .map(|h| vec![h.to_ascii_lowercase()])
+        .unwrap_or_default()
+}
+
+/// Everything found on this machine, in source order. Sources that find the
+/// same host become one entry, the first, which keeps what the others knew.
 pub async fn all() -> Vec<Found> {
     let home = dirs::home_dir().unwrap_or_default();
     let pane_dir = std::env::var_os("PANE_DIR").map_or_else(|| home.join(".pane"), PathBuf::from);
-    let found = |source| move |machine| Found { machine, source };
-    let mut all: Vec<Found> = ssh_config(&home.join(".ssh").join("config"))
-        .into_iter()
-        .map(found(Source::SshConfig))
-        .chain(pane(&pane_dir).into_iter().map(found(Source::Pane)))
-        .collect();
-    let peers = match tailscale_status().await {
-        Some(status) => tailscale(&status, &all),
-        None => Vec::new(),
-    };
-    all.extend(peers);
-    all.extend(
+    let mut found = ssh_config(&home.join(".ssh").join("config"));
+    found.extend(
+        pane(&pane_dir)
+            .into_iter()
+            .map(|m| Found::new(m, Source::Pane)),
+    );
+    if let Some(status) = tailscale_status().await {
+        found.extend(tailscale(&status));
+    }
+    found.extend(
         crate::client::wsl::distros()
             .await
             .into_iter()
-            .map(|distro| Machine {
-                name: distro.clone(),
-                via: Via::Command {
-                    command: crate::client::wsl::prefix(&distro),
-                },
-            })
-            .map(found(Source::Wsl)),
+            .map(|distro| {
+                let machine = Machine {
+                    name: distro.clone(),
+                    via: Via::Command {
+                        command: crate::client::wsl::prefix(&distro),
+                    },
+                };
+                Found::new(machine, Source::Wsl)
+            }),
     );
-    all
+    merge(found)
 }
 
-/// What discovery knows about the machine reached through `via`: whether
-/// Pane lists it, and the OS Tailscale reports.
-pub fn hint(found: &[Found], via: &Via) -> Hint {
-    let same = || found.iter().filter(|f| f.machine.via == *via);
-    Hint {
-        os: same().find_map(|f| match f.source {
-            Source::Tailscale(os) => Some(os),
-            _ => None,
-        }),
-        pane: same().any(|f| f.source == Source::Pane),
+/// Folds each entry into an earlier one for the same host.
+fn merge(found: Vec<Found>) -> Vec<Found> {
+    let mut kept: Vec<Found> = Vec::new();
+    for f in found {
+        match kept.iter_mut().find(|k| k.same_host(&f.names)) {
+            Some(k) => {
+                k.hint.os = k.hint.os.or(f.hint.os);
+                k.hint.pane |= f.hint.pane;
+                k.names.extend(f.names);
+            }
+            None => kept.push(f),
+        }
     }
+    kept
+}
+
+/// The found machines that aren't saved already, by name, connection or host.
+pub fn unsaved(saved: &[Machine], found: &[Found]) -> Vec<Found> {
+    found
+        .iter()
+        .filter(|f| {
+            !saved.iter().any(|m| {
+                m.name == f.machine.name || m.via == f.machine.via || f.same_host(&names_of(&m.via))
+            })
+        })
+        .cloned()
+        .collect()
+}
+
+/// What discovery knows about the machine reached through `via`, from the
+/// found entry for the same connection or host.
+pub fn hint(found: &[Found], via: &Via) -> Hint {
+    let names = names_of(via);
+    found
+        .iter()
+        .find(|f| f.machine.via == *via || f.same_host(&names))
+        .map(|f| f.hint.clone())
+        .unwrap_or_default()
 }
 
 /// `tailscale status --json`, from the first `tailscale` CLI found.
 async fn tailscale_status() -> Option<String> {
+    const MAC_APP: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
     let clis = [
         "tailscale",
-        "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+        MAC_APP,
         r"C:\Program Files\Tailscale\tailscale.exe",
     ];
     for cli in clis {
+        // The Mac app's binary is also its GUI, so it's asked only while the
+        // app already runs.
+        if cli == MAC_APP && !mac_app_running() {
+            continue;
+        }
         let mut command = tokio::process::Command::new(cli);
         command
             .args(["status", "--json"])
@@ -114,10 +183,17 @@ async fn tailscale_status() -> Option<String> {
     None
 }
 
+fn mac_app_running() -> bool {
+    cfg!(target_os = "macos")
+        && std::process::Command::new("pgrep")
+            .args(["-xq", "Tailscale"])
+            .status()
+            .is_ok_and(|s| s.success())
+}
+
 /// Online peers in `tailscale status --json` that can run everyport, as ssh
-/// machines named by their MagicDNS name. Skips this device, and peers that
-/// `known` machines already reach by name or Tailscale IP.
-pub fn tailscale(status: &str, known: &[Found]) -> Vec<Found> {
+/// machines named by their MagicDNS name. Skips this device.
+pub fn tailscale(status: &str) -> Vec<Found> {
     #[derive(Deserialize)]
     struct Status {
         #[serde(rename = "Self")]
@@ -142,16 +218,6 @@ pub fn tailscale(status: &str, known: &[Found]) -> Vec<Found> {
         return Vec::new();
     };
     let this = status.this.map(|s| s.dns_name).unwrap_or_default();
-    let known_hosts: Vec<&str> = known
-        .iter()
-        .filter_map(|f| match &f.machine.via {
-            Via::Command { command } if command.first().is_some_and(|c| c == "ssh") => {
-                let dest = command.last()?;
-                Some(dest.rsplit('@').next().unwrap_or(dest))
-            }
-            _ => None,
-        })
-        .collect();
     let mut peers: Vec<Found> = status
         .peers
         .into_values()
@@ -164,45 +230,58 @@ pub fn tailscale(status: &str, known: &[Found]) -> Vec<Found> {
                 // Phones and TVs can't run everyport.
                 _ => return None,
             };
-            let name = peer.dns_name.trim_end_matches('.').to_string();
-            let short = name.split('.').next().unwrap_or(&name);
-            let known = known_hosts.iter().any(|host| {
-                host.eq_ignore_ascii_case(&name)
-                    || host.eq_ignore_ascii_case(short)
-                    || peer.tailscale_ips.iter().any(|ip| ip == host)
-            });
-            (!known).then(|| Found {
-                machine: Machine {
+            let name = peer.dns_name.trim_end_matches('.').to_ascii_lowercase();
+            let short = name.split('.').next().unwrap_or(&name).to_string();
+            let mut found = Found::new(
+                Machine {
                     name: name.clone(),
                     via: Via::Command {
                         command: vec!["ssh".into(), name],
                     },
                 },
-                source: Source::Tailscale(os),
-            })
+                Source::Tailscale,
+            );
+            found.hint.os = Some(os);
+            found.names.push(short);
+            found.names.extend(peer.tailscale_ips);
+            Some(found)
         })
         .collect();
     peers.sort_by(|a, b| a.machine.name.cmp(&b.machine.name));
     peers
 }
 
-/// Named `Host` entries in an ssh config file and the files it `Include`s.
-/// Patterns with wildcards or negation aren't machines, so they're skipped.
-pub fn ssh_config(path: &Path) -> Vec<Machine> {
+/// Named `Host` entries in an ssh config file and the files it `Include`s,
+/// with the `HostName` each one connects to. Patterns with wildcards or
+/// negation aren't machines, so they're skipped.
+pub fn ssh_config(path: &Path) -> Vec<Found> {
     let mut hosts = Vec::new();
     read_ssh_config(path, path.parent().unwrap_or(Path::new(".")), 0, &mut hosts);
     hosts
         .into_iter()
-        .map(|host| Machine {
-            name: host.clone(),
-            via: Via::Command {
-                command: vec!["ssh".into(), host],
-            },
+        .map(|(host, hostname)| {
+            let mut found = Found::new(
+                Machine {
+                    name: host.clone(),
+                    via: Via::Command {
+                        command: vec!["ssh".into(), host],
+                    },
+                },
+                Source::SshConfig,
+            );
+            found.names.extend(hostname.map(|h| h.to_ascii_lowercase()));
+            found
         })
         .collect()
 }
 
-fn read_ssh_config(path: &Path, ssh_dir: &Path, depth: u32, hosts: &mut Vec<String>) {
+/// Appends each named host and, like ssh, the first `HostName` given for it.
+fn read_ssh_config(
+    path: &Path,
+    ssh_dir: &Path,
+    depth: u32,
+    hosts: &mut Vec<(String, Option<String>)>,
+) {
     // ssh itself stops at 16 levels of Include.
     let Ok(text) = std::fs::read_to_string(path) else {
         return;
@@ -210,6 +289,8 @@ fn read_ssh_config(path: &Path, ssh_dir: &Path, depth: u32, hosts: &mut Vec<Stri
     if depth > 16 {
         return;
     }
+    // The named hosts of the current `Host` block.
+    let mut block: Vec<String> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
         if line.starts_with('#') {
@@ -221,10 +302,23 @@ fn read_ssh_config(path: &Path, ssh_dir: &Path, depth: u32, hosts: &mut Vec<Stri
         let values = words(rest.trim_start_matches(|c: char| c.is_whitespace() || c == '='));
         match keyword.to_ascii_lowercase().as_str() {
             "host" => {
+                block.clear();
                 for host in values {
                     let pattern = host.contains(['*', '?']) || host.starts_with('!');
-                    if !pattern && !hosts.contains(&host) {
-                        hosts.push(host);
+                    if pattern {
+                        continue;
+                    }
+                    if !hosts.iter().any(|(h, _)| *h == host) {
+                        hosts.push((host.clone(), None));
+                    }
+                    block.push(host);
+                }
+            }
+            "match" => block.clear(),
+            "hostname" => {
+                for (host, hostname) in hosts.iter_mut() {
+                    if hostname.is_none() && block.contains(host) {
+                        *hostname = values.first().cloned();
                     }
                 }
             }
@@ -428,7 +522,8 @@ mod tests {
         std::fs::write(dir.join("config.d").join("nested"), "Include extra\n").unwrap();
         std::fs::write(dir.join("extra"), "Host extra-box\n").unwrap();
 
-        let machines = ssh_config(&dir.join("config"));
+        let found = ssh_config(&dir.join("config"));
+        let machines: Vec<Machine> = found.iter().map(|f| f.machine.clone()).collect();
         assert_eq!(
             names(&machines),
             ["extra-box", "work-vm", "devbox", "build-vm", "lab box"]
@@ -439,6 +534,18 @@ mod tests {
                 command: vec!["ssh".into(), "devbox".into()]
             }
         );
+        // A machine saved by its address is the same host as the aliases for it.
+        let saved = Machine {
+            name: "server".into(),
+            via: Via::Command {
+                command: vec!["ssh".into(), "me@10.0.0.5".into()],
+            },
+        };
+        let left: Vec<String> = unsaved(&[saved], &found)
+            .into_iter()
+            .map(|f| f.machine.name)
+            .collect();
+        assert_eq!(left, ["extra-box", "work-vm", "lab box"]);
         assert!(ssh_config(&dir.join("missing")).is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -474,59 +581,50 @@ mod tests {
     }
 
     #[test]
-    fn lists_online_tailscale_peers_not_found_another_way() {
-        let status = include_str!("fixtures/tailscale-status.json");
-        let ssh = |name: &str, dest: &str, source| Found {
-            machine: Machine {
-                name: name.into(),
-                via: Via::Command {
-                    command: vec!["ssh".into(), dest.into()],
-                },
+    fn merges_tailscale_peers_into_other_sources_for_the_same_host() {
+        let ssh = |name: &str, dest: &str| Machine {
+            name: name.into(),
+            via: Via::Command {
+                command: vec!["ssh".into(), dest.into()],
             },
-            source,
         };
         // An ssh config alias by the short name, and Pane by Tailscale IP.
-        let known = [
-            ssh("nas", "nas", Source::SshConfig),
-            ssh("Studio", "me@100.101.6.6", Source::Pane),
+        let mut found = vec![
+            Found::new(ssh("nas", "nas"), Source::SshConfig),
+            Found::new(ssh("Studio", "me@100.101.6.6"), Source::Pane),
         ];
-        let peers = tailscale(status, &known);
-        let summary: Vec<(&str, &Via, String)> = peers
+        found.extend(tailscale(include_str!("fixtures/tailscale-status.json")));
+        let found = merge(found);
+        let summary: Vec<(&str, String, Hint)> = found
             .iter()
-            .map(|f| (f.machine.name.as_str(), &f.machine.via, f.source.label()))
+            .map(|f| (f.machine.name.as_str(), f.label(), f.hint.clone()))
             .collect();
-        let via = |dest: &str| Via::Command {
-            command: vec!["ssh".into(), dest.into()],
-        };
+        let known = |os, pane| Hint { os: Some(os), pane };
         assert_eq!(
             summary,
             [
+                ("nas", "SSH config".into(), known(Os::Linux, false)),
+                ("Studio", "Pane".into(), known(Os::Macos, true)),
                 (
                     "build-server.tail0000.ts.net",
-                    &via("build-server.tail0000.ts.net"),
-                    "Tailscale (Linux)".to_string()
+                    "Tailscale (Linux)".into(),
+                    known(Os::Linux, false)
                 ),
                 (
                     "desktop-gaming.tail0000.ts.net",
-                    &via("desktop-gaming.tail0000.ts.net"),
-                    "Tailscale (Windows)".to_string()
+                    "Tailscale (Windows)".into(),
+                    known(Os::Windows, false)
                 ),
             ]
         );
-        assert_eq!(
-            hint(&peers, &via("desktop-gaming.tail0000.ts.net")),
-            Hint {
-                os: Some(Os::Windows),
-                pane: false
-            }
-        );
-        assert_eq!(
-            hint(&known, &via("me@100.101.6.6")),
-            Hint {
-                os: None,
-                pane: true
-            }
-        );
-        assert!(tailscale("not json", &[]).is_empty());
+        // Saved by its short name, the Windows PC isn't offered again, and keeps its OS.
+        let saved = ssh("gaming pc", "desktop-gaming");
+        let offered: Vec<String> = unsaved(std::slice::from_ref(&saved), &found)
+            .into_iter()
+            .map(|f| f.machine.name)
+            .collect();
+        assert_eq!(offered, ["nas", "Studio", "build-server.tail0000.ts.net"]);
+        assert_eq!(hint(&found, &saved.via), known(Os::Windows, false));
+        assert!(tailscale("not json").is_empty());
     }
 }

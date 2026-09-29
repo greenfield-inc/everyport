@@ -2,7 +2,7 @@
 
 Everyport reaches an SSH machine in three steps. WSL distros, Docker containers and `everyport serve` machines skip the first two.
 
-1. **Turn on SSH on the machine.** On a Mac: System Settings > General > Sharing > Remote Login. On Linux: `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch). On Windows, in PowerShell as administrator:
+1. **Turn on SSH on the machine.** On a Mac: System Settings > General > Sharing > Remote Login. On Linux: `sudo systemctl enable --now ssh` (sshd on Fedora and Arch). On Windows, in PowerShell as administrator:
    ```powershell
    Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic
    ```
@@ -13,7 +13,7 @@ Everyport lists machines it finds under **Found on this computer**: hosts in `~/
 
 ## When a machine can't connect
 
-The popover shows each step and the fix under the one that failed. After fixing it, click **Check again**. **Check** beside a machine in **Settings → Machines** shows the same steps. In the terminal:
+The popover shows each step and the fix under the one that failed. Click a command to copy it. After fixing it, click **Check again**. **Check** beside a machine in **Settings → Machines** shows the same steps. In the terminal:
 
 ```text
 $ everyport doctor --on studio-mac
