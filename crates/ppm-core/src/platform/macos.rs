@@ -8,10 +8,10 @@
 
 use super::{
     inbound_connections, unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails,
-    ProcInfo, ProcUsage,
+    ProcInfo, ProcUsage, Socket,
 };
 use crate::protocol::ProcRef;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::ffi::{c_char, c_void, CStr};
 use std::io;
 use std::io::Read;
@@ -213,25 +213,32 @@ impl Sockets {
     fn walk() -> io::Result<Self> {
         let mut listeners = Vec::new();
         let mut listening = Vec::new();
-        let mut established = Vec::new();
-        let mut counted = HashSet::new();
+        // A socket shared by forked processes is counted once.
+        let mut established: HashMap<u64, Socket> = HashMap::new();
         for pid in all_pids()? {
             for fd in socket_fds(pid) {
                 let Some(tcp) = TcpSocket::read(pid, fd) else {
                     continue;
                 };
+                let socket = || Socket {
+                    address: tcp.address,
+                    port: tcp.port,
+                    holders: vec![pid],
+                };
                 match tcp.state {
                     TSI_S_LISTEN => {
-                        listening.push((tcp.address, tcp.port));
+                        listening.push(socket());
                         listeners.push(Listener {
                             port: tcp.port,
                             pid,
                             address: tcp.address.to_string(),
                         });
                     }
-                    // A socket shared by forked processes is counted once.
-                    TSI_S_ESTABLISHED if counted.insert(tcp.id) => {
-                        established.push((tcp.address, tcp.port));
+                    TSI_S_ESTABLISHED => {
+                        established
+                            .entry(tcp.id)
+                            .and_modify(|s| s.holders.push(pid))
+                            .or_insert_with(socket);
                     }
                     _ => {}
                 }
@@ -239,9 +246,10 @@ impl Sockets {
         }
         listeners.sort_by_key(|l| (l.port, l.pid));
         listeners.dedup();
+        let parent = |pid| proc_info(pid)?.parent;
         Ok(Self {
             listeners,
-            connections: inbound_connections(&listening, established),
+            connections: inbound_connections(&listening, established.into_values(), parent),
         })
     }
 }

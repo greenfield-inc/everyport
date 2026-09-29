@@ -118,22 +118,49 @@ pub fn is_wsl_owner(process_name: &str) -> bool {
     )
 }
 
+/// A TCP socket's local address and the processes holding it.
+struct Socket {
+    address: IpAddr,
+    port: u16,
+    holders: Vec<u32>,
+}
+
 /// Counts established TCP sockets by local port, keeping the ones a listener
-/// accepted: on its port, at its address or under an unspecified one. An
-/// outgoing connection on another address can use the same port number.
+/// accepted: on its port, at its address or under an unspecified one, and
+/// held by a process holding the listener or started under one. An outgoing
+/// connection can use the same port number, on another address or, under a
+/// wildcard listener, from another process. `parent` gives a process's parent.
 fn inbound_connections(
-    listening: &[(IpAddr, u16)],
-    established: impl IntoIterator<Item = (IpAddr, u16)>,
+    listening: &[Socket],
+    established: impl IntoIterator<Item = Socket>,
+    mut parent: impl FnMut(u32) -> Option<u32>,
 ) -> HashMap<u16, u32> {
     let mut counts = HashMap::new();
-    for (address, port) in established {
-        let address = address.to_canonical();
-        let accepted = listening.iter().any(|&(listener, listening_port)| {
-            listening_port == port
-                && (listener.is_unspecified() || listener.to_canonical() == address)
-        });
+    for socket in established {
+        let address = socket.address.to_canonical();
+        let listeners: Vec<u32> = listening
+            .iter()
+            .filter(|l| {
+                l.port == socket.port
+                    && (l.address.is_unspecified() || l.address.to_canonical() == address)
+            })
+            .flat_map(|l| l.holders.iter().copied())
+            .collect();
+        let accepted = !listeners.is_empty()
+            && socket.holders.iter().any(|&holder| {
+                let mut seen = Vec::new();
+                let mut current = Some(holder);
+                while let Some(pid) = current.filter(|pid| !seen.contains(pid)) {
+                    if listeners.contains(&pid) {
+                        return true;
+                    }
+                    seen.push(pid);
+                    current = parent(pid);
+                }
+                false
+            });
         if accepted {
-            *counts.entry(port).or_default() += 1;
+            *counts.entry(socket.port).or_default() += 1;
         }
     }
     counts

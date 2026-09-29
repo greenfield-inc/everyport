@@ -4,10 +4,10 @@
 
 use super::{
     inbound_connections, unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails,
-    ProcInfo, ProcUsage,
+    ProcInfo, ProcUsage, Socket,
 };
 use crate::protocol::ProcRef;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
@@ -25,6 +25,8 @@ pub struct Linux {
     /// Processes that held listening sockets at the previous scan. They are
     /// searched first, so a steady scan reads only their descriptors.
     socket_owners: Mutex<Vec<u32>>,
+    /// The same for the sockets `connections` looks up.
+    connection_owners: Mutex<Vec<u32>>,
     /// User names by uid, from `/etc/passwd`.
     users: Mutex<HashMap<u32, String>>,
     cpu: unix::CpuSampler,
@@ -43,6 +45,7 @@ impl Linux {
             boot_ms: btime.unwrap_or(0) * 1000,
             uid: unsafe { libc::geteuid() },
             socket_owners: Mutex::new(Vec::new()),
+            connection_owners: Mutex::new(Vec::new()),
             users: Mutex::new(HashMap::new()),
             cpu: unix::CpuSampler::default(),
         }
@@ -84,41 +87,24 @@ impl Linux {
 }
 
 impl Platform for Linux {
-    /// LISTEN rows of `/proc/net/tcp{,6}`, mapped to a process by finding the
-    /// socket's inode among the links in `/proc/<pid>/fd`. The search stops
-    /// once every socket has an owner.
+    /// LISTEN rows of `/proc/net/tcp{,6}`, each mapped to the first process
+    /// found holding it.
     fn listeners(&self) -> io::Result<Vec<Listener>> {
-        let mut unowned: HashMap<u64, (u16, IpAddr)> = tcp_rows()
+        let rows: Vec<TcpRow> = tcp_rows()
             .into_iter()
             .filter(|row| row.state == TCP_LISTEN && self.can_inspect(row))
-            .map(|row| (row.inode, (row.port, row.address)))
             .collect();
-        let mut owners = self.socket_owners.lock().unwrap();
-        let mut found = Vec::new();
-        for pid in owners.iter().copied().chain(pids()?) {
-            if unowned.is_empty() {
-                break;
-            }
-            let Ok(fds) = fs::read_dir(format!("/proc/{pid}/fd")) else {
-                continue;
-            };
-            for fd in fds.flatten() {
-                let Some(inode) = fs::read_link(fd.path()).ok().and_then(|l| socket_inode(&l))
-                else {
-                    continue;
-                };
-                if let Some((port, address)) = unowned.remove(&inode) {
-                    found.push(Listener {
-                        port,
-                        pid,
-                        address: address.to_string(),
-                    });
-                }
-            }
-        }
-        *owners = found.iter().map(|l| l.pid).collect();
-        owners.dedup();
-        Ok(found)
+        let holders = holders(&self.socket_owners, rows.iter().map(|row| row.inode))?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|row| {
+                Some(Listener {
+                    port: row.port,
+                    pid: *holders.get(&row.inode)?.first()?,
+                    address: row.address.to_string(),
+                })
+            })
+            .collect())
     }
 
     /// Another user's descriptors can't be read, so the owner is the socket's
@@ -137,19 +123,29 @@ impl Platform for Linux {
             .collect())
     }
 
-    /// Every user's connections are counted: the table needs no pid.
+    /// Only processes we may inspect have known holders, so only their
+    /// connections are counted, as with their listeners.
     fn connections(&self) -> Option<HashMap<u16, u32>> {
-        let rows = tcp_rows();
-        let listening: Vec<(IpAddr, u16)> = rows
-            .iter()
-            .filter(|row| row.state == TCP_LISTEN)
-            .map(|row| (row.address, row.port))
+        let rows: Vec<TcpRow> = tcp_rows()
+            .into_iter()
+            .filter(|row| self.can_inspect(row))
             .collect();
-        let established = rows
+        let listening: Vec<&TcpRow> = rows.iter().filter(|r| r.state == TCP_LISTEN).collect();
+        let established: Vec<&TcpRow> = rows
             .iter()
-            .filter(|row| row.state == TCP_ESTABLISHED)
-            .map(|row| (row.address, row.port));
-        Some(inbound_connections(&listening, established))
+            .filter(|r| r.state == TCP_ESTABLISHED && listening.iter().any(|l| l.port == r.port))
+            .collect();
+        let inodes = listening.iter().chain(&established).map(|row| row.inode);
+        let mut holders = holders(&self.connection_owners, inodes).ok()?;
+        let mut socket = |row: &TcpRow| Socket {
+            address: row.address,
+            port: row.port,
+            holders: holders.remove(&row.inode).unwrap_or_default(),
+        };
+        let listening: Vec<Socket> = listening.into_iter().map(&mut socket).collect();
+        let established: Vec<Socket> = established.into_iter().map(&mut socket).collect();
+        let parent = |pid| self.proc_info(pid)?.parent;
+        Some(inbound_connections(&listening, established, parent))
     }
 
     fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
@@ -246,6 +242,39 @@ fn socket_inode(link: &std::path::Path) -> Option<u64> {
         .strip_suffix(']')?
         .parse()
         .ok()
+}
+
+/// The processes holding each socket in `inodes`, by the `socket:[inode]`
+/// links in `/proc/<pid>/fd`. The processes in `recent` are searched in full
+/// first, the rest only until every socket has a holder. `recent` becomes
+/// the processes that held any, so a steady scan reads only theirs.
+fn holders(
+    recent: &Mutex<Vec<u32>>,
+    inodes: impl IntoIterator<Item = u64>,
+) -> io::Result<HashMap<u64, Vec<u32>>> {
+    let inodes: HashSet<u64> = inodes.into_iter().filter(|&inode| inode != 0).collect();
+    let mut recent = recent.lock().unwrap();
+    let searched_first = recent.clone();
+    let rest = pids()?.filter(|pid| !searched_first.contains(pid));
+    let mut found: HashMap<u64, Vec<u32>> = HashMap::new();
+    for (i, pid) in searched_first.iter().copied().chain(rest).enumerate() {
+        if i >= searched_first.len() && found.len() == inodes.len() {
+            break;
+        }
+        let Ok(fds) = fs::read_dir(format!("/proc/{pid}/fd")) else {
+            continue;
+        };
+        for fd in fds.flatten() {
+            let inode = fs::read_link(fd.path()).ok().and_then(|l| socket_inode(&l));
+            if let Some(inode) = inode.filter(|inode| inodes.contains(inode)) {
+                found.entry(inode).or_default().push(pid);
+            }
+        }
+    }
+    *recent = found.values().flatten().copied().collect();
+    recent.sort_unstable();
+    recent.dedup();
+    Ok(found)
 }
 
 /// `st` values in `/proc/net/tcp`, from the kernel's TCP state enum.
