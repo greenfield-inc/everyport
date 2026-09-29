@@ -95,6 +95,19 @@ These are what separate "a web page in a window" from an app that belongs in the
 32. **No blur.** Use a solid `--popover` background. Avoid `backdrop-filter`, which is slow in WebKitGTK.
 33. **WebKitGTK quirks:** if the window renders blank on NVIDIA, relaunch with `WEBKIT_DISABLE_DMABUF_RENDERER=1`, and document the fallback in `ppm doctor`.
 
+## Disk work
+
+Steady-state scans read no files. Process facts come from the kernel (libproc, `/proc`, Win32), which is not disk I/O. Everything read from disk is cached and invalidated by file events, following Pane's watcher (`main/src/services/gitFileWatcher.ts` in [greenfield-inc/Pane](https://github.com/greenfield-inc/Pane)):
+
+- Watch only the files a result came from, not project trees: `.git/HEAD` (and a worktree's `gitdir` target) for the branch, the manifest (`package.json`, `Cargo.toml`, `pyproject.toml`) and framework config for name and framework, `.vercel/project.json`, and the one transcript file for an agent title. Use the `notify` crate (FSEvents, inotify, ReadDirectoryChangesW), non-recursive, on the containing folder.
+- Batch events for about 1.5 s before re-reading.
+- Run a 60 s self-heal tick that only calls `stat` (mtime and size), for events the OS coalesced or dropped.
+- If watching fails (handle limits, WSL `/mnt` paths), fall back to that stat tick, never to re-reading files.
+- Drop a watch and its cache entry when no server uses that path anymore.
+- Discovery work (finding a transcript, listing session folders) runs once per new server, off the scan thread, never on a timer.
+
+Budget: after startup, a scan with no file changes does zero file reads. Measure it with `fs_usage -f filesys` on macOS or `strace -e trace=file` on Linux, and paste the result in the PR.
+
 ## Engineering rules
 
 - DRY and YAGNI. One code path for local and remote. No abstraction without two real users.
