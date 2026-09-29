@@ -136,14 +136,15 @@ impl Engine {
         Ok(Table::new(processes))
     }
 
-    /// Signals each target, unless the platform interrupted them all at once.
-    /// One that exited or was replaced meanwhile is skipped; a refusal
-    /// (another user's process) is an error.
+    /// Signals each target the platform didn't interrupt. One that exited or
+    /// was replaced meanwhile is skipped; a refusal (another user's process)
+    /// is an error.
     fn signal(&self, targets: &[ProcRef], force: bool) -> Result<(), String> {
-        if !force && self.platform.interrupt(targets) {
-            return Ok(());
-        }
-        for target in targets {
+        let interrupted = match force {
+            true => Vec::new(),
+            false => self.platform.interrupt(targets),
+        };
+        for target in targets.iter().filter(|t| !interrupted.contains(t)) {
             match self.platform.signal(*target, force) {
                 Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
                     return Err(format!("not allowed to stop pid {}: {e}", target.pid));

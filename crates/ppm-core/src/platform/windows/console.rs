@@ -29,30 +29,33 @@ use windows::Win32::System::Console::{
 
 /// The first argument of a helper process.
 const HELPER_ARG: &str = "--ppm-console-ctrl-c";
-/// The helper's first line of output when it sent Ctrl+C.
+/// The first word of the helper's reply when it sent Ctrl+C. The processes
+/// from the tree that got it follow.
 const SENT: &str = "sent";
-/// How long the helper stays to answer "Terminate batch job (Y/N)?". It
-/// matches the engine's grace period before it kills what is left.
-const ANSWER_FOR: Duration = Duration::from_secs(3);
+/// How long the helper stays to answer "Terminate batch job (Y/N)?": the
+/// engine's 3 s grace period, and time for a launching shell to ask after
+/// the engine kills the rest.
+const ANSWER_FOR: Duration = Duration::from_secs(5);
 /// Shells that ignore Ctrl+C while they wait on a command.
 const SHELLS: &[&str] = &["cmd", "powershell", "pwsh", "bash", "sh"];
 
-/// Sends Ctrl+C to the console of `tree` through a helper. True when sent.
-pub fn interrupt(tree: &[ProcRef]) -> bool {
+/// Sends Ctrl+C to the console of `tree` through a helper. Returns the
+/// processes from `tree` that got it.
+pub fn interrupt(tree: &[ProcRef]) -> Vec<ProcRef> {
     const DETACHED_PROCESS: u32 = 0x0000_0008;
     let Ok(exe) = std::env::current_exe() else {
-        return false;
+        return Vec::new();
     };
     let helper = Command::new(exe)
         .arg(HELPER_ARG)
-        .args(tree.iter().map(|t| format!("{}:{}", t.pid, t.started_at)))
+        .args(tree.iter().map(proc_arg))
         .creation_flags(DETACHED_PROCESS)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .spawn();
     let Ok(mut helper) = helper else {
-        return false;
+        return Vec::new();
     };
     let mut line = String::new();
     if let Some(stdout) = helper.stdout.take() {
@@ -60,7 +63,11 @@ pub fn interrupt(tree: &[ProcRef]) -> bool {
     }
     // After sending, it keeps answering batch prompts, so reap it later.
     std::thread::spawn(move || helper.wait());
-    line.trim_end() == SENT
+    let mut reply = line.split_whitespace();
+    if reply.next() != Some(SENT) {
+        return Vec::new();
+    }
+    reply.filter_map(parse_proc).collect()
 }
 
 /// Runs the helper and exits when this process was started as one.
@@ -69,25 +76,16 @@ pub fn run_helper() {
     if args.next().as_deref() != Some(HELPER_ARG) {
         return;
     }
-    let tree: Vec<ProcRef> = args
-        .filter_map(|arg| {
-            let (pid, started_at) = arg.split_once(':')?;
-            Some(ProcRef {
-                pid: pid.parse().ok()?,
-                started_at: started_at.parse().ok()?,
-            })
-        })
-        .collect();
+    let tree: Vec<ProcRef> = args.filter_map(|arg| parse_proc(&arg)).collect();
     // AttachConsole can point the standard handles at the console, so keep
     // the pipe to ppm.
     let mut reply = unsafe { File::from_raw_handle(std::io::stdout().as_raw_handle()) };
     match send(&tree) {
-        Ok(has_cmd) => {
-            let _ = writeln!(reply, "{SENT}");
+        Ok(Sent { members, shells }) => {
+            let members: Vec<String> = members.iter().map(proc_arg).collect();
+            let _ = writeln!(reply, "{SENT} {}", members.join(" "));
             drop(reply);
-            if has_cmd {
-                answer_batch_prompts(&tree);
-            }
+            answer_batch_prompts(&shells);
             std::process::exit(0)
         }
         Err(reason) => {
@@ -97,9 +95,28 @@ pub fn run_helper() {
     }
 }
 
+fn proc_arg(proc: &ProcRef) -> String {
+    format!("{}:{}", proc.pid, proc.started_at)
+}
+
+fn parse_proc(arg: &str) -> Option<ProcRef> {
+    let (pid, started_at) = arg.split_once(':')?;
+    Some(ProcRef {
+        pid: pid.parse().ok()?,
+        started_at: started_at.parse().ok()?,
+    })
+}
+
+#[derive(Debug, PartialEq)]
+struct Sent {
+    /// Processes from the tree on the console.
+    members: Vec<ProcRef>,
+    /// Pids of the shells on the console, from the tree or launching it.
+    shells: Vec<(u32, String)>,
+}
+
 /// Attaches to the tree's console and sends Ctrl+C when that is safe.
-/// Returns whether a `cmd.exe` is on the console.
-fn send(tree: &[ProcRef]) -> Result<bool, String> {
+fn send(tree: &[ProcRef]) -> Result<Sent, String> {
     // Ctrl+C reaches the helper too.
     unsafe { SetConsoleCtrlHandler(None, true) }.map_err(|e| e.to_string())?;
     if !tree.iter().any(|t| unsafe { AttachConsole(t.pid) }.is_ok()) {
@@ -107,16 +124,19 @@ fn send(tree: &[ProcRef]) -> Result<bool, String> {
     }
     let procs = Windows::new().processes().map_err(|e| e.to_string())?;
     let attached = console_processes();
-    check(tree, &procs, &attached)?;
+    let sent = check(tree, &procs, &attached)?;
+    // Ctrl+C goes to whoever is on the console when it is sent. Narrow the
+    // time for a process to join after the check.
+    if console_processes() != attached {
+        return Err("the console changed".into());
+    }
     unsafe { GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) }.map_err(|e| e.to_string())?;
-    Ok(procs
-        .iter()
-        .any(|p| attached.contains(&p.proc.pid) && stem(&p.name) == "cmd"))
+    Ok(sent)
 }
 
 /// Ok when every process on the console is in `tree` or is a shell above
 /// it, and at least one is in `tree`.
-fn check(tree: &[ProcRef], procs: &[ProcInfo], attached: &[u32]) -> Result<(), String> {
+fn check(tree: &[ProcRef], procs: &[ProcInfo], attached: &[u32]) -> Result<Sent, String> {
     let by_pid: HashMap<u32, &ProcInfo> = procs.iter().map(|p| (p.proc.pid, p)).collect();
     let mut launchers = HashSet::new();
     for member in tree {
@@ -130,21 +150,29 @@ fn check(tree: &[ProcRef], procs: &[ProcInfo], attached: &[u32]) -> Result<(), S
             pid = parent;
         }
     }
-    let mut members = 0;
+    let mut sent = Sent {
+        members: Vec::new(),
+        shells: Vec::new(),
+    };
     for pid in attached {
         let Some(info) = by_pid.get(pid) else {
             return Err(format!("pid {pid} on the console has exited"));
         };
+        let name = stem(&info.name);
+        let shell = SHELLS.contains(&name.as_str());
         if tree.contains(&info.proc) {
-            members += 1;
-        } else if !(launchers.contains(pid) && SHELLS.contains(&stem(&info.name).as_str())) {
+            sent.members.push(info.proc);
+        } else if !(shell && launchers.contains(pid)) {
             return Err(format!("{} (pid {pid}) shares the console", info.name));
         }
+        if shell {
+            sent.shells.push((*pid, name));
+        }
     }
-    if members == 0 {
+    if sent.members.is_empty() {
         return Err("the server isn't on this console".into());
     }
-    Ok(())
+    Ok(sent)
 }
 
 /// Pids attached to our console, other than our own.
@@ -164,9 +192,16 @@ fn console_processes() -> Vec<u32> {
 }
 
 /// `cmd.exe` asks "Terminate batch job (Y/N)?" when a batch file such as
-/// `npm.cmd` gets Ctrl+C, and waits. Answers yes to each such prompt until
-/// the tree has left the console and no prompt is showing.
-fn answer_batch_prompts(tree: &[ProcRef]) {
+/// `npm.cmd` gets Ctrl+C, and waits. Answers yes while `cmd` is on the
+/// console, but only once the checked shells are all that is left, so the
+/// keys can reach nothing else.
+fn answer_batch_prompts(shells: &[(u32, String)]) {
+    let is_shell = |pid: &u32| shells.iter().any(|(shell, _)| shell == pid);
+    let cmds: Vec<u32> = shells
+        .iter()
+        .filter(|(_, name)| name == "cmd")
+        .map(|(pid, _)| *pid)
+        .collect();
     let open = |name| OpenOptions::new().read(true).write(true).open(name);
     let (Ok(input), Ok(output)) = (open("CONIN$"), open("CONOUT$")) else {
         return;
@@ -174,19 +209,17 @@ fn answer_batch_prompts(tree: &[ProcRef]) {
     let deadline = Instant::now() + ANSWER_FOR;
     let mut answered = false;
     while Instant::now() < deadline {
+        let attached = console_processes();
+        if !attached.iter().any(|pid| cmds.contains(pid)) {
+            return;
+        }
         match prompt_answer(&cursor_line(&output)) {
             // Answer once, then wait for the prompt to go before the next.
-            Some(yes) if !answered => {
+            Some(yes) if !answered && attached.iter().all(is_shell) => {
                 answered = type_line(&input, yes);
             }
             Some(_) => {}
-            None => {
-                answered = false;
-                let attached = console_processes();
-                if !tree.iter().any(|t| attached.contains(&t.pid)) {
-                    return;
-                }
-            }
+            None => answered = false,
         }
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -288,7 +321,14 @@ mod tests {
             proc(50, 40, "node.exe"),
         ];
         let tree = [at(50), at(40), at(30)];
-        assert_eq!(check(&tree, &procs, &[10, 20, 30, 40, 50]), Ok(()));
+        let shells = [(10, "pwsh"), (20, "cmd"), (40, "cmd")];
+        assert_eq!(
+            check(&tree, &procs, &[10, 20, 30, 40, 50]),
+            Ok(Sent {
+                members: vec![at(30), at(40), at(50)],
+                shells: shells.map(|(pid, name)| (pid, name.to_string())).to_vec(),
+            })
+        );
     }
 
     #[test]

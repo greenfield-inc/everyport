@@ -236,7 +236,7 @@ impl Platform for Windows {
         Ok(())
     }
 
-    fn interrupt(&self, tree: &[ProcRef]) -> bool {
+    fn interrupt(&self, tree: &[ProcRef]) -> Vec<ProcRef> {
         console::interrupt(tree)
     }
 }

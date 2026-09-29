@@ -58,10 +58,11 @@ pub trait Platform: Send + Sync {
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()>;
     /// Asks a whole tree to exit the way its terminal would, for a platform
     /// whose terminate isn't graceful (Ctrl+C on a Windows console). `tree`
-    /// is every process being stopped. True when sent: the engine then skips
-    /// the terminate and kills what is left after its grace period.
-    fn interrupt(&self, _tree: &[ProcRef]) -> bool {
-        false
+    /// is every process being stopped. Returns the ones it reached: the
+    /// engine terminates only the rest, and kills what is left after its
+    /// grace period.
+    fn interrupt(&self, _tree: &[ProcRef]) -> Vec<ProcRef> {
+        Vec::new()
     }
     /// Established inbound TCP connections, counted by local port, or `None`
     /// when unknown. The engine uses them to tell an idle server from one in

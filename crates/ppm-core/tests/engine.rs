@@ -25,8 +25,8 @@ struct World {
     /// Processes that ignore a terminate.
     stubborn: HashSet<u32>,
     signals: Vec<(u32, bool)>,
-    /// Whether the platform interrupts whole trees, as Windows consoles do.
-    interrupts: bool,
+    /// Processes the platform interrupts, as a Windows console does.
+    interrupts: HashSet<u32>,
     interrupted: Vec<Vec<u32>>,
 }
 
@@ -157,12 +157,17 @@ impl Platform for Fake {
         }
         Ok(())
     }
-    fn interrupt(&self, tree: &[ProcRef]) -> bool {
+    fn interrupt(&self, tree: &[ProcRef]) -> Vec<ProcRef> {
         let mut world = self.world();
-        if world.interrupts {
-            world.interrupted.push(tree.iter().map(|t| t.pid).collect());
-        }
-        world.interrupts
+        let reached: Vec<ProcRef> = tree
+            .iter()
+            .filter(|t| world.interrupts.contains(&t.pid))
+            .copied()
+            .collect();
+        world
+            .interrupted
+            .push(reached.iter().map(|t| t.pid).collect());
+        reached
     }
     fn connections(&self) -> Option<HashMap<u16, u32>> {
         self.world().connections.clone()
@@ -587,10 +592,11 @@ fn a_later_scan_kills_what_ignores_terminate_for_three_seconds() {
 }
 
 #[test]
-fn an_interrupted_tree_gets_no_terminate_and_is_killed_after_three_seconds() {
+fn interrupted_processes_get_no_terminate_and_are_killed_after_three_seconds() {
     let fake = Fake::new();
     next_dev(&fake);
-    fake.world().interrupts = true;
+    // 230 runs on another console, so the interrupt doesn't reach it.
+    fake.world().interrupts = HashSet::from([200, 210, 220]);
     let root = fake.proc_ref(200);
     let mut engine = fake.engine();
 
@@ -600,12 +606,12 @@ fn an_interrupted_tree_gets_no_terminate_and_is_killed_after_three_seconds() {
         force: false,
     };
     assert_eq!(engine.call(&stop), Ok(()));
-    assert_eq!(fake.world().interrupted, [[230, 220, 210, 200]]);
-    assert!(fake.world().signals.is_empty());
+    assert_eq!(fake.world().interrupted, [[220, 210, 200]]);
+    assert_eq!(fake.world().signals, [(230, false)]);
 
     fake.advance(3000);
     engine.scan();
-    let killed = [(230, true), (220, true), (210, true), (200, true)];
+    let killed = [(230, false), (220, true), (210, true), (200, true)];
     assert_eq!(fake.world().signals, killed);
 }
 
