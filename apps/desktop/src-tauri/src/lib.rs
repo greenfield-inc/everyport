@@ -59,6 +59,8 @@ pub fn run() {
             popover::has_vibrancy,
             machines::machines_list,
             machines::call_machine,
+            machines::connect_machine,
+            machines::install_ppm,
             launch::open_server_url,
             launch::open_external,
             launch::open_workspace,

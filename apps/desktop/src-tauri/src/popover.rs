@@ -262,6 +262,7 @@ fn show_now(app: &AppHandle, server: Option<ServerRef>) {
         position(app, &window, size.to_logical(scale));
     }
     let _ = window.emit_to(LABEL, "popover:visible", true);
+    machines::reload_if_changed(app);
     machines::publish(app);
     #[cfg(target_os = "macos")]
     {

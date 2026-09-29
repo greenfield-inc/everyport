@@ -21,10 +21,12 @@ fn reveal(app: &AppHandle, path: &str) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+/// Opens the server in the browser. Another machine's port is forwarded to
+/// this one first.
 #[tauri::command]
-pub fn open_server_url(app: AppHandle, machine_id: String, port: u16) -> Result<(), String> {
-    local_only(&machine_id)?;
-    open_url(&app, &format!("http://localhost:{port}"))
+pub async fn open_server_url(app: AppHandle, machine_id: String, port: u16) -> Result<(), String> {
+    let url = machines::url(&app, &machine_id, port).await?;
+    open_url(&app, &url)
 }
 
 /// Web links such as a Vercel preview. Only http(s), so the page can't launch
@@ -56,27 +58,29 @@ pub fn open_workspace(app: AppHandle, machine_id: String, port: u16) -> Result<(
         }
         return open_url(&app, url);
     }
-    local_only(&machine_id)?;
     let folder = [&server.project.worktree, &server.project.root, &server.cwd]
         .into_iter()
         .find_map(|path| path.as_deref())
         .ok_or("this server has no folder")?;
-    reveal(&app, folder)
+    reveal_folder(app, machine_id, folder.to_string())
 }
 
 #[tauri::command]
 pub fn reveal_folder(app: AppHandle, machine_id: String, path: String) -> Result<(), String> {
-    local_only(&machine_id)?;
+    let path = match place(&app, &machine_id)? {
+        Place::Local => path,
+        Place::Wsl(distro) => wsl_path(&distro, &path),
+    };
     reveal(&app, &path)
 }
 
 #[tauri::command]
 pub fn open_in_editor(app: AppHandle, machine_id: String, path: String) -> Result<(), String> {
-    local_only(&machine_id)?;
-    if editor(&path) {
-        Ok(())
-    } else {
-        reveal(&app, &path)
+    match place(&app, &machine_id)? {
+        Place::Local if editor(&path) => Ok(()),
+        Place::Local => reveal(&app, &path),
+        Place::Wsl(distro) if wsl_editor(&distro, &path) => Ok(()),
+        Place::Wsl(distro) => reveal(&app, &wsl_path(&distro, &path)),
     }
 }
 
@@ -89,17 +93,22 @@ pub fn resume_session(
     machine_id: String,
     session: AgentSession,
 ) -> Result<(), String> {
-    local_only(&machine_id)?;
+    let place = place(&app, &machine_id)?;
     let (session, cwd) = machines::find_session(&app, &machine_id, &session.id)
         .ok_or("that session is no longer running a server")?;
     let command = resume_command(session.kind, &session.id)
         .ok_or_else(|| format!("unexpected session id: {}", session.id))?;
-    let directory = session
-        .directory
-        .or(cwd)
-        .or_else(|| std::env::var("HOME").ok())
-        .unwrap_or_else(|| ".".into());
-    terminal(&session.id, &directory, &command).map_err(|e| e.to_string())
+    let directory = session.directory.or(cwd);
+    match place {
+        Place::Local => {
+            let directory = directory
+                .or_else(|| std::env::var("HOME").ok())
+                .unwrap_or_else(|| ".".into());
+            terminal(&session.id, &directory, &command)
+        }
+        Place::Wsl(distro) => wsl_terminal(&distro, directory.as_deref().unwrap_or("~"), &command),
+    }
+    .map_err(|e| e.to_string())
 }
 
 /// The command that resumes a session, for ids made of letters, digits, `-`
@@ -116,14 +125,34 @@ fn resume_command(kind: AgentKind, id: &str) -> Option<String> {
     valid.then(|| format!("{resume} {id}"))
 }
 
-/// Folders and terminals on other machines need the remote connection, which
-/// the app doesn't have yet.
-fn local_only(machine_id: &str) -> Result<(), String> {
+/// Where a machine's folders and terminals open from this computer.
+enum Place {
+    Local,
+    /// A WSL distro on this Windows computer.
+    Wsl(String),
+}
+
+fn place(app: &AppHandle, machine_id: &str) -> Result<Place, String> {
     if machine_id == machines::LOCAL {
-        Ok(())
-    } else {
-        Err("only available for this computer".into())
+        return Ok(Place::Local);
     }
+    machines::distro(app, machine_id)
+        .map(Place::Wsl)
+        .ok_or_else(|| "Folders and terminals open only for this computer and WSL.".into())
+}
+
+/// A distro's Linux path as Windows reaches it.
+fn wsl_path(distro: &str, path: &str) -> String {
+    format!(r"\\wsl.localhost\{distro}{}", path.replace('/', r"\"))
+}
+
+/// `wsl.exe` running `command` in a login shell, in `directory` in the distro.
+fn wsl_command(distro: &str, directory: &str, command: &str) -> Vec<String> {
+    [
+        "wsl.exe", "-d", distro, "--cd", directory, "--exec", "bash", "-lc", command,
+    ]
+    .map(String::from)
+    .to_vec()
 }
 
 /// Opens `path` in the first installed editor: Cursor, VS Code, Zed, Sublime.
@@ -154,6 +183,52 @@ fn editor(path: &str) -> bool {
     editors
         .iter()
         .any(|editor| Command::new(editor).arg(path).spawn().is_ok())
+}
+
+/// Opens a distro's folder in Cursor or VS Code through their WSL remote.
+fn wsl_editor(distro: &str, path: &str) -> bool {
+    let remote = format!("wsl+{distro}");
+    ["cursor.cmd", "code.cmd"].iter().any(|editor| {
+        Command::new(editor)
+            .args(["--remote", &remote, path])
+            .spawn()
+            .is_ok()
+    })
+}
+
+/// Runs `command` in the distro, in Windows Terminal with the distro's
+/// profile, or a new console where it isn't installed.
+fn wsl_terminal(distro: &str, directory: &str, command: &str) -> std::io::Result<()> {
+    let wsl = wsl_command(distro, directory, command);
+    Command::new("wt.exe")
+        .args(wt_args(
+            ["-p", distro]
+                .into_iter()
+                .chain(wsl.iter().map(String::as_str)),
+        ))
+        .spawn()
+        .or_else(|_| {
+            let mut console = Command::new(&wsl[0]);
+            console.args(&wsl[1..]);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NEW_CONSOLE: u32 = 0x10;
+                console.creation_flags(CREATE_NEW_CONSOLE);
+            }
+            console.spawn()
+        })
+        .map(drop)
+}
+
+/// Arguments for `wt.exe`, which splits its command line at every `;`, even
+/// inside a quoted argument, unless it is escaped as `\;`. A folder from a
+/// snapshot must not start a second command. Spaces and quotes need nothing
+/// here: `Command` quotes each argument for the Windows command line.
+fn wt_args<'a>(args: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    args.into_iter()
+        .map(|arg| arg.replace(';', r"\;"))
+        .collect()
 }
 
 /// Single-quotes `value` for a POSIX shell.
@@ -209,14 +284,14 @@ fn terminal(_name: &str, directory: &str, command: &str) -> std::io::Result<()> 
     const CREATE_NEW_CONSOLE: u32 = 0x10;
 
     Command::new("wt.exe")
-        .args([
+        .args(wt_args([
             "-d",
             directory,
             "powershell.exe",
             "-NoExit",
             "-Command",
             command,
-        ])
+        ]))
         .spawn()
         .or_else(|_| {
             Command::new("powershell.exe")
@@ -284,6 +359,46 @@ mod tests {
         assert_eq!(
             resume_command(AgentKind::Codex, id).as_deref(),
             Some("codex resume 0b5c7f36-2d8e-4f1a-9c3b-6e2f1a8d4c90")
+        );
+    }
+
+    #[test]
+    fn reaches_wsl_folders_through_wsl_localhost() {
+        assert_eq!(
+            wsl_path("Ubuntu", "/home/me/app"),
+            r"\\wsl.localhost\Ubuntu\home\me\app"
+        );
+    }
+
+    #[test]
+    fn escapes_semicolons_for_windows_terminal() {
+        // Windows Terminal's command line docs: a literal `;` is written `\;`,
+        // or it starts a new tab. Folder and command as a snapshot could send them.
+        let wsl = wsl_command(
+            "Ubuntu",
+            "/home/me/my app;calc.exe",
+            r#"echo "a;b"; claude --resume 0b5c7f36"#,
+        );
+        let args = wt_args(
+            ["-p", "Ubuntu"]
+                .into_iter()
+                .chain(wsl.iter().map(String::as_str)),
+        );
+        assert_eq!(
+            args,
+            [
+                "-p",
+                "Ubuntu",
+                "wsl.exe",
+                "-d",
+                "Ubuntu",
+                "--cd",
+                r"/home/me/my app\;calc.exe",
+                "--exec",
+                "bash",
+                "-lc",
+                r#"echo "a\;b"\; claude --resume 0b5c7f36"#,
+            ]
         );
     }
 
