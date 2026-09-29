@@ -184,6 +184,7 @@ async fn probes_installs_and_connects_through_an_ssh_style_prefix() {
     let probe = install::probe(&prefix).await.unwrap();
     let ppm_path = format!("{}/.local/bin/ppm", home.display());
     assert_eq!(probe.target, host_target());
+    assert_eq!(probe.install_path, ppm_path);
     assert_eq!(probe.ppm_path, ppm_path);
     assert_eq!(probe.installed, None);
     assert!(!probe.up_to_date());

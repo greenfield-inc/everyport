@@ -72,6 +72,7 @@ async fn supervise(
         let ended = match &connection {
             Connection::Sidecar { path } => {
                 let path = path.to_string_lossy();
+                // Without a prefix nothing is quoted, so the OS doesn't matter.
                 session
                     .stdio(remote::command(&[], Os::Linux, &[&path, "stdio"]))
                     .await

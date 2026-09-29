@@ -27,7 +27,10 @@ pub struct Probe {
     /// Rust target triple of the release binary for this machine, such as
     /// `x86_64-unknown-linux-musl`.
     pub target: String,
-    /// Where `ppm` is, or where `install` puts it.
+    /// Where `install` puts `ppm`.
+    pub install_path: String,
+    /// The `ppm` to run: `install_path`, or `ppm` when only the machine's
+    /// `PATH` has it, as after `brew install`.
     pub ppm_path: String,
     /// `ppm --version` there, such as `0.1.0`. `None` when it isn't installed.
     pub installed: Option<String>,
@@ -43,7 +46,7 @@ impl Probe {
 /// Checks the machine's OS and CPU, and the `ppm` installed there. Looks at
 /// the install path first, then `ppm` on the machine's `PATH`.
 pub async fn probe(prefix: &[String]) -> anyhow::Result<Probe> {
-    let (os, target, ppm_path) = match run(prefix, Os::Linux, &["uname", "-sm"]).await {
+    let (os, target, install_path) = match run(prefix, Os::Linux, &["uname", "-sm"]).await {
         Ok(uname) if !is_windows_shell(&uname) => {
             let (os, target) = unix_target(&uname)?;
             let home = run(prefix, os, &["printenv", "HOME"]).await?;
@@ -78,16 +81,17 @@ pub async fn probe(prefix: &[String]) -> anyhow::Result<Probe> {
             )
         }
     };
-    let (ppm_path, installed) = match version(prefix, os, &ppm_path).await {
-        Some(v) => (ppm_path, Some(v)),
+    let (ppm_path, installed) = match version(prefix, os, &install_path).await {
+        Some(v) => (install_path.clone(), Some(v)),
         None => match version(prefix, os, "ppm").await {
             Some(v) => ("ppm".to_string(), Some(v)),
-            None => (ppm_path, None),
+            None => (install_path.clone(), None),
         },
     };
     Ok(Probe {
         os,
         target,
+        install_path,
         ppm_path,
         installed,
     })
@@ -100,25 +104,14 @@ pub async fn probe(prefix: &[String]) -> anyhow::Result<Probe> {
 pub async fn install(prefix: &[String], probe: &Probe) -> anyhow::Result<()> {
     let binary = binary(&probe.target).await?;
     let sha = hex(&Sha256::digest(&binary));
-    let path = match probe.os {
-        Os::Windows => probe
-            .ppm_path
-            .contains('\\')
-            .then(|| probe.ppm_path.clone())
-            .context("Run the probe again before installing.")?,
-        _ => {
-            let path = probe.ppm_path.clone();
-            let dir = path
-                .rsplit_once('/')
-                .map(|(d, _)| d)
-                .context("Run the probe again before installing.")?;
-            run(prefix, probe.os, &["mkdir", "-p", dir]).await?;
-            path
-        }
-    };
+    let path = &probe.install_path;
     match probe.os {
-        Os::Windows => install_windows(prefix, &path, &binary, &sha).await?,
+        Os::Windows => install_windows(prefix, path, &binary, &sha).await?,
         os => {
+            let (dir, _) = path
+                .rsplit_once('/')
+                .context("The install path has no folder.")?;
+            run(prefix, os, &["mkdir", "-p", dir]).await?;
             let part = format!("{path}.part");
             send(
                 prefix,
@@ -137,10 +130,10 @@ pub async fn install(prefix: &[String], probe: &Probe) -> anyhow::Result<()> {
                 bail!("The copy on the machine doesn't match the download. Try again.");
             }
             run(prefix, os, &["chmod", "755", &part]).await?;
-            run(prefix, os, &["mv", "-f", &part, &path]).await?;
+            run(prefix, os, &["mv", "-f", &part, path]).await?;
         }
     }
-    match version(prefix, probe.os, &path).await {
+    match version(prefix, probe.os, path).await {
         Some(v) if v == VERSION => Ok(()),
         Some(v) => bail!("Installed ppm {VERSION}, but the machine runs ppm {v} from {path}."),
         None => bail!("Installed ppm to {path}, but it doesn't run there."),
