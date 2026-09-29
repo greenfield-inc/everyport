@@ -45,6 +45,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 // Offsets into the 64-bit RTL_USER_PROCESS_PARAMETERS, which the Windows
 // headers leave opaque. They match phnt's ntpebteb.h and are stable since Windows 7.
+#[cfg(not(target_pointer_width = "64"))]
+compile_error!("the PEB offsets below are for 64-bit Windows only");
 const CURRENT_DIRECTORY: usize = 0x38;
 const ENVIRONMENT: usize = 0x80;
 const ENVIRONMENT_SIZE: usize = 0x3F0;
@@ -81,7 +83,10 @@ impl Platform for Windows {
             .map(|row| Listener {
                 port: port(row.dwLocalPort),
                 pid: row.dwOwningPid,
-                address: Ipv6Addr::from(row.ucLocalAddr).to_string(),
+                address: match (Ipv6Addr::from(row.ucLocalAddr), row.dwLocalScopeId) {
+                    (ip, 0) => ip.to_string(),
+                    (ip, scope) => format!("{ip}%{scope}"),
+                },
             });
         Ok(v4.chain(v6).collect())
     }
