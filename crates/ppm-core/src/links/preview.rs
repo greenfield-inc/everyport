@@ -2,6 +2,7 @@
 //! records every preview as a GitHub deployment, so no Vercel token is
 //! needed. Lookups run on a background thread; callers get the last result.
 
+use super::watch::UNUSED_FOR;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -14,11 +15,11 @@ const MAX_AGE: Duration = Duration::from_secs(120);
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static PREVIEWS: LazyLock<Mutex<HashMap<(String, String), Entry>>> = LazyLock::new(Mutex::default);
 
-#[derive(Default)]
 struct Entry {
     url: Option<String>,
     fetched_at: Option<Instant>,
     in_flight: bool,
+    used: Instant,
 }
 
 /// Previews go online, so they stay off until the user turns them on.
@@ -33,17 +34,27 @@ pub(super) fn preview_url(root: &Path, repo: &str, branch: &str) -> Option<Strin
         return None;
     }
     let key = (repo.to_string(), branch.to_string());
+    let now = Instant::now();
     let mut previews = PREVIEWS.lock().unwrap();
-    let entry = previews.entry(key.clone()).or_default();
+    previews.retain(|_, e| e.in_flight || now.duration_since(e.used) < UNUSED_FOR);
+    let entry = previews.entry(key.clone()).or_insert(Entry {
+        url: None,
+        fetched_at: None,
+        in_flight: false,
+        used: now,
+    });
+    entry.used = now;
     if !entry.in_flight && entry.fetched_at.is_none_or(|at| at.elapsed() > MAX_AGE) {
         entry.in_flight = true;
         let root = root.to_path_buf();
         std::thread::spawn(move || {
             let url = lookup(&root, &key.0, &key.1);
+            let now = Instant::now();
             let fetched = Entry {
                 url,
-                fetched_at: Some(Instant::now()),
+                fetched_at: Some(now),
                 in_flight: false,
+                used: now,
             };
             PREVIEWS.lock().unwrap().insert(key, fetched);
         });

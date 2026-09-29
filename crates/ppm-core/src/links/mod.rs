@@ -1,19 +1,19 @@
 //! What a server belongs to: its project, workspace and coding-agent session.
 //! Owned by the links lane.
 //!
-//! The engine calls these on every scan, so each result is cached and reused
-//! until one of the files it was read from changes. A steady-state call costs
-//! a few `stat`s.
+//! The engine calls these on every scan. Each result is cached until a file
+//! it was read from changes (see `watch`), so a steady-state call touches no
+//! files. Results no scan asked for in a minute are dropped.
 
 mod agent;
 mod preview;
 mod project;
+mod watch;
 
 use crate::platform::ProcDetails;
 use crate::protocol::{AgentSession, Project, Workspace};
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
-use std::time::{Duration, Instant, SystemTime};
+use std::sync::LazyLock;
 
 pub use preview::set_vercel_previews;
 
@@ -25,6 +25,8 @@ pub const AGENT_ENV_KEYS: &[&str] = &[
     project::PANE_PANEL_ENV,
     project::PANE_WORKSPACE_ENV,
     project::CONDUCTOR_WORKSPACE_ENV,
+    agent::CLAUDE_DIR_ENV,
+    agent::CODEX_DIR_ENV,
 ];
 
 static PROJECTS: LazyLock<project::Resolver> = LazyLock::new(project::Resolver::default);
@@ -64,71 +66,9 @@ fn home() -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
-fn modified(path: &Path) -> Option<SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
-}
-
-/// A value read from files, fresh while none of them has changed and, when
-/// it has a lifetime, until that runs out.
-struct Stamped<T> {
-    files: Vec<(PathBuf, Option<SystemTime>)>,
-    until: Option<Instant>,
-    value: T,
-}
-
-impl<T: Clone> Stamped<T> {
-    fn new(files: Vec<PathBuf>, value: T) -> Self {
-        let files = files
-            .into_iter()
-            .map(|f| {
-                let at = modified(&f);
-                (f, at)
-            })
-            .collect();
-        Self {
-            files,
-            until: None,
-            value,
-        }
-    }
-
-    fn expires_in(self, lifetime: Duration) -> Self {
-        Self {
-            until: Some(Instant::now() + lifetime),
-            ..self
-        }
-    }
-
-    fn is_fresh(&self) -> bool {
-        self.until.is_none_or(|until| Instant::now() < until)
-            && self.files.iter().all(|(path, at)| modified(path) == *at)
-    }
-}
-
-/// A cache of `Stamped` values. `get` returns the cached value while its
-/// files are unchanged, and calls `read` otherwise.
-struct Cache<K, T>(Mutex<std::collections::HashMap<K, Stamped<T>>>);
-
-impl<K, T> Default for Cache<K, T> {
-    fn default() -> Self {
-        Self(Mutex::default())
-    }
-}
-
-impl<K: std::hash::Hash + Eq + Clone, T: Clone> Cache<K, T> {
-    fn get(&self, key: &K, read: impl FnOnce() -> Stamped<T>) -> T {
-        if let Some(hit) = self.0.lock().unwrap().get(key).filter(|s| s.is_fresh()) {
-            return hit.value.clone();
-        }
-        let fresh = read();
-        let value = fresh.value.clone();
-        self.0.lock().unwrap().insert(key.clone(), fresh);
-        value
-    }
-}
-
 #[cfg(test)]
 mod fixture {
+    use crate::platform::ProcDetails;
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -142,19 +82,21 @@ mod fixture {
             let dir = std::env::temp_dir().join(format!("ppm-links-{}-{n}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
-            // Canonical, so paths match what the OS reports (/private/var on macOS).
-            Self(dir.canonicalize().unwrap())
+            Self(dir)
         }
 
         pub fn write(&self, rel: &str, contents: &str) -> PathBuf {
-            let path = self.0.join(rel);
+            let path = self.path(rel);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(&path, contents).unwrap();
             path
         }
 
+        /// `rel` uses `/`; the result uses the OS separator, as paths read
+        /// back from the filesystem do.
         pub fn path(&self, rel: &str) -> PathBuf {
-            self.0.join(rel)
+            rel.split('/')
+                .fold(self.0.clone(), |path, part| path.join(part))
         }
     }
 
@@ -166,5 +108,30 @@ mod fixture {
 
     pub fn s(path: &Path) -> String {
         path.to_string_lossy().into_owned()
+    }
+
+    /// Polls `check` until it returns a value. File events arrive after a
+    /// 1.5 s batch, and discovery runs on a background thread.
+    pub fn eventually<T>(check: impl Fn() -> Option<T>) -> T {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            if let Some(value) = check() {
+                return value;
+            }
+            assert!(std::time::Instant::now() < deadline, "timed out");
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    }
+
+    /// One process of a server's chain.
+    pub fn details(cwd: Option<&str>, env: &[(&str, &str)]) -> ProcDetails {
+        ProcDetails {
+            cwd: cwd.map(str::to_string),
+            args: Vec::new(),
+            env: env
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        }
     }
 }

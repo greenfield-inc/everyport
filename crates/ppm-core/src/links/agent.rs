@@ -2,26 +2,33 @@
 //!
 //! Both agents export their session id to every command they run
 //! (`CLAUDE_CODE_SESSION_ID`, `CODEX_THREAD_ID`), so a server's environment
-//! names its session exactly.
+//! names its session exactly. Its transcript is found once, on a background
+//! thread. After that, only the lines appended to the watched transcript or
+//! title index are read, when it changes.
 
-use super::{env, home, Cache, Stamped};
+use super::watch::Cache;
+use super::{env, home};
 use crate::platform::ProcDetails;
 use crate::protocol::{AgentKind, AgentSession};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::{Duration, UNIX_EPOCH};
+use std::sync::{Arc, OnceLock};
+use std::time::UNIX_EPOCH;
 
 pub const CLAUDE_SESSION_ENV: &str = "CLAUDE_CODE_SESSION_ID";
 pub const CODEX_THREAD_ENV: &str = "CODEX_THREAD_ID";
+/// Where each agent keeps its sessions, when not in the home folder. Read
+/// from the server's environment, since an app started from the Dock or Start
+/// menu doesn't have the user's shell variables.
+pub const CLAUDE_DIR_ENV: &str = "CLAUDE_CONFIG_DIR";
+pub const CODEX_DIR_ENV: &str = "CODEX_HOME";
 
-/// Titles change as a session goes, so they are re-read this often.
-const TITLE_LIFETIME: Duration = Duration::from_secs(30);
-/// How long before a Codex transcript not found yet is looked for again.
-const RETRY: Duration = Duration::from_secs(60);
+/// How much of a transcript or title index to read the first time.
+const FIRST_READ: u64 = 512 * 1024;
 
+/// Where sessions live when the server's environment doesn't say.
 pub struct Dirs {
     pub claude: Option<PathBuf>,
     pub codex: Option<PathBuf>,
@@ -37,25 +44,38 @@ impl Dirs {
                 .or_else(|| home.as_ref().map(|h| h.join(default)))
         };
         Self {
-            claude: dir("CLAUDE_CONFIG_DIR", ".claude"),
-            codex: dir("CODEX_HOME", ".codex"),
+            claude: dir(CLAUDE_DIR_ENV, ".claude"),
+            codex: dir(CODEX_DIR_ENV, ".codex"),
         }
     }
 }
 
 pub struct Resolver {
     dirs: Dirs,
-    claude: Cache<String, AgentSession>,
-    codex: Cache<String, Option<CodexSession>>,
-    codex_titles: Cache<(), Arc<HashMap<String, String>>>,
+    claude: Cache<String, Found<ClaudeTranscript>>,
+    codex: Cache<String, Found<CodexTranscript>>,
+    claude_titles: Cache<PathBuf, Appended<ClaudeTitles>>,
+    codex_titles: Cache<PathBuf, Appended<Arc<HashMap<String, String>>>>,
 }
 
-/// The first line of a Codex transcript.
-#[derive(Clone)]
-struct CodexSession {
-    id: String,
+/// Filled in by a background thread; empty until it finishes.
+type Found<T> = Arc<OnceLock<Option<T>>>;
+
+/// What the start of a Claude Code transcript says.
+struct ClaudeTranscript {
+    path: PathBuf,
+    directory: Option<String>,
+    started_at: Option<u64>,
+    /// A title set early on, or else the first prompt.
+    early_title: Option<String>,
+}
+
+/// The first line of a Codex transcript, and where its title lives.
+struct CodexTranscript {
+    path: PathBuf,
     cwd: String,
-    transcript: PathBuf,
+    started_at: Option<u64>,
+    title_index: PathBuf,
 }
 
 impl Resolver {
@@ -64,123 +84,238 @@ impl Resolver {
             dirs,
             claude: Cache::default(),
             codex: Cache::default(),
+            claude_titles: Cache::default(),
             codex_titles: Cache::default(),
         }
     }
 
     pub fn agent(&self, chain: &[ProcDetails]) -> Option<AgentSession> {
+        let dir = |key, default: &Option<PathBuf>| {
+            env(chain, key)
+                .map(PathBuf::from)
+                .or_else(|| default.clone())
+        };
         if let Some(id) = env(chain, CLAUDE_SESSION_ENV).filter(|id| is_id(id)) {
-            return Some(self.claude(id));
+            return Some(self.claude(id, dir(CLAUDE_DIR_ENV, &self.dirs.claude)));
         }
         if let Some(id) = env(chain, CODEX_THREAD_ENV).filter(|id| is_id(id)) {
-            let found = self.codex.get(&id.to_string(), || {
-                let found = self.find_codex(id).and_then(|path| codex_header(&path));
-                // A transcript, once found, stays put. Look again later for one not written yet.
-                let stamped = Stamped::new(vec![], found.clone());
-                if found.is_some() {
-                    stamped
-                } else {
-                    stamped.expires_in(RETRY)
-                }
-            });
-            return Some(match found {
-                Some(session) => self.codex_session(&session),
-                None => session(AgentKind::Codex, id, None),
-            });
+            return Some(self.codex(id, dir(CODEX_DIR_ENV, &self.dirs.codex)));
         }
         None
     }
 
-    // ------------------------------------------------------------ Claude Code
-
-    fn claude(&self, id: &str) -> AgentSession {
-        self.claude.get(&id.to_string(), || {
-            let mut found = session(AgentKind::ClaudeCode, id, None);
-            if let Some(transcript) = self.find_claude(id) {
-                // Titles are appended as the session goes, so the newest is near the end.
-                let head = read_head(&transcript, 256 * 1024);
-                found.title = last_title(&read_tail(&transcript, 512 * 1024))
-                    .or_else(|| last_title(&head))
-                    .or_else(|| first_prompt(&head));
-                found.directory =
-                    json_lines(&head).find_map(|l| Some(l["cwd"].as_str()?.to_string()));
-                found.started_at = created_ms(&transcript);
-                found.transcript_path = Some(transcript.to_string_lossy().into_owned());
-            }
-            Stamped::new(vec![], found).expires_in(TITLE_LIFETIME)
-        })
-    }
-
-    /// `<claude>/projects/<folder>/<id>.jsonl`.
-    fn find_claude(&self, id: &str) -> Option<PathBuf> {
-        let projects = self.dirs.claude.as_ref()?.join("projects");
-        let file = format!("{id}.jsonl");
-        fs::read_dir(projects)
-            .ok()?
-            .flatten()
-            .map(|e| e.path().join(&file))
-            .find(|p| p.is_file())
-    }
-
-    // ------------------------------------------------------------ Codex
-
-    fn codex_session(&self, found: &CodexSession) -> AgentSession {
-        let mut agent = session(AgentKind::Codex, &found.id, Some(found.cwd.clone()));
-        agent.title = self.codex_titles().get(&found.id).cloned();
-        agent.started_at = created_ms(&found.transcript);
-        agent.transcript_path = Some(found.transcript.to_string_lossy().into_owned());
+    fn claude(&self, id: &str, dir: Option<PathBuf>) -> AgentSession {
+        let mut agent = session(AgentKind::ClaudeCode, id, None);
+        let found = self.claude.get(&id.to_string(), |_| {
+            let id = id.to_string();
+            discover(move || ClaudeTranscript::read(find_claude(&dir?, &id)?))
+        });
+        let Some(Some(transcript)) = found.get() else {
+            return agent;
+        };
+        let path = &transcript.path;
+        let titles = self.claude_titles.get(path, |previous| {
+            let read = read_appended(path, previous, ClaudeTitles::default(), ClaudeTitles::add);
+            (vec![path.clone()], read)
+        });
+        agent.title = titles
+            .state
+            .title()
+            .or_else(|| transcript.early_title.clone());
+        agent.directory = transcript.directory.clone();
+        agent.started_at = transcript.started_at;
+        agent.transcript_path = Some(path.to_string_lossy().into_owned());
         agent
     }
 
-    /// Thread names from `session_index.jsonl`, re-read when it changes.
-    fn codex_titles(&self) -> Arc<HashMap<String, String>> {
-        let Some(index) = self
-            .dirs
-            .codex
-            .as_ref()
-            .map(|c| c.join("session_index.jsonl"))
-        else {
-            return Arc::default();
+    fn codex(&self, id: &str, dir: Option<PathBuf>) -> AgentSession {
+        let found = self.codex.get(&id.to_string(), |_| {
+            let id = id.to_string();
+            discover(move || {
+                let dir = dir?;
+                CodexTranscript::read(find_codex(&dir, &id)?, dir.join("session_index.jsonl"))
+            })
+        });
+        let Some(Some(transcript)) = found.get() else {
+            return session(AgentKind::Codex, id, None);
         };
-        self.codex_titles.get(&(), || {
-            let text = read_tail(&index, 1024 * 1024);
-            let titles = json_lines(&text)
-                .filter_map(|l| {
-                    Some((
-                        l["id"].as_str()?.to_string(),
-                        l["thread_name"].as_str()?.to_string(),
-                    ))
-                })
-                .collect();
-            Stamped::new(vec![index.clone()], Arc::new(titles))
+        let index = &transcript.title_index;
+        let titles = self.codex_titles.get(index, |previous| {
+            let read = read_appended(index, previous, Arc::default(), |titles, line| {
+                if let (Some(id), Some(name)) = (line["id"].as_str(), line["thread_name"].as_str())
+                {
+                    Arc::make_mut(titles).insert(id.to_string(), name.to_string());
+                }
+            });
+            (vec![index.clone()], read)
+        });
+        let mut agent = session(AgentKind::Codex, id, Some(transcript.cwd.clone()));
+        agent.title = titles.state.get(id).cloned();
+        agent.started_at = transcript.started_at;
+        agent.transcript_path = Some(transcript.path.to_string_lossy().into_owned());
+        agent
+    }
+}
+
+/// Runs `find` on a background thread, so discovery never holds up a scan.
+fn discover<T: Send + Sync + 'static>(
+    find: impl FnOnce() -> Option<T> + Send + 'static,
+) -> (Vec<PathBuf>, Found<T>) {
+    let found = Found::default();
+    let slot = found.clone();
+    std::thread::spawn(move || slot.set(find()));
+    (Vec::new(), found)
+}
+
+impl ClaudeTranscript {
+    fn read(path: PathBuf) -> Option<Self> {
+        let head = read_head(&path, 256 * 1024);
+        let early_title = json_lines(&head)
+            .fold(ClaudeTitles::default(), |mut titles, line| {
+                titles.add(&line);
+                titles
+            })
+            .title()
+            .or_else(|| first_prompt(&head));
+        let directory = json_lines(&head).find_map(|l| Some(l["cwd"].as_str()?.to_string()));
+        Some(Self {
+            directory,
+            started_at: created_ms(&path),
+            early_title,
+            path,
         })
     }
+}
 
-    /// `<codex>/sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl`, newest days first.
-    fn find_codex(&self, id: &str) -> Option<PathBuf> {
-        let suffix = format!("-{id}.jsonl");
-        self.codex_days().into_iter().find_map(|day| {
-            files(&day)
-                .into_iter()
-                .find(|f| f.to_string_lossy().ends_with(&suffix))
+impl CodexTranscript {
+    fn read(path: PathBuf, title_index: PathBuf) -> Option<Self> {
+        let mut first = String::new();
+        BufReader::new(File::open(&path).ok()?.take(1024 * 1024))
+            .read_line(&mut first)
+            .ok()?;
+        let line: serde_json::Value = serde_json::from_str(&first).ok()?;
+        Some(Self {
+            cwd: line["payload"]["cwd"].as_str()?.to_string(),
+            started_at: created_ms(&path),
+            path,
+            title_index,
         })
     }
+}
 
-    fn codex_days(&self) -> Vec<PathBuf> {
-        let Some(sessions) = self.dirs.codex.as_ref().map(|c| c.join("sessions")) else {
-            return Vec::new();
+/// A custom title (`/rename`) wins over the generated one. The last of each counts.
+#[derive(Clone, Default)]
+struct ClaudeTitles {
+    custom: Option<String>,
+    generated: Option<String>,
+}
+
+impl ClaudeTitles {
+    fn add(&mut self, line: &serde_json::Value) {
+        let text = |key: &str| {
+            line[key]
+                .as_str()
+                .filter(|t| !t.is_empty())
+                .map(str::to_string)
         };
-        let newest_first = |dir: &Path| {
-            let mut dirs: Vec<PathBuf> = files(dir).into_iter().filter(|p| p.is_dir()).collect();
-            dirs.sort_by(|a, b| b.cmp(a));
-            dirs
-        };
-        newest_first(&sessions)
-            .iter()
-            .flat_map(|year| newest_first(year))
-            .flat_map(|month| newest_first(&month))
-            .collect()
+        match line["type"].as_str() {
+            Some("custom-title") => self.custom = text("customTitle").or(self.custom.take()),
+            Some("ai-title") => self.generated = text("aiTitle").or(self.generated.take()),
+            _ => {}
+        }
     }
+
+    fn title(&self) -> Option<String> {
+        self.custom.clone().or_else(|| self.generated.clone())
+    }
+}
+
+/// State folded from a JSON-lines file, and how far into it that got.
+#[derive(Clone)]
+struct Appended<S> {
+    offset: u64,
+    state: S,
+}
+
+/// Folds the whole lines added to `path` since `previous` was read. The first
+/// time, or if the file shrank, starts from its last `FIRST_READ` bytes.
+fn read_appended<S>(
+    path: &Path,
+    previous: Option<Appended<S>>,
+    empty: S,
+    add: impl Fn(&mut S, &serde_json::Value),
+) -> Appended<S> {
+    let len = fs::metadata(path).map_or(0, |m| m.len());
+    let (start, mut state, resume) = match previous {
+        Some(p) if p.offset <= len => (p.offset, p.state, true),
+        _ => (len.saturating_sub(FIRST_READ), empty, false),
+    };
+    let mut data = Vec::new();
+    if let Ok(mut file) = File::open(path) {
+        if file.seek(SeekFrom::Start(start)).is_ok() {
+            let _ = file.take(len - start).read_to_end(&mut data);
+        }
+    }
+    // Stop at the last complete line; a line still being written is read next time.
+    let end = data.iter().rposition(|&b| b == b'\n').map_or(0, |i| i + 1);
+    let mut text = String::from_utf8_lossy(&data[..end]);
+    if start > 0 && !resume {
+        // Started mid-file: drop the partial first line.
+        let skip = text.find('\n').map_or(text.len(), |i| i + 1);
+        text = text[skip..].to_string().into();
+    }
+    for line in json_lines(&text) {
+        add(&mut state, &line);
+    }
+    Appended {
+        offset: start + end as u64,
+        state,
+    }
+}
+
+/// `<claude>/projects/<folder>/<id>.jsonl`.
+fn find_claude(claude: &Path, id: &str) -> Option<PathBuf> {
+    let file = format!("{id}.jsonl");
+    fs::read_dir(claude.join("projects"))
+        .ok()?
+        .flatten()
+        .map(|e| e.path().join(&file))
+        .find(|p| p.is_file())
+}
+
+/// `<codex>/sessions/YYYY/MM/DD/rollout-<local time>-<id>.jsonl`. Codex ids are
+/// UUIDv7, which start with their creation time in Unix milliseconds, so only
+/// the folders for that UTC day and the days either side (time zones) are read.
+fn find_codex(codex: &Path, id: &str) -> Option<PathBuf> {
+    let ms = u64::from_str_radix(id.replace('-', "").get(..12)?, 16).ok()?;
+    let day = (ms / 86_400_000) as i64;
+    let suffix = format!("-{id}.jsonl");
+    [day, day - 1, day + 1].into_iter().find_map(|day| {
+        let (y, m, d) = civil_from_days(day);
+        let folder = codex
+            .join("sessions")
+            .join(format!("{y:04}"))
+            .join(format!("{m:02}"))
+            .join(format!("{d:02}"));
+        fs::read_dir(folder)
+            .ok()?
+            .flatten()
+            .map(|e| e.path())
+            .find(|f| f.to_string_lossy().ends_with(&suffix))
+    })
+}
+
+/// Year, month and day of a day count since 1970-01-01 (Howard Hinnant's algorithm).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (yoe + era * 400 + i64::from(m <= 2), m, d)
 }
 
 fn session(kind: AgentKind, id: &str, directory: Option<String>) -> AgentSession {
@@ -204,33 +339,6 @@ fn is_id(id: &str) -> bool {
     !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
-fn codex_header(transcript: &Path) -> Option<CodexSession> {
-    let mut first = String::new();
-    BufReader::new(File::open(transcript).ok()?.take(1024 * 1024))
-        .read_line(&mut first)
-        .ok()?;
-    let line: serde_json::Value = serde_json::from_str(&first).ok()?;
-    let payload = &line["payload"];
-    Some(CodexSession {
-        id: payload["id"].as_str()?.to_string(),
-        cwd: payload["cwd"].as_str()?.to_string(),
-        transcript: transcript.to_path_buf(),
-    })
-}
-
-/// A custom title (`/rename`) wins over the generated one. The last of each counts.
-fn last_title(text: &str) -> Option<String> {
-    let (mut custom, mut generated) = (None, None);
-    for line in json_lines(text) {
-        match line["type"].as_str() {
-            Some("custom-title") => custom = line["customTitle"].as_str().map(str::to_string),
-            Some("ai-title") => generated = line["aiTitle"].as_str().map(str::to_string),
-            _ => {}
-        }
-    }
-    custom.or(generated).filter(|t| !t.is_empty())
-}
-
 /// The first line of the first typed prompt, up to 60 characters.
 fn first_prompt(text: &str) -> Option<String> {
     json_lines(text)
@@ -251,10 +359,6 @@ fn json_lines(text: &str) -> impl Iterator<Item = serde_json::Value> + '_ {
     text.lines().filter_map(|l| serde_json::from_str(l).ok())
 }
 
-fn files(dir: &Path) -> Vec<PathBuf> {
-    fs::read_dir(dir).map_or_else(|_| Vec::new(), |d| d.flatten().map(|e| e.path()).collect())
-}
-
 fn created_ms(path: &Path) -> Option<u64> {
     let created = fs::metadata(path).and_then(|m| m.created()).ok()?;
     Some(created.duration_since(UNIX_EPOCH).ok()?.as_millis() as u64)
@@ -268,26 +372,9 @@ fn read_head(path: &Path, bytes: u64) -> String {
     String::from_utf8_lossy(&data).into_owned()
 }
 
-/// The last `bytes` of a file, starting at a whole line.
-fn read_tail(path: &Path, bytes: u64) -> String {
-    let Ok(mut file) = File::open(path) else {
-        return String::new();
-    };
-    let offset = file.metadata().map_or(0, |m| m.len().saturating_sub(bytes));
-    let mut data = Vec::new();
-    if file.seek(SeekFrom::Start(offset)).is_ok() {
-        let _ = file.read_to_end(&mut data);
-    }
-    let text = String::from_utf8_lossy(&data);
-    match (offset > 0, text.find('\n')) {
-        (true, Some(newline)) => text[newline + 1..].to_string(),
-        _ => text.into_owned(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::super::fixture::{s, TempDir};
+    use super::super::fixture::{details, eventually, s, TempDir};
     use super::*;
 
     const CLAUDE_ID: &str = "68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c";
@@ -300,15 +387,13 @@ mod tests {
         })
     }
 
-    fn process(cwd: Option<&str>, env: &[(&str, &str)]) -> ProcDetails {
-        ProcDetails {
-            cwd: cwd.map(str::to_string),
-            args: Vec::new(),
-            env: env
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        }
+    /// Discovery runs in the background, so ask until it has finished.
+    fn discovered(resolver: &Resolver, chain: &[ProcDetails]) -> AgentSession {
+        eventually(|| {
+            resolver
+                .agent(chain)
+                .filter(|a| a.transcript_path.is_some())
+        })
     }
 
     /// A Codex transcript's first line, as Codex 0.157 writes it.
@@ -340,11 +425,11 @@ mod tests {
         );
         // The session id survives on `npm`, not on the renamed `next-server` below it.
         let chain = [
-            process(Some(workspace), &[]),
-            process(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)]),
+            details(Some(workspace), &[]),
+            details(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)]),
         ];
 
-        let found = resolver(&tmp).agent(&chain).unwrap();
+        let found = discovered(&resolver(&tmp), &chain);
         assert_eq!(found.kind, AgentKind::ClaudeCode);
         assert_eq!(found.title.as_deref(), Some("Dot-grid menu bar icon"));
         assert_eq!(found.directory.as_deref(), Some(workspace));
@@ -364,9 +449,8 @@ mod tests {
             ]
             .join("\n"),
         );
-        let found = resolver(&tmp)
-            .agent(&[process(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)])])
-            .unwrap();
+        let chain = [details(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)])];
+        let found = discovered(&resolver(&tmp), &chain);
         assert_eq!(
             found.title.as_deref(),
             Some("Port the resolver from WhatThePort and keep every path worki")
@@ -377,7 +461,7 @@ mod tests {
     fn claude_session_without_a_transcript_can_still_be_resumed() {
         let tmp = TempDir::new();
         let found = resolver(&tmp)
-            .agent(&[process(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)])])
+            .agent(&[details(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)])])
             .unwrap();
         assert_eq!((found.title, found.transcript_path), (None, None));
         assert_eq!(found.resume_command, format!("claude --resume {CLAUDE_ID}"));
@@ -399,12 +483,12 @@ mod tests {
                 "{{\"id\":\"{CODEX_ID}\",\"thread_name\":\"Rebase session PRs\"}}\n{{\"id\":\"{CODEX_ID}\",\"thread_name\":\"Rebase and prepare session PRs\"}}\n"
             ),
         );
-        let chain = [process(
+        let chain = [details(
             Some("/Users/dev/app"),
             &[(CODEX_THREAD_ENV, CODEX_ID)],
         )];
 
-        let found = resolver(&tmp).agent(&chain).unwrap();
+        let found = discovered(&resolver(&tmp), &chain);
         assert_eq!(found.kind, AgentKind::Codex);
         assert_eq!(found.id, CODEX_ID);
         assert_eq!(
@@ -419,7 +503,7 @@ mod tests {
     #[test]
     fn claude_wins_when_both_agents_are_in_the_environment() {
         let tmp = TempDir::new();
-        let chain = [process(
+        let chain = [details(
             None,
             &[
                 (CODEX_THREAD_ENV, CODEX_ID),
@@ -433,9 +517,58 @@ mod tests {
     }
 
     #[test]
+    fn sessions_folder_from_the_servers_environment() {
+        let tmp = TempDir::new();
+        let transcript = tmp.write(
+            &format!("work-claude/projects/-tmp-app/{CLAUDE_ID}.jsonl"),
+            r#"{"type":"ai-title","aiTitle":"Fix the login redirect"}"#,
+        );
+        // ppm itself, started from the Dock, doesn't have the shell's CLAUDE_CONFIG_DIR.
+        let chain = [details(
+            None,
+            &[
+                (CLAUDE_SESSION_ENV, CLAUDE_ID),
+                (CLAUDE_DIR_ENV, &s(&tmp.path("work-claude"))),
+            ],
+        )];
+        let found = discovered(&resolver(&tmp), &chain);
+        assert_eq!(found.transcript_path, Some(s(&transcript)));
+        assert_eq!(found.title.as_deref(), Some("Fix the login redirect"));
+    }
+
+    #[test]
+    fn a_renamed_session_shows_its_new_title() {
+        let tmp = TempDir::new();
+        let transcript = tmp.write(
+            &format!(".claude/projects/-tmp-app/{CLAUDE_ID}.jsonl"),
+            "{\"type\":\"ai-title\",\"aiTitle\":\"Menu bar icon\"}\n",
+        );
+        let resolver = resolver(&tmp);
+        let chain = [details(None, &[(CLAUDE_SESSION_ENV, CLAUDE_ID)])];
+        assert_eq!(
+            discovered(&resolver, &chain).title.as_deref(),
+            Some("Menu bar icon")
+        );
+
+        // What `/rename` appends.
+        let mut file = File::options().append(true).open(&transcript).unwrap();
+        std::io::Write::write_all(
+            &mut file,
+            b"{\"type\":\"custom-title\",\"customTitle\":\"Dot-grid menu bar icon\"}\n",
+        )
+        .unwrap();
+        let renamed = eventually(|| {
+            resolver
+                .agent(&chain)
+                .filter(|a| a.title.as_deref() == Some("Dot-grid menu bar icon"))
+        });
+        assert_eq!(renamed.transcript_path, Some(s(&transcript)));
+    }
+
+    #[test]
     fn unsafe_ids_are_ignored() {
         let tmp = TempDir::new();
-        let chain = [process(None, &[(CLAUDE_SESSION_ENV, "../../secrets")])];
+        let chain = [details(None, &[(CLAUDE_SESSION_ENV, "../../secrets")])];
         assert_eq!(resolver(&tmp).agent(&chain), None);
     }
 }

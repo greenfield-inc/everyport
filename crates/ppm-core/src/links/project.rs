@@ -1,7 +1,8 @@
 //! Project and workspace from a working directory: the nearest git root, the
 //! nearest manifest, framework, branch, GitHub remote and Vercel link.
 
-use super::{env, home, preview, Cache, Stamped};
+use super::watch::Cache;
+use super::{env, home, preview};
 use crate::platform::ProcDetails;
 use crate::protocol::{Project, VercelProject, Workspace, WorkspaceKind};
 use std::fs;
@@ -26,7 +27,7 @@ struct Resolved {
 impl Resolver {
     pub fn project(&self, cwd: &Path, command: Option<&str>) -> Project {
         let Resolved { mut project, git } = self.resolve(cwd);
-        if command.is_some_and(|c| c.to_lowercase().contains("storybook")) {
+        if command.is_some_and(runs_storybook) {
             project.framework = Some("Storybook".into());
         }
         if let (Some(vercel), Some(git), Some(repo), Some(branch)) =
@@ -80,8 +81,21 @@ impl Resolver {
     }
 
     fn resolve(&self, cwd: &Path) -> Resolved {
-        self.cache.get(&cwd.to_path_buf(), || resolve(cwd))
+        self.cache.get(&cwd.to_path_buf(), |_| resolve(cwd))
     }
+}
+
+/// The program, or the script a package manager runs, is `storybook`:
+/// `storybook dev`, `node node_modules/.bin/storybook dev`, `npx storybook dev`
+/// or `npm run storybook`. A config path that merely mentions it doesn't count.
+fn runs_storybook(command: &str) -> bool {
+    let words: Vec<&str> = command.split_whitespace().collect();
+    let skip_run = matches!(words.get(1), Some(&("run" | "exec" | "dlx" | "x")));
+    let candidates = if skip_run { [0, 2] } else { [0, 1] };
+    candidates.iter().filter_map(|&i| words.get(i)).any(|word| {
+        let file = word.rsplit(['/', '\\']).next().unwrap_or(word);
+        file.split('.').next() == Some("storybook")
+    })
 }
 
 fn workspace(kind: WorkspaceKind, name: String, open_url: Option<String>) -> Workspace {
@@ -117,7 +131,7 @@ fn file_name(path: &Path) -> Option<String> {
 
 /// Walks up from `cwd` to the nearest git root (or the home folder), taking
 /// the nearest manifest on the way.
-fn resolve(cwd: &Path) -> Stamped<Resolved> {
+fn resolve(cwd: &Path) -> (Vec<PathBuf>, Resolved) {
     let home = home();
     let mut manifest: Option<(PathBuf, Manifest)> = None;
     let mut git = None;
@@ -137,13 +151,13 @@ fn resolve(cwd: &Path) -> Stamped<Resolved> {
     let mut files = Vec::new();
     let mut vercel_candidates = Vec::new();
     if let Some((dir, m)) = &manifest {
-        files.push(m.file.clone());
-        vercel_candidates.push(dir.join(".vercel/project.json"));
+        files.extend(m.files.iter().cloned());
+        vercel_candidates.push(dir.join(".vercel").join("project.json"));
     }
     let (mut branch, mut github) = (None, None);
     if let Some(git) = &git {
         files.extend([git.head.clone(), git.config.clone()]);
-        vercel_candidates.push(git.root.join(".vercel/project.json"));
+        vercel_candidates.push(git.root.join(".vercel").join("project.json"));
         branch = fs::read_to_string(&git.head)
             .ok()
             .and_then(|h| branch_from_head(&h));
@@ -186,7 +200,7 @@ fn resolve(cwd: &Path) -> Stamped<Resolved> {
         github,
         vercel,
     };
-    Stamped::new(files, Resolved { project, git })
+    (files, Resolved { project, git })
 }
 
 // ---------------------------------------------------------------- git
@@ -210,7 +224,9 @@ impl Git {
         } else {
             // Worktrees and submodules have a `.git` file pointing at the real git dir.
             let text = fs::read_to_string(&dot_git).ok()?;
-            let git_dir = dir.join(text.lines().find_map(|l| l.strip_prefix("gitdir:"))?.trim());
+            // Git writes `/` here even on Windows; normalize for native separators.
+            let git_dir =
+                normalize(&dir.join(text.lines().find_map(|l| l.strip_prefix("gitdir:"))?.trim()));
             // Only linked worktrees have `commondir`; it points back at the main `.git`.
             let common_dir = fs::read_to_string(git_dir.join("commondir"))
                 .map_or_else(|_| git_dir.clone(), |c| git_dir.join(c.trim()));
@@ -229,8 +245,9 @@ impl Git {
     }
 }
 
-/// Resolves `..` in `<repo>/.git/worktrees/<name>/../..`. `canonicalize` would
-/// also do it, but turns Windows paths into `\\?\C:\...`.
+/// Resolves `..` in `<repo>/.git/worktrees/<name>/../..` and uses the OS
+/// separator throughout, so paths match file events. `canonicalize` would
+/// turn Windows paths into `\\?\C:\...`.
 fn normalize(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for part in path.components() {
@@ -294,7 +311,8 @@ fn github_from_config(config: &str) -> Option<String> {
 // ---------------------------------------------------------------- manifests
 
 struct Manifest {
-    file: PathBuf,
+    /// The manifest, and any config file the framework was read from.
+    files: Vec<PathBuf>,
     name: Option<String>,
     framework: Option<String>,
 }
@@ -305,9 +323,9 @@ impl Manifest {
             let file = dir.join(name);
             fs::read_to_string(&file).ok().map(|text| (file, text))
         };
-        let manifest = |file, name, framework: Option<&str>| {
+        let manifest = |files, name, framework: Option<&str>| {
             Some(Manifest {
-                file,
+                files,
                 name,
                 framework: framework.map(str::to_string),
             })
@@ -325,32 +343,38 @@ impl Manifest {
                 .find(|(dep, _)| has(dep))
                 .map(|(_, label)| *label);
             let name = json["name"].as_str().map(str::to_string);
-            return manifest(file, name, framework);
+            return manifest(vec![file], name, framework);
         }
         if let Some((file, text)) = read("pyproject.toml").or_else(|| read("requirements.txt")) {
             let name = toml_name(&text, "project").or_else(|| toml_name(&text, "tool.poetry"));
             let text = text.to_lowercase();
+            let manage = dir.join("manage.py");
             let framework = PYTHON_FRAMEWORKS
                 .iter()
                 .find(|(dep, _)| text.contains(dep))
                 .map(|(_, label)| *label)
-                .or(dir.join("manage.py").exists().then_some("Django"))
+                .or(manage.exists().then_some("Django"))
                 .unwrap_or("Python");
-            return manifest(file, name, Some(framework));
+            return manifest(vec![file, manage], name, Some(framework));
         }
         if let Some((file, text)) = read("Cargo.toml") {
-            return manifest(file, toml_name(&text, "package"), Some("Rust"));
+            return manifest(vec![file], toml_name(&text, "package"), Some("Rust"));
         }
         if let Some((file, text)) = read("go.mod") {
             let module = text.lines().find_map(|l| l.strip_prefix("module "));
             let name = module
                 .and_then(|m| m.trim().rsplit('/').next())
                 .map(str::to_string);
-            return manifest(file, name, Some("Go"));
+            return manifest(vec![file], name, Some("Go"));
         }
         if let Some((file, _)) = read("Gemfile") {
-            let rails = dir.join("config/application.rb").exists();
-            return manifest(file, None, Some(if rails { "Rails" } else { "Ruby" }));
+            let application = dir.join("config").join("application.rb");
+            let rails = application.exists();
+            return manifest(
+                vec![file, application],
+                None,
+                Some(if rails { "Rails" } else { "Ruby" }),
+            );
         }
         if let Some((file, text)) = read("mix.exs") {
             let name = text
@@ -361,7 +385,11 @@ impl Manifest {
                 })
                 .map(str::to_string);
             let phoenix = text.contains(":phoenix");
-            return manifest(file, name, Some(if phoenix { "Phoenix" } else { "Elixir" }));
+            return manifest(
+                vec![file],
+                name,
+                Some(if phoenix { "Phoenix" } else { "Elixir" }),
+            );
         }
         None
     }
@@ -412,18 +440,8 @@ fn toml_name(text: &str, section: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::fixture::{s, TempDir};
+    use super::super::fixture::{details, eventually, s, TempDir};
     use super::*;
-
-    fn details(env: &[(&str, &str)]) -> ProcDetails {
-        ProcDetails {
-            env: env
-                .iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-            ..Default::default()
-        }
-    }
 
     /// A repo at `<tmp>/app` on `main` with a GitHub remote, as `git init` and
     /// `git remote add` would leave it.
@@ -490,19 +508,26 @@ mod tests {
         repo(&tmp);
         tmp.write(
             "app/package.json",
-            r#"{"dependencies": {"next": "15.1.0"}, "devDependencies": {"storybook": "8.4.0"}}"#,
+            r#"{"dependencies": {"next": "15.1.0", "vite": "6.0.0"}, "devDependencies": {"storybook": "8.4.0"}}"#,
         );
         let resolver = Resolver::default();
-
-        let app = resolver.project(&tmp.path("app"), Some("next dev"));
-        let storybook = resolver.project(
-            &tmp.path("app"),
-            Some("node node_modules/.bin/storybook dev -p 6006"),
-        );
-        assert_eq!(app.framework.as_deref(), Some("Next.js"));
-        assert_eq!(storybook.framework.as_deref(), Some("Storybook"));
+        let cases = [
+            ("next dev", "Next.js"),
+            ("node node_modules/.bin/storybook dev -p 6006", "Storybook"),
+            ("npx storybook dev", "Storybook"),
+            ("npm run storybook", "Storybook"),
+            (
+                "C:\\app\\node_modules\\.bin\\storybook.cmd dev",
+                "Storybook",
+            ),
+            ("vite --config vite.storybook.config.ts", "Next.js"),
+        ];
+        for (command, framework) in cases {
+            let project = resolver.project(&tmp.path("app"), Some(command));
+            assert_eq!(project.framework.as_deref(), Some(framework), "{command}");
+        }
         // No manifest name, so the repo folder names it.
-        assert_eq!(app.name, "app");
+        assert_eq!(resolver.project(&tmp.path("app"), None).name, "app");
     }
 
     #[test]
@@ -582,57 +607,66 @@ mod tests {
     }
 
     #[test]
-    fn a_branch_switch_is_seen_on_the_next_call() {
+    fn a_branch_switch_is_seen_after_the_file_event() {
         let tmp = TempDir::new();
         repo(&tmp);
         let resolver = Resolver::default();
-        assert_eq!(
-            resolver.project(&tmp.path("app"), None).branch.as_deref(),
-            Some("main")
-        );
+        let branch = || resolver.project(&tmp.path("app"), None).branch;
+        assert_eq!(branch().as_deref(), Some("main"));
 
-        let head = tmp.path("app/.git/HEAD");
-        fs::write(&head, "ref: refs/heads/feature/login\n").unwrap();
-        // Filesystems with coarse timestamps could miss a same-instant rewrite.
-        let later =
-            fs::metadata(&head).unwrap().modified().unwrap() + std::time::Duration::from_secs(2);
-        fs::File::options()
-            .write(true)
-            .open(&head)
-            .unwrap()
-            .set_modified(later)
-            .unwrap();
-        assert_eq!(
-            resolver.project(&tmp.path("app"), None).branch.as_deref(),
-            Some("feature/login")
-        );
+        // What `git switch` does: write HEAD.lock, then rename it over HEAD.
+        let lock = tmp.write("app/.git/HEAD.lock", "ref: refs/heads/feature/login\n");
+        fs::rename(lock, tmp.path("app/.git/HEAD")).unwrap();
+        eventually(|| branch().filter(|b| b == "feature/login"));
     }
 
     #[test]
     fn github_owner_and_repo_from_remote_urls() {
-        let config = |url: &str| format!("[remote \"origin\"]\n\turl = {url}\n");
-        for url in [
-            "git@github.com:greenfield-inc/Pane.git",
-            "https://github.com/greenfield-inc/Pane",
-            "https://github.com/greenfield-inc/Pane.git/",
-            "ssh://git@github.com/greenfield-inc/Pane.git",
-        ] {
-            assert_eq!(
-                github_from_config(&config(url)).as_deref(),
+        let remote = |name: &str, url: &str| format!("[remote \"{name}\"]\n\turl = {url}\n");
+        let cases = [
+            (
+                remote("origin", "git@github.com:greenfield-inc/Pane.git"),
                 Some("greenfield-inc/Pane"),
-                "{url}"
+            ),
+            (
+                remote("origin", "https://github.com/greenfield-inc/Pane"),
+                Some("greenfield-inc/Pane"),
+            ),
+            (
+                remote("origin", "https://github.com/greenfield-inc/Pane.git/"),
+                Some("greenfield-inc/Pane"),
+            ),
+            (
+                remote("origin", "ssh://git@github.com/greenfield-inc/Pane.git"),
+                Some("greenfield-inc/Pane"),
+            ),
+            (
+                remote("origin", "git@gitlab.com:greenfield-inc/Pane.git"),
+                None,
+            ),
+            (
+                remote("upstream", "https://github.com/tomjohndesign/what-the-port"),
+                Some("tomjohndesign/what-the-port"),
+            ),
+            (
+                remote("upstream", "https://github.com/tomjohndesign/what-the-port")
+                    + &remote(
+                        "origin",
+                        "git@github.com:greenfield-inc/port-process-manager.git",
+                    ),
+                Some("greenfield-inc/port-process-manager"),
+            ),
+        ];
+        for (config, github) in cases {
+            let tmp = TempDir::new();
+            repo(&tmp);
+            tmp.write(
+                "app/.git/config",
+                &format!("[core]\n\tbare = false\n{config}"),
             );
+            let project = Resolver::default().project(&tmp.path("app"), None);
+            assert_eq!(project.github.as_deref(), github, "{config}");
         }
-        assert_eq!(
-            github_from_config(&config("git@gitlab.com:greenfield-inc/Pane.git")),
-            None
-        );
-        let upstream_only =
-            "[remote \"upstream\"]\n\turl = https://github.com/tomjohndesign/what-the-port\n";
-        assert_eq!(
-            github_from_config(upstream_only).as_deref(),
-            Some("tomjohndesign/what-the-port")
-        );
     }
 
     #[test]
@@ -641,12 +675,15 @@ mod tests {
         // The server runs in a scratch folder; Pane's environment still names the workspace.
         let cwd = tmp.write("scratch/.keep", "");
         let chain = [
-            details(&[]),
-            details(&[
-                ("PANE_SESSION_ID", "3f2a9c1e-77b0"),
-                ("PANE_PANEL_ID", "panel-8d41"),
-                ("PANE_WORKSPACE_PATH", "/Users/dev/Pane/worktrees/ppm-links"),
-            ]),
+            details(None, &[]),
+            details(
+                None,
+                &[
+                    ("PANE_SESSION_ID", "3f2a9c1e-77b0"),
+                    ("PANE_PANEL_ID", "panel-8d41"),
+                    ("PANE_WORKSPACE_PATH", "/Users/dev/Pane/worktrees/ppm-links"),
+                ],
+            ),
         ];
         assert_eq!(
             Resolver::default().workspace(cwd.parent().unwrap(), &chain),
@@ -661,10 +698,10 @@ mod tests {
     #[test]
     fn pane_ids_that_pane_would_reject_leave_no_link() {
         let tmp = TempDir::new();
-        let chain = [details(&[
-            ("PANE_SESSION_ID", "abc&panel=x"),
-            ("PANE_PANEL_ID", "p1"),
-        ])];
+        let chain = [details(
+            None,
+            &[("PANE_SESSION_ID", "abc&panel=x"), ("PANE_PANEL_ID", "p1")],
+        )];
         let found = Resolver::default().workspace(&tmp.0, &chain).unwrap();
         assert_eq!((found.kind, found.open_url), (WorkspaceKind::Pane, None));
     }
@@ -672,7 +709,7 @@ mod tests {
     #[test]
     fn conductor_from_its_environment() {
         let tmp = TempDir::new();
-        let chain = [details(&[("CONDUCTOR_WORKSPACE_NAME", "providence")])];
+        let chain = [details(None, &[("CONDUCTOR_WORKSPACE_NAME", "providence")])];
         assert_eq!(
             Resolver::default().workspace(&tmp.0, &chain),
             Some(workspace(
