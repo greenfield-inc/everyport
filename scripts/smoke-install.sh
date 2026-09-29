@@ -11,13 +11,13 @@ set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
 dist="$(cd "${1:-$root/dist}" && pwd)"
-version="$(node -p "require('$root/packaging/npm/package.json').version")"
 work="$(mktemp -d)"
 servers=()
 trap 'kill "${servers[@]}" 2>/dev/null || true; rm -rf "$work"' EXIT
 
 # Windows tools need Windows paths; elsewhere this is a no-op.
 native() { if command -v cygpath > /dev/null; then cygpath -w "$1"; else echo "$1"; fi; }
+version="$(node -p 'require(process.argv[1]).version' "$(native "$root/packaging/npm/package.json")")"
 
 serve() {
   uv run --quiet --no-project python -m http.server "$2" --bind 127.0.0.1 --directory "$(native "$1")" > "$work/server-$2.log" 2>&1 &
@@ -54,11 +54,13 @@ install_with() {
 
 if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
   script=(pwsh -NoProfile -File "$(native "$dist/release/install.ps1")")
-  npm_bin="$work/npm/ppm.cmd"
+  npm_bin="$work/npm"
+  cmd=.cmd
   installed=ppm.exe
 else
   script=(sh "$dist/release/install.sh")
-  npm_bin="$work/npm/bin/ppm"
+  npm_bin="$work/npm/bin"
+  cmd=
   installed=ppm
 fi
 
@@ -86,13 +88,13 @@ expect_mismatch() {
 
 install_with script "$good" "${script[@]}" > "$work/script.log" 2>&1 || { cat "$work/script.log"; exit 1; }
 expect_version "install script" "$work/home-script-18765/bin/$installed" --version
-expect_version "npm ppm" install_with npm "$good" "$npm_bin" --version
-expect_version "npm port-process-manager" install_with npm2 "$good" "${npm_bin/ppm/port-process-manager}" --version
+expect_version "npm ppm" install_with npm "$good" "$npm_bin/ppm$cmd" --version
+expect_version "npm port-process-manager" install_with npm2 "$good" "$npm_bin/port-process-manager$cmd" --version
 expect_version "uvx port-process-manager" install_with uvx "$good" uvx --from "$wheel" port-process-manager --version
 expect_version "uvx ppm" install_with uvx2 "$good" uvx --from "$wheel" ppm --version
 
 expect_mismatch "install script" install_with script "$bad" "${script[@]}"
-expect_mismatch "npm" install_with npm "$bad" "$npm_bin" --version
+expect_mismatch "npm" install_with npm "$bad" "$npm_bin/ppm$cmd" --version
 expect_mismatch "uvx" install_with uvx "$bad" uvx --from "$wheel" port-process-manager --version
 
 [ "$failures" = 0 ] || { echo "$failures check(s) failed"; exit 1; }
