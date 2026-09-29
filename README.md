@@ -21,7 +21,7 @@ Free and open source. No account. No telemetry.
 - Spike alerts when a server's memory crosses your threshold or keeps climbing
 - Clean up: servers whose worktree was deleted, or that are idle, long-running or leaking memory
 - Auto-kill for those servers, set to ask first or act on its own
-- Stop or restart any server. Clean up and auto-kill skip protected processes, such as databases. You can edit the protected list in **Settings → Clean up**.
+- Stop or restart any server. Clean up and auto-kill skip protected processes, such as databases, and Stop asks first. You can edit the protected list in **Settings → Clean up**.
 
 **Jump to the work**
 - Open `localhost:<port>` in your browser, or the Vercel preview for the same branch
@@ -131,8 +131,8 @@ Web pages can't read its responses unless you allow their origin, as in `ppm ser
 ppm                        Terminal UI with your servers
 ppm list [--json]          List servers once
 ppm watch --jsonl          Print a snapshot on every change
-ppm stop <port>            Stop the server on a port (--force to kill)
-ppm restart <port>         Stop it, then rerun its command in the folder it started from
+ppm stop <port>            Stop the server on a port (--protected if it's protected, --force to kill)
+ppm restart <port>         Stop it, then rerun its command in the folder it started from (--protected if it's protected)
 ppm open <port>            Open the server in your browser, forwarding its port with --on
 ppm clean [--yes]          Stop the servers Clean up suggests
 ppm stdio                  Speak the ppm protocol on stdin and stdout

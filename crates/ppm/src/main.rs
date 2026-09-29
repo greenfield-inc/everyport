@@ -53,12 +53,20 @@ enum Command {
     /// Stop the server on a port
     Stop {
         port: u16,
-        /// Kill instead of asking it to quit
+        /// Kill instead of asking it to quit, even if it's protected
         #[arg(long)]
         force: bool,
+        /// Stop it even if it's protected, asking it to quit first
+        #[arg(long)]
+        protected: bool,
     },
     /// Stop it, then rerun its command in the folder it started from
-    Restart { port: u16 },
+    Restart {
+        port: u16,
+        /// Restart it even if it's protected
+        #[arg(long)]
+        protected: bool,
+    },
     /// Open the server in your browser, forwarding its port with --on
     Open { port: u16 },
     /// Stop the servers Clean up suggests
@@ -147,8 +155,14 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
         None => commands::list(machine()?, false),
         Some(Command::List { json }) => commands::list(machine()?, json),
         Some(Command::Watch { .. }) => commands::watch(machine()?),
-        Some(Command::Stop { port, force }) => commands::stop(machine()?, port, force),
-        Some(Command::Restart { port }) => commands::restart(machine()?, port),
+        Some(Command::Stop {
+            port,
+            force,
+            protected,
+        }) => commands::stop(machine()?, port, force, protected),
+        Some(Command::Restart { port, protected }) => {
+            commands::restart(machine()?, port, protected)
+        }
         Some(Command::Open { port }) => commands::open(cli.on.as_deref(), install, port),
         Some(Command::Clean) => commands::clean(machine()?, cli.yes),
         Some(_) if cli.on.is_some() => Err(io::Error::other(
