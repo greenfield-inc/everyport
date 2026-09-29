@@ -169,6 +169,10 @@
   color: var(--primary);
 }
 
+.settings-footer {
+  padding: 2px 0 6px;
+}
+
 .settings-switch {
   appearance: none;
   position: relative;
