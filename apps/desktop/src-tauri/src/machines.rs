@@ -6,6 +6,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -24,6 +25,8 @@ pub const LOCAL: &str = "local";
 const SNOOZE: Duration = Duration::from_secs(3600);
 const FIRST_RETRY: Duration = Duration::from_secs(1);
 const LAST_RETRY: Duration = Duration::from_secs(30);
+/// Run numbers start at 1, so a new entry's 0 matches no task.
+static NEXT_RUN: AtomicU64 = AtomicU64::new(1);
 
 /// `Machine` in @ppm/protocol.
 #[derive(Clone, Serialize)]
@@ -66,7 +69,8 @@ struct Entry {
     via: Option<Via>,
     /// The distro, for a WSL machine.
     distro: Option<String>,
-    /// Bumped on every (re)start and removal, so tasks for an older run stop.
+    /// This run's number, unique across all machines, so tasks for an older
+    /// run, or for a removed machine of the same name, stop.
     run: u64,
     connection: Option<Connection>,
     client: Option<Client>,
@@ -74,6 +78,9 @@ struct Entry {
     probe: Option<Probe>,
     /// This computer's snapshot as ppm sent it, before WSL relays are removed.
     raw: Option<Snapshot>,
+    /// Open forwards by remote port. They end with the run, since a new run
+    /// may reach another host, and dropping one closes its tunnel.
+    forwards: HashMap<u16, Forward>,
 }
 
 impl Entry {
@@ -95,6 +102,7 @@ impl Entry {
             client: None,
             probe: None,
             raw: None,
+            forwards: HashMap::new(),
         }
     }
 }
@@ -102,8 +110,6 @@ impl Entry {
 pub struct Machines {
     entries: Vec<Entry>,
     snoozed: HashMap<(String, u16), Instant>,
-    /// Open tunnels, by machine and remote port. Dropping one closes it.
-    forwards: HashMap<(String, u16), Forward>,
     /// `machines.toml`'s modification time when the list was last read.
     read_at: Option<SystemTime>,
 }
@@ -132,7 +138,6 @@ pub fn start(app: &AppHandle) {
     app.manage(Mutex::new(Machines {
         entries: vec![Entry::new(LOCAL, "This computer", None, None)],
         snoozed: HashMap::new(),
-        forwards: HashMap::new(),
         read_at: None,
     }));
     let run = begin(app, LOCAL).expect("this computer is always listed");
@@ -205,18 +210,24 @@ pub fn reload(app: &AppHandle) {
             let mut entries = vec![take(&mut old, LOCAL).expect("this computer is always listed")];
             for l in listed {
                 let name = l.machine.name.clone();
+                if name == LOCAL {
+                    eprintln!(
+                        "machines: skipping a machine named {LOCAL}, which is this computer's id"
+                    );
+                    continue;
+                }
                 let kept = take(&mut old, &name)
                     .filter(|e| e.via.as_ref() == Some(&l.machine.via) && e.distro == l.distro);
-                entries.push(kept.unwrap_or_else(|| {
-                    if l.auto {
-                        starts.push(name.clone());
-                    }
-                    Entry::new(&name, &name, Some(l.machine.via), l.distro)
-                }));
+                let entry =
+                    kept.unwrap_or_else(|| Entry::new(&name, &name, Some(l.machine.via), l.distro));
+                // New, or discovered before and saved since.
+                if l.auto && entry.machine.state == MachineState::Available {
+                    starts.push(name);
+                }
+                entries.push(entry);
             }
-            // Removed machines disconnect as their clients drop; their tasks stop.
-            all.forwards
-                .retain(|(id, _), _| entries.iter().any(|e| e.machine.id == *id));
+            // Removed machines disconnect as their clients and forwards drop;
+            // their tasks stop.
             all.entries = entries;
             starts
         };
@@ -244,9 +255,10 @@ pub fn reload_if_changed(app: &AppHandle) {
 fn begin(app: &AppHandle, id: &str) -> Option<u64> {
     let mut all = machines(app);
     let entry = all.entries.iter_mut().find(|e| e.machine.id == id)?;
-    entry.run += 1;
+    entry.run = NEXT_RUN.fetch_add(1, Ordering::Relaxed);
     entry.client = None;
     entry.connection = None;
+    entry.forwards.clear();
     entry.probe = None;
     entry.machine.state = MachineState::Connecting;
     entry.machine.error = None;
@@ -438,6 +450,8 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
             Update::Disconnected { error, retry_in } => {
                 // Its servers are unknown now; the page shows the error instead.
                 eprintln!("machine {id}: {error}");
+                // Its tunnels may have died with the connection.
+                entry.forwards.clear();
                 entry.raw = None;
                 machine.snapshot = None;
                 machine.state = MachineState::Error;
@@ -464,8 +478,7 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
                     machine.snapshot = Some(snapshot);
                 }
                 // A tunnel to a server that stopped has nothing left to carry.
-                all.forwards
-                    .retain(|(machine, port), _| machine != id || ports.contains(port));
+                entry.forwards.retain(|port, _| ports.contains(port));
                 all.show_local();
             }
             Update::Event(Event::Alert(event)) => {
@@ -505,10 +518,17 @@ impl Machines {
     }
 
     /// This computer's snapshot, without the ports WSL relays for a distro
-    /// that shows them itself, or the app's own forwards to other machines,
+    /// that shows them itself, or the app's own tunnels to other machines,
     /// which belong to the remote server (and stopping one would stop the
-    /// app or its ssh tunnel).
+    /// app or its ssh tunnel). This computer and WSL open ports directly,
+    /// with no tunnel.
     fn show_local(&mut self) {
+        let tunnels: Vec<u16> = self
+            .entries
+            .iter()
+            .filter(|e| e.machine.id != LOCAL && e.distro.is_none())
+            .flat_map(|e| e.forwards.values().map(|f| f.local_port))
+            .collect();
         let distros: Vec<&Snapshot> = self
             .entries
             .iter()
@@ -520,12 +540,7 @@ impl Machines {
             .and_then(|e| e.raw.clone())
             .map(|mut raw| {
                 ppm_client::wsl::dedupe(&mut raw, &distros);
-                raw.servers.retain(|server| {
-                    !self
-                        .forwards
-                        .iter()
-                        .any(|((id, _), f)| id != LOCAL && f.local_port == server.port)
-                });
+                raw.servers.retain(|server| !tunnels.contains(&server.port));
                 raw
             });
         if let Some(entry) = self.entries.iter_mut().find(|e| e.machine.id == LOCAL) {
@@ -636,23 +651,32 @@ pub async fn call(app: &AppHandle, machine_id: &str, call: Call) -> Result<(), S
 /// machine's port is forwarded here first, and stays forwarded while its
 /// server runs.
 pub async fn url(app: &AppHandle, machine_id: &str, port: u16) -> Result<String, String> {
-    let key = (machine_id.to_string(), port);
-    let connection = {
+    let (run, connection) = {
         let all = machines(app);
-        if let Some(forward) = all.forwards.get(&key) {
+        let entry = all
+            .entry(machine_id)
+            .ok_or_else(|| format!("no machine {machine_id}"))?;
+        if let Some(forward) = entry.forwards.get(&port) {
             return Ok(forward.url.clone());
         }
-        all.entry(machine_id)
-            .and_then(|e| e.connection.clone())
-            .ok_or_else(|| format!("{machine_id} isn't connected"))?
+        let connection = entry
+            .connection
+            .clone()
+            .ok_or_else(|| format!("{machine_id} isn't connected"))?;
+        (entry.run, connection)
     };
     let forward = forward::forward(&connection, port)
         .await
         .map_err(|e| format!("{e:#}"))?;
-    let url = forward.url.clone();
-    eprintln!("machine {machine_id}: :{port} opens at {url}");
     let mut all = machines(app);
-    all.forwards.insert(key, forward);
+    let entry = all
+        .entries
+        .iter_mut()
+        .find(|e| e.machine.id == machine_id && e.run == run)
+        .ok_or_else(|| format!("{machine_id} disconnected"))?;
+    // Another open of the same port may have finished first; keep its tunnel.
+    let url = entry.forwards.entry(port).or_insert(forward).url.clone();
+    eprintln!("machine {machine_id}: :{port} opens at {url}");
     all.show_local();
     drop(all);
     changed(app);

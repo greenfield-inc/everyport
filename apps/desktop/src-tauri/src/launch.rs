@@ -201,8 +201,8 @@ fn wsl_editor(distro: &str, path: &str) -> bool {
 fn wsl_terminal(distro: &str, directory: &str, command: &str) -> std::io::Result<()> {
     let wsl = wsl_command(distro, directory, command);
     Command::new("wt.exe")
-        .args(["-p", distro])
-        .args(&wsl)
+        .args(["-p", &wt_arg(distro)])
+        .args(wsl.iter().map(|arg| wt_arg(arg)))
         .spawn()
         .or_else(|_| {
             let mut console = Command::new(&wsl[0]);
@@ -216,6 +216,13 @@ fn wsl_terminal(distro: &str, directory: &str, command: &str) -> std::io::Result
             console.spawn()
         })
         .map(drop)
+}
+
+/// An argument for `wt.exe`, which splits its command line at every `;`,
+/// even inside a quoted argument, unless it is escaped as `\;`. A folder
+/// from a snapshot must not start a second command.
+fn wt_arg(arg: &str) -> String {
+    arg.replace(';', r"\;")
 }
 
 /// Single-quotes `value` for a POSIX shell.
@@ -273,11 +280,11 @@ fn terminal(_name: &str, directory: &str, command: &str) -> std::io::Result<()> 
     Command::new("wt.exe")
         .args([
             "-d",
-            directory,
+            &wt_arg(directory),
             "powershell.exe",
             "-NoExit",
             "-Command",
-            command,
+            &wt_arg(command),
         ])
         .spawn()
         .or_else(|_| {
@@ -355,6 +362,11 @@ mod tests {
             wsl_path("Ubuntu", "/home/me/app"),
             r"\\wsl.localhost\Ubuntu\home\me\app"
         );
+    }
+
+    #[test]
+    fn keeps_semicolons_inside_a_windows_terminal_argument() {
+        assert_eq!(wt_arg("/tmp;calc.exe;wsl.exe"), r"/tmp\;calc.exe\;wsl.exe");
     }
 
     #[test]
