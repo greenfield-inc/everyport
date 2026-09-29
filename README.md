@@ -236,8 +236,8 @@ everyport stop <port>            Stop the server on a port (--protected if it's 
 everyport restart <port>         Stop it, then rerun its command in the folder it started from (--protected if it's protected)
 everyport open <port>            Open the server in your browser, forwarding its port with --on
 everyport clean [--yes]          Stop the servers Clean up suggests
-everyport stdio                  Speak the everyport protocol on stdin and stdout
-everyport serve                  Speak the everyport protocol over HTTP on loopback
+everyport stdio                  Speak the Everyport protocol on stdin and stdout
+everyport serve                  Speak the Everyport protocol over HTTP on loopback
 everyport remote add|list|rm     Manage remote machines
 everyport --on <machine> ...     Run the command on another machine
 everyport doctor                 Check permissions and platform support

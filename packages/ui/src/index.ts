@@ -1,4 +1,4 @@
-// The popover UI: React components that render everyport protocol data through a
+// The popover UI: React components that render Everyport protocol data through a
 // EveryportClient. No Tauri imports here, so Pane and other hosts can embed it.
 // Import "@everyport/ui/styles.css" once; the host runs Tailwind 4.
 export { Popover, type PopoverProps } from "./Popover.tsx";

@@ -1,4 +1,4 @@
-// The everyport wire protocol for TypeScript clients. Types in ./generated come from
+// The Everyport wire protocol for TypeScript clients. Types in ./generated come from
 // crates/everyport-core/src/protocol.rs; run `pnpm --filter @everyport/protocol generate`
 // after changing it.
 export * from "./generated/index.ts";

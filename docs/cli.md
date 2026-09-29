@@ -16,8 +16,8 @@ Commands:
   restart  Stop it, then rerun its command in the folder it started from
   open     Open the server in your browser, forwarding its port with --on
   clean    Stop the servers Clean up suggests
-  stdio    Speak the everyport protocol on stdin and stdout
-  serve    Speak the everyport protocol over HTTP on loopback
+  stdio    Speak the Everyport protocol on stdin and stdout
+  serve    Speak the Everyport protocol over HTTP on loopback
   remote   Manage remote machines
   doctor   Check permissions and platform support
   help     Print this message or the help of the given subcommand(s)
@@ -118,7 +118,7 @@ Options:
 ## `everyport stdio`
 
 ```text
-Speak the everyport protocol on stdin and stdout
+Speak the Everyport protocol on stdin and stdout
 
 Usage: everyport stdio [OPTIONS]
 
@@ -130,7 +130,7 @@ Options:
 ## `everyport serve`
 
 ```text
-Speak the everyport protocol over HTTP on loopback
+Speak the Everyport protocol over HTTP on loopback
 
 Usage: everyport serve [OPTIONS]
 

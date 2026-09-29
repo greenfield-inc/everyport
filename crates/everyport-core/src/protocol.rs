@@ -1,4 +1,4 @@
-//! The everyport wire protocol. `everyport stdio` writes one `Event` per line to stdout and
+//! The Everyport wire protocol. `everyport stdio` writes one `Event` per line to stdout and
 //! reads one `Request` per line from stdin; `everyport serve` carries the same JSON
 //! over HTTP and server-sent events. Types export to TypeScript through ts-rs
 //! (`cargo test -p everyport-core` writes packages/protocol/src/generated).

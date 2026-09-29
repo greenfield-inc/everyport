@@ -35,7 +35,7 @@ serve() {
 }
 
 cp -R "$dist/release" "$work/tampered"
-for binary in "$work"/tampered/everyport-* "$work"/tampered/everyport-*; do
+for binary in "$work"/tampered/everyport-*; do
   printf 'tampered' >> "$binary"
 done
 serve "$dist/release" 18765

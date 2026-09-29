@@ -33,6 +33,7 @@
   "bundle": {
     "active": true,
     "copyright": "Copyright (c) 2026 Dcouple, Inc.",
+    "publisher": "Dcouple, Inc.",
     "targets": "all",
     "externalBin": ["binaries/everyport-sidecar"],
     "icon": [

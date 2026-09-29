@@ -70,9 +70,9 @@ enum Command {
     Open { port: u16 },
     /// Stop the servers Clean up suggests
     Clean,
-    /// Speak the everyport protocol on stdin and stdout
+    /// Speak the Everyport protocol on stdin and stdout
     Stdio,
-    /// Speak the everyport protocol over HTTP on loopback
+    /// Speak the Everyport protocol over HTTP on loopback
     Serve {
         /// Loopback address to listen on
         #[arg(long, default_value = serve::DEFAULT_LISTEN)]
