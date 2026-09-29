@@ -10,7 +10,7 @@ cask "port-process-manager" do
   desc "Menu bar app that shows every dev server on your machine"
   homepage "https://github.com/greenfield-inc/port-process-manager"
 
-  depends_on macos: ">= :ventura"
+  depends_on macos: :ventura
 
   app "Port Process Manager.app"
 

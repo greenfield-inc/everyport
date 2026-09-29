@@ -69,18 +69,18 @@ expect_version() {
   if output="$("$@" 2>&1)" && grep -qF "$version" <<< "$output"; then
     echo "ok    $name: $(tail -n 1 <<< "$output")"
   else
-    echo "FAIL  $name printed:"; sed 's/^/      /' <<< "$output"; failures=$((failures + 1))
+    echo "FAIL  $name printed:"; printf '%s\n' "$output"; failures=$((failures + 1))
   fi
 }
 expect_mismatch() {
   local name="$1" output
   shift
   if output="$("$@" 2>&1)"; then
-    echo "FAIL  $name installed despite a wrong checksum:"; sed 's/^/      /' <<< "$output"; failures=$((failures + 1))
+    echo "FAIL  $name installed despite a wrong checksum:"; printf '%s\n' "$output"; failures=$((failures + 1))
   elif grep -q 'checksum mismatch' <<< "$output"; then
     echo "ok    $name refused: $(grep 'checksum mismatch' <<< "$output" | head -n 1)"
   else
-    echo "FAIL  $name failed for another reason:"; sed 's/^/      /' <<< "$output"; failures=$((failures + 1))
+    echo "FAIL  $name failed for another reason:"; printf '%s\n' "$output"; failures=$((failures + 1))
   fi
 }
 
