@@ -1,5 +1,8 @@
 import type { AgentSession, Call, Event, HostInfo, Snapshot } from "./generated/index.ts";
 
+/** The id of this computer, which the host app runs itself and reconnects on its own. */
+export const LOCAL_MACHINE = "local";
+
 /** One machine the UI shows: this computer, or a remote connection. */
 export interface Machine {
   id: string;
@@ -12,8 +15,20 @@ export interface Machine {
    */
   state: "available" | "connecting" | "install" | "installing" | "connected" | "error";
   error?: string;
+  /** The steps to reach the machine, up to the one that failed, while it can't connect. */
+  check?: CheckStep[];
   install?: { version: string; path: string };
   snapshot: Snapshot | null;
+}
+
+/** One step of reaching a machine, from `everyport::client::check`. */
+export interface CheckStep {
+  label: string;
+  ok: boolean;
+  /** One sentence with the fix, for the failed step. Commands are in `backticks`. */
+  fix?: string;
+  /** What the failing tool printed. */
+  detail?: string;
 }
 
 /**
@@ -35,7 +50,7 @@ export interface EveryportClient {
   openInEditor?(machineId: string, path: string): Promise<void>;
   resumeSession?(machineId: string, session: AgentSession): Promise<void>;
   openSettings?(): void;
-  /** Connects a discovered machine the user picked. */
+  /** Connects a discovered machine the user picked, or tries a failed one again. */
   connectMachine?(machineId: string): Promise<void>;
   /** Installs everyport on a machine in the `install` state, then connects. */
   installEveryport?(machineId: string): Promise<void>;

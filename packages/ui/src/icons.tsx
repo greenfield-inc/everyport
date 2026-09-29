@@ -125,6 +125,15 @@ export const CheckIcon = ({ className }: Props) => (
   </svg>
 );
 
+export const CopyIcon = ({ className }: Props) => (
+  <svg width="10" height="10" viewBox="0 0 10 10" className={`everyport:shrink-0 ${className ?? ""}`} aria-hidden>
+    <g {...line} strokeWidth="1.1">
+      <rect x="3.3" y="3.3" width="5.2" height="5.2" rx="1" />
+      <path d="M6.7 1.5H2.5a1 1 0 0 0-1 1v4.2" />
+    </g>
+  </svg>
+);
+
 export function ReasonIcon({ kind, className }: Props & { kind: CleanUpReason["kind"] }) {
   return (
     <svg width="11" height="11" viewBox="0 0 12 12" className={`everyport:shrink-0 ${className ?? ""}`} aria-hidden>

@@ -1,16 +1,15 @@
 //! Keeps one connection alive: runs a session, reports what happens, and
 //! starts a new session with backoff when it ends.
 
+use crate::client::check::Failure;
 use crate::client::remote;
+use crate::client::retry::{self, Backoff};
 use crate::client::Connection;
 use crate::protocol::{Call, Event, Os, Request, PROTOCOL_VERSION};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
-
-const FIRST_RETRY: Duration = Duration::from_secs(1);
-const LAST_RETRY: Duration = Duration::from_secs(30);
 
 /// What a connection reports, in order.
 #[derive(Debug, Clone, PartialEq)]
@@ -19,8 +18,13 @@ pub enum Update {
     Connecting,
     /// A `hello`, `snapshot` or `alert` from everyport. Results go to [`Client::call`].
     Event(Event),
-    /// The session ended. The next one starts after `retry_in`.
-    Disconnected { error: String, retry_in: Duration },
+    /// The session ended. The next one starts after `retry_in`, or never
+    /// when trying again can't help until the user acts, such as after ssh
+    /// rejected their key.
+    Disconnected {
+        error: String,
+        retry_in: Option<Duration>,
+    },
 }
 
 pub(crate) type Reply = oneshot::Sender<Result<(), String>>;
@@ -59,7 +63,7 @@ async fn supervise(
     mut calls: mpsc::UnboundedReceiver<(Call, Reply)>,
     updates: mpsc::UnboundedSender<Update>,
 ) {
-    let mut retry_in = FIRST_RETRY;
+    let mut backoff = Backoff::default();
     loop {
         if updates.send(Update::Connecting).is_err() {
             return;
@@ -92,15 +96,20 @@ async fn supervise(
         };
         let Ended::Error(error) = ended else { return };
         if session.greeted {
-            retry_in = FIRST_RETRY;
+            backoff.reset();
         }
+        // Only ssh's own failures can wait for the user; the sidecar always retries.
+        let ssh = matches!(&connection, Connection::Command { argv_prefix, .. } if remote::program(argv_prefix) == "ssh");
+        let waits = ssh && Failure::of(&error).is_some_and(Failure::waits_for_user);
+        let retry_in = (!waits).then(|| backoff.next_wait());
         if updates
             .send(Update::Disconnected { error, retry_in })
             .is_err()
         {
             return;
         }
-        let wait = tokio::time::sleep(retry_in);
+        let Some(retry_in) = retry_in else { return };
+        let wait = retry::wait(retry_in);
         tokio::pin!(wait);
         loop {
             tokio::select! {
@@ -111,7 +120,6 @@ async fn supervise(
                 },
             }
         }
-        retry_in = (retry_in * 2).min(LAST_RETRY);
     }
 }
 

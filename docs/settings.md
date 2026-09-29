@@ -21,7 +21,9 @@ The first row is **This computer**. Below it are the machines you've added, each
 
 **Add a machine** takes a name and either a command that runs a program on the machine, such as `ssh devbox`, or an `everyport://` connection code from `everyport serve`. See [Remote machines](remote-machines.md).
 
-**Found on this computer** lists machines the app discovered: hosts in `~/.ssh/config`, your Pane remote hosts and, on Windows, WSL distros. **Add** saves one. WSL distros show in the app without being added.
+**How machines connect** sums up the setup, and **?** beside the title opens [Connect a machine](machines.md). **Check** beside a machine runs the connection check and shows each step, with the fix under the one that failed.
+
+**Found on this computer** lists machines the app discovered: hosts in `~/.ssh/config`, your Pane remote hosts, online Tailscale peers and, on Windows, WSL distros. **Add** saves one. WSL distros show in the app without being added.
 
 When a machine has no `everyport`, **Install Everyport…** asks before it copies the matching binary over the same connection and checks its checksum. When the app updates, it updates the copy it installed without asking.
 

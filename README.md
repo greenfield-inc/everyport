@@ -68,7 +68,7 @@ Free and open source. No account. No telemetry.
 
 **Watch any machine**
 - On Windows, every WSL distro shows up on its own, with the real Linux process behind each port
-- Add machines from `~/.ssh/config`, your Pane remote hosts, or by hand
+- Add machines from `~/.ssh/config`, your Pane remote hosts, your Tailscale peers, or by hand
 - Connect over `ssh`, `docker exec`, `kubectl exec`, `wsl`, or any command you choose
 - The app offers to install `everyport` on a machine the first time you connect
 - Opening a remote server's URL forwards its port to your machine (except for `everyport serve` machines)
@@ -184,7 +184,7 @@ Auto-kill runs only in the desktop app, for this computer. `everyport watch`, th
 
 On Windows, each installed WSL distro is added for you. Servers running inside WSL show under their distro with their Linux process tree, and open at `localhost` as usual.
 
-To add another machine, open **Settings → Machines**. Hosts from `~/.ssh/config` and your Pane remote hosts are listed under **Found on this computer**. Add one, and its servers appear in the app next to your local ones.
+To add another machine, open **Settings → Machines**. Hosts from `~/.ssh/config`, your Pane remote hosts and online Tailscale peers are listed under **Found on this computer**. Add one, and its servers appear in the app next to your local ones. If a machine can't connect, the app shows which step failed and how to fix it. See [Connect a machine](docs/machines.md).
 
 A machine is any command that runs a program on it:
 
@@ -209,7 +209,7 @@ everyport --on devbox open 5173         # forwards the port and opens it here
 everyport remote rm devbox
 ```
 
-`everyport --on <machine>` works with `list`, `watch`, `stop`, `restart`, `open`, `clean` and the terminal UI. A machine can be a saved one or any host `everyport remote list` discovers. The first time, `everyport` asks before installing itself there. Pass `--yes` to install without asking, as in scripts. `open` forwards the port through ssh or kubectl. For other connections, such as Docker, `everyport` runs `everyport connect` on the machine to relay it. The forward stays open until you press Ctrl-C.
+`everyport --on <machine>` works with `list`, `watch`, `stop`, `restart`, `open`, `clean`, `doctor` and the terminal UI. A machine can be a saved one or any host `everyport remote list` discovers. The first time, `everyport` asks before installing itself there. Pass `--yes` to install without asking, as in scripts. `open` forwards the port through ssh or kubectl. For other connections, such as Docker, `everyport` runs `everyport connect` on the machine to relay it. The forward stays open until you press Ctrl-C.
 
 See [Remote machines](docs/remote-machines.md) for more.
 
@@ -242,7 +242,7 @@ everyport stdio                  Speak the Everyport protocol on stdin and stdou
 everyport serve                  Speak the Everyport protocol over HTTP on loopback
 everyport remote add|list|rm     Manage remote machines
 everyport --on <machine> ...     Run the command on another machine
-everyport doctor                 Check permissions and platform support
+everyport doctor [--on <machine>] Check permissions and platform support, and the way to each machine
 ```
 
 Every command and option is in the [CLI reference](docs/cli.md).
@@ -284,6 +284,7 @@ See [AGENTS.md](AGENTS.md) for the repo layout and checks.
 - [Website](https://everyport.dev): try the popover and the terminal UI in your browser
 - [Docs](https://everyport.dev/docs): the pages below, with search
 - [Getting started](docs/getting-started.md)
+- [Connect a machine](docs/machines.md): SSH, your key, and what to do when a machine can't connect
 - [Remote machines](docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, `everyport serve` and Tailscale
 - [Settings and clean up](docs/settings.md)
 - [CLI reference](docs/cli.md)

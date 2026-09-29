@@ -57,6 +57,44 @@ export const scenarios: Record<string, () => Machine[]> = {
     { id: "wsl-ubuntu", label: "Ubuntu", host: null, state: "connecting", snapshot: null },
     { id: "gpu", label: "gpu-01", host: null, state: "error", error: "ssh: connect to host gpu-01 port 22: Connection refused", snapshot: null },
   ],
+  /** Machines that can't connect: SSH off (`ssh -p 1 127.0.0.1`), a rejected key, and a grey discovered peer. */
+  unreachable: () => [
+    local(fixtureSnapshot),
+    {
+      id: "studio-mac",
+      label: "studio-mac",
+      host: null,
+      state: "error",
+      check: [
+        { label: "127.0.0.1 resolves to 127.0.0.1", ok: true },
+        {
+          label: "Nothing listens on port 1",
+          ok: false,
+          fix: "SSH is off on studio-mac. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (sshd on Fedora and Arch). On Windows, in PowerShell as administrator, run `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic`.",
+          detail: "Connection refused (os error 61)",
+        },
+      ],
+      snapshot: null,
+    },
+    {
+      id: "build-box",
+      label: "build-box",
+      host: null,
+      state: "error",
+      check: [
+        { label: "127.0.0.1 resolves to 127.0.0.1", ok: true },
+        { label: "Port 39022 answers", ok: true },
+        {
+          label: "Your key isn't accepted",
+          ok: false,
+          fix: "build-box didn't accept your key. Run `ssh-copy-id -p 39022 127.0.0.1` to add it. If your key has a passphrase, run `ssh-add` first. For Windows, add your public key to `C:\\Users\\<you>\\.ssh\\authorized_keys`, or `C:\\ProgramData\\ssh\\administrators_authorized_keys` if you're an administrator there.",
+          detail: "`exit` failed: parsas@127.0.0.1: Permission denied (publickey).",
+        },
+      ],
+      snapshot: null,
+    },
+    { id: "desktop-gaming", label: "desktop-gaming.tail0000.ts.net", host: null, state: "available", snapshot: null },
+  ],
   empty: () => [local(withServers([]))],
   /** 50 servers and 12 other ports, for scrolling and update cost. */
   many: () => [
@@ -128,5 +166,6 @@ export function fixtureClient(machines: Machine[], live: number | null): Everypo
     openInEditor: async (machineId, path) => log("openInEditor", machineId, path),
     resumeSession: async (machineId, session) => log("resumeSession", machineId, session.resume_command),
     openSettings: () => log("openSettings"),
+    connectMachine: async (machineId) => log("connectMachine", machineId),
   };
 }

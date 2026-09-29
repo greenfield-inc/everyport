@@ -89,8 +89,12 @@ enum Command {
         #[command(subcommand)]
         command: Remote,
     },
-    /// Check permissions and platform support
-    Doctor,
+    /// Check permissions and platform support, and the way to each machine
+    Doctor {
+        /// Check only the way to this machine
+        #[arg(long, value_name = "MACHINE")]
+        on: Option<String>,
+    },
     /// Pipe stdin and stdout to a port on this machine, for forwarding
     #[command(hide = true)]
     Connect {
@@ -160,8 +164,21 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
         }
         Some(Command::Open { port }) => commands::open(cli.on.as_deref(), install, port),
         Some(Command::Clean) => commands::clean(machine()?, cli.yes),
+        Some(Command::Doctor { on }) => match on.as_deref().or(cli.on.as_deref()) {
+            Some(name) => remote::doctor(Some(name)),
+            None => {
+                let here = commands::doctor(everyport::config::dir());
+                println!();
+                let machines = remote::doctor(None)?;
+                Ok(if here == ExitCode::SUCCESS {
+                    machines
+                } else {
+                    here
+                })
+            }
+        },
         Some(_) if cli.on.is_some() => Err(io::Error::other(
-            "--on works with list, watch, stop, restart, open, clean and the terminal UI",
+            "--on works with list, watch, stop, restart, open, clean, doctor and the terminal UI",
         )),
         Some(Command::Stdio) => {
             let hub = Hub::start(commands::engine()?);
@@ -182,7 +199,6 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
             Remote::List => remote::list(),
             Remote::Rm { name } => remote::rm(&name),
         },
-        Some(Command::Doctor) => Ok(commands::doctor(everyport::config::dir())),
         Some(Command::Connect { port, check }) => connect::run(port, check),
     }
 }

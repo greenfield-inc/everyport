@@ -19,7 +19,7 @@ Commands:
   stdio    Speak the Everyport protocol on stdin and stdout
   serve    Speak the Everyport protocol over HTTP on loopback
   remote   Manage remote machines
-  doctor   Check permissions and platform support
+  doctor   Check permissions and platform support, and the way to each machine
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -207,11 +207,12 @@ Options:
 ## `everyport doctor`
 
 ```text
-Check permissions and platform support
+Check permissions and platform support, and the way to each machine
 
 Usage: everyport doctor [OPTIONS]
 
 Options:
-  -y, --yes   Don't ask: install everyport on the machine, or stop what clean suggests
-  -h, --help  Print help
+      --on <MACHINE>  Check only the way to this machine
+  -y, --yes           Don't ask: install everyport on the machine, or stop what clean suggests
+  -h, --help          Print help
 ```

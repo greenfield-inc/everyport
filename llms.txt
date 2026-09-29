@@ -17,6 +17,7 @@ For agents and scripts:
 - [Docs](https://everyport.dev/docs): the pages below on the web, and [llms-full.txt](https://everyport.dev/llms-full.txt) with all of them in one file
 - [README](https://raw.githubusercontent.com/greenfield-inc/everyport/main/README.md): features, install, quick start and privacy
 - [Getting started](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/getting-started.md): the desktop app, the terminal UI and their keys
+- [Connect a machine](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/machines.md): SSH, your key, discovered machines, and `everyport doctor --on` when a machine can't connect
 - [Remote machines](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, port forwarding, `everyport serve` and Tailscale
 - [Settings and clean up](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/settings.md): every setting, clean up, auto-kill, protected processes and `config.toml`
 - [CLI reference](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/cli.md): every `everyport` command and option

@@ -5,6 +5,7 @@
 use crate::commands;
 use crate::hub::Hub;
 use anyhow::{bail, Context};
+use everyport::client::check;
 use everyport::client::forward::{self, Forward};
 use everyport::client::install::{self, Probe};
 use everyport::client::machines::{self, Via};
@@ -206,9 +207,21 @@ async fn reach(name: &str, install: Install) -> anyhow::Result<Connection> {
         Via::Url { url, token } => return Ok(Connection::Http { url, token }),
         Via::Command { command } => command,
     };
-    let probe = install::probe(&prefix)
-        .await
-        .with_context(|| format!("Couldn't reach {name}"))?;
+    let probe = match install::probe(&prefix).await {
+        Ok(probe) => probe,
+        Err(_) => {
+            // Discovery says whether Pane lists it and what OS it runs, for the fix.
+            let via = Via::Command {
+                command: prefix.clone(),
+            };
+            let hint = discover::hint(&discover::all().await, &via);
+            let report = check::check(name, &via, &hint).await;
+            match report.probe {
+                Some(probe) => probe,
+                None => bail!("Couldn't reach {name}.\n{report}"),
+            }
+        }
+    };
     let everyport_path = if probe.up_to_date() {
         probe.everyport_path
     } else if should_install(

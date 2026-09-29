@@ -1,4 +1,4 @@
-import type { Machine, EveryportClient, Server, Snapshot } from "@everyport/protocol";
+import { LOCAL_MACHINE, type Machine, type EveryportClient, type Server, type Snapshot } from "@everyport/protocol";
 import { type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Header } from "./components.tsx";
 import { Socket } from "./icons.tsx";
@@ -42,7 +42,17 @@ export function Popover({ client, alertMemory, initialServer, onReady, autoFocus
   return (
     <Themed theme={theme} appearance={appearance}>
       <div className="everyport-panel" tabIndex={0} onKeyDown={(event) => keys.current?.(event)}>
-        {machines.length > 1 && machine && <MachineSwitcher machines={machines} current={machine.id} onSelect={setMachineId} />}
+        {machines.length > 1 && machine && (
+          <MachineSwitcher
+            machines={machines}
+            current={machine.id}
+            onSelect={(id) => {
+              setMachineId(id);
+              // Picking a machine that failed tries it again right away.
+              if (id !== LOCAL_MACHINE && machines.find((m) => m.id === id)?.state === "error") void client.connectMachine?.(id).catch(() => {});
+            }}
+          />
+        )}
         {machine?.snapshot ? (
           <MachineView
             key={machine.id}

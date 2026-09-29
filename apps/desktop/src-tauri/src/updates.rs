@@ -163,6 +163,7 @@ mod tests {
             host: None,
             state: MachineState::Connected,
             error: None,
+            check: None,
             install: None,
             snapshot: Some(snapshot),
         }
