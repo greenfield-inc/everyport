@@ -9,7 +9,7 @@ import { useOnFocus, useSettings } from "./useSettings";
 
 const PANES = [
   { title: "General", view: GeneralPane },
-  { title: "Machines", view: MachinesPane },
+  { title: "Machines", view: MachinesPane, help: "https://github.com/greenfield-inc/everyport/blob/main/docs/machines.md" },
   { title: "Clean up", view: CleanUpPane },
 ] as const;
 
@@ -31,7 +31,9 @@ export function SettingsWindow() {
   }, []);
   useEffect(() => setFailure(null), [settings]);
   if (!settings) return null;
-  const View = PANES.find((p) => p.title === pane)!.view;
+  const current = PANES.find((p) => p.title === pane)!;
+  const View = current.view;
+  const help = "help" in current ? current.help : undefined;
   return (
     <Themed theme={settings.app.theme ?? undefined} appearance={settings.app.appearance} className="settings">
       <nav className="settings-nav" aria-label="Settings">
@@ -48,7 +50,14 @@ export function SettingsWindow() {
         ))}
       </nav>
       <main className="settings-pane">
-        <h1>{pane}</h1>
+        <h1>
+          {pane}
+          {help && (
+            <button type="button" className="settings-help" aria-label={`About ${pane}`} title="How machines connect" onClick={() => void invoke("open_external", { url: help })}>
+              ?
+            </button>
+          )}
+        </h1>
         {[settings.config_error, settings.app_error].filter(Boolean).map((error) => (
           <p key={error} className="settings-error" role="alert">
             Fix this settings file to change settings here. Until then, the last settings that could be read stay in use. {error}

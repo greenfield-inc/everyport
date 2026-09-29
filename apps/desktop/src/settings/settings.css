@@ -345,6 +345,45 @@
   min-width: 0;
 }
 
+.settings-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+  color: var(--settings-muted);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.settings-steps {
+  margin: 0;
+  padding: 10px 12px 10px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-steps code {
+  font-family: var(--everyport-mono);
+  font-size: 11px;
+}
+
+.settings-check {
+  padding: 8px 12px 10px;
+  border-top: 0.5px solid var(--border);
+}
+
+/* The Details toggle, which `.settings button` would otherwise restyle. */
+.settings-check button {
+  font-size: 11px;
+  color: var(--settings-muted);
+}
+
 .settings-confirm {
   display: flex;
   align-items: center;

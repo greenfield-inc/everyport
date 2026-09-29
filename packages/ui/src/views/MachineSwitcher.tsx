@@ -1,5 +1,5 @@
-import type { Machine, EveryportClient } from "@everyport/protocol";
-import { useState } from "react";
+import type { CheckStep, Machine, EveryportClient } from "@everyport/protocol";
+import { Fragment, useState } from "react";
 
 const stateLabel: Record<Machine["state"], string> = {
   available: "Not connected",
@@ -56,9 +56,59 @@ export function MachineSwitcher({
   );
 }
 
+/** Text with each `command` shown as code the user can select and copy. */
+function WithCode({ text }: { text: string }) {
+  return (
+    <>
+      {text.split("`").map((part, i) =>
+        i % 2 ? (
+          <code key={i} className="everyport:select-text everyport:rounded everyport:bg-accent everyport:px-1 everyport:font-mono everyport:text-11 everyport:text-fg">
+            {part}
+          </code>
+        ) : (
+          <Fragment key={i}>{part}</Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
+/** The steps to reach a machine, with the fix under the one that failed. */
+export function Checklist({ steps }: { steps: CheckStep[] }) {
+  const [details, setDetails] = useState(false);
+  return (
+    <ol aria-label="Connection check" className="everyport:flex everyport:w-full everyport:flex-col everyport:gap-1.5 everyport:text-left everyport:text-13">
+      {steps.map((step, i) => (
+        <li key={i} className="everyport:flex everyport:gap-2">
+          <span aria-label={step.ok ? "passed" : "failed"} className={`everyport:w-3 everyport:shrink-0 everyport:text-center ${step.ok ? "everyport:text-fg3" : "everyport:text-danger"}`}>
+            {step.ok ? "✓" : "✗"}
+          </span>
+          <div className="everyport:flex everyport:min-w-0 everyport:flex-col everyport:gap-1">
+            <span className={step.ok ? "everyport:text-fg2" : "everyport:font-medium everyport:text-fg"}>{step.label}</span>
+            {step.fix && (
+              <p className="everyport:text-fg2">
+                <WithCode text={step.fix} />
+              </p>
+            )}
+            {step.detail && (
+              <>
+                <button type="button" onClick={() => setDetails(!details)} className="everyport:self-start everyport:text-11 everyport:text-fg3 everyport:hover:text-fg2">
+                  {details ? "Hide details" : "Details"}
+                </button>
+                {details && <pre className="everyport:select-text everyport:whitespace-pre-wrap everyport:break-words everyport:font-mono everyport:text-11 everyport:text-fg3">{step.detail}</pre>}
+              </>
+            )}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 /**
  * The list area while a machine has no snapshot: connecting, failed, not
- * connected yet, or asking before it installs everyport there.
+ * connected yet, or asking before it installs everyport there. A failed
+ * machine shows the steps to reach it and the fix for the one that failed.
  */
 export function MachineStatus({ machine, client }: { machine: Machine; client: EveryportClient }) {
   const [failed, setFailed] = useState<string>();
@@ -77,15 +127,22 @@ export function MachineStatus({ machine, client }: { machine: Machine; client: E
             ? (machine.error ?? `Can't connect to ${machine.label}`)
             : `Connecting to ${machine.label}…`;
   const button =
-    machine.state === "available" && client.connectMachine
-      ? { label: "Connect", onClick: run(client.connectMachine.bind(client)) }
+    (machine.state === "available" || machine.state === "error") && client.connectMachine
+      ? { label: machine.state === "error" ? "Check again" : "Connect", onClick: run(client.connectMachine.bind(client)) }
       : machine.state === "install" && client.installEveryport
         ? { label: "Install Everyport", onClick: run(client.installEveryport.bind(client)) }
         : undefined;
   const error = failed ?? (machine.state === "install" ? machine.error : undefined);
   return (
     <div className="everyport:flex everyport:flex-col everyport:items-center everyport:gap-3 everyport:px-4 everyport:py-7 everyport:text-center everyport:text-13">
-      <p className={machine.state === "error" ? "everyport:text-danger" : "everyport:text-fg2"}>{text}</p>
+      {machine.state === "error" && machine.check ? (
+        <>
+          <p className="everyport:text-fg">Can't connect to {machine.label}</p>
+          <Checklist steps={machine.check} />
+        </>
+      ) : (
+        <p className={machine.state === "error" ? "everyport:text-danger" : "everyport:text-fg2"}>{text}</p>
+      )}
       {error && <p className="everyport:text-danger">{error}</p>}
       {button && (
         <button type="button" onClick={button.onClick} className="everyport:rounded-lg everyport:bg-accent everyport:px-3 everyport:py-[5px] everyport:font-medium everyport:text-fg">

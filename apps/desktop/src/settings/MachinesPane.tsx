@@ -1,4 +1,5 @@
-import type { Machine } from "@everyport/protocol";
+import type { CheckStep, Machine } from "@everyport/protocol";
+import { Checklist } from "@everyport/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { type FormEvent, useCallback, useEffect, useState } from "react";
@@ -62,6 +63,15 @@ export function MachinesPane() {
           {error}
         </p>
       )}
+      <Section title="How machines connect">
+        <ol className="settings-steps">
+          <li>Turn on SSH on the machine. On a Mac, that's Remote Login in Sharing settings.</li>
+          <li>
+            Let it accept your SSH key: run <code>ssh-copy-id</code> with the machine's name.
+          </li>
+          <li>Pick it here or in the menu, and Everyport installs itself there.</li>
+        </ol>
+      </Section>
       <Section>
         <MachineRow name="This computer" detail={null} machine={status("local")} />
         {list?.saved.map(({ name, target }) => (
@@ -92,8 +102,17 @@ export function MachinesPane() {
 
 function MachineRow({ name, detail, machine, children }: { name: string; detail: string | null; machine?: Machine; children?: React.ReactNode }) {
   const [confirming, setConfirming] = useState(false);
+  const [checked, setChecked] = useState<CheckStep[] | string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const check = () => {
+    setChecking(true);
+    invoke<CheckStep[]>("check_machine", { machineId: name })
+      .then(setChecked, (e: unknown) => setChecked(String(e)))
+      .finally(() => setChecking(false));
+  };
   const state = machine?.state;
   const status = state ? (state === "error" && machine.error ? machine.error : STATUS[state]) : null;
+  const steps = typeof checked === "object" && checked ? checked : state === "error" ? machine?.check : undefined;
   const caption = [detail, status].filter(Boolean).join(" · ");
   const offer = state === "install" ? machine?.install : undefined;
   return (
@@ -104,8 +123,19 @@ function MachineRow({ name, detail, machine, children }: { name: string; detail:
             Install Everyport…
           </button>
         )}
+        {name !== "This computer" && machine && (
+          <button type="button" className="settings-button" disabled={checking} onClick={check}>
+            {checking ? "Checking…" : "Check"}
+          </button>
+        )}
         {children}
       </Row>
+      {steps && (
+        <div className="settings-check">
+          <Checklist steps={steps} />
+        </div>
+      )}
+      {typeof checked === "string" && <p className="settings-error-text settings-check">{checked}</p>}
       {offer && confirming && (
         <div className="settings-confirm" role="alertdialog" aria-label={`Install Everyport on ${name}`}>
           <span>

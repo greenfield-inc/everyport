@@ -56,6 +56,7 @@ pub fn run() {
             machines::machines_sync,
             machines::call_machine,
             machines::connect_machine,
+            machines::check_machine,
             machines::install_everyport,
             launch::open_server_url,
             launch::open_external,

@@ -10,10 +10,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
+use everyport::client::check::{self, Hint, Step};
 use everyport::client::discover::{self, Found, Source};
 use everyport::client::forward::{self, Forward};
 use everyport::client::install::{self, Probe};
 use everyport::client::machines::{self as saved, Via};
+use everyport::client::retry::{self, Backoff};
 use everyport::client::{Client, Connection, Update};
 use everyport::protocol::{AgentSession, Call, Event, HostInfo, Server, ServerStatus, Snapshot};
 use serde::Serialize;
@@ -23,8 +25,6 @@ use crate::{notify, onboarding, popover, settings, tray, updates};
 
 pub const LOCAL: &str = "local";
 const SNOOZE: Duration = Duration::from_secs(3600);
-const FIRST_RETRY: Duration = Duration::from_secs(1);
-const LAST_RETRY: Duration = Duration::from_secs(30);
 /// Run numbers start at 1, so a new entry's 0 matches no task.
 static NEXT_RUN: AtomicU64 = AtomicU64::new(1);
 
@@ -37,6 +37,9 @@ pub struct Machine {
     pub state: MachineState,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// The steps to reach the machine, up to the one that failed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check: Option<Vec<Step>>,
     /// What installing everyport would do, while the app asks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub install: Option<InstallOffer>,
@@ -69,6 +72,8 @@ struct Entry {
     via: Option<Via>,
     /// The distro, for a WSL machine.
     distro: Option<String>,
+    /// What discovery knows about it, for the fix when it can't connect.
+    hint: Hint,
     /// This run's number, unique across all machines, so tasks for an older
     /// run, or for a removed machine of the same name, stop.
     run: u64,
@@ -84,7 +89,7 @@ struct Entry {
 }
 
 impl Entry {
-    fn new(id: &str, label: &str, via: Option<Via>, distro: Option<String>) -> Self {
+    fn new(id: &str, label: &str, via: Option<Via>, distro: Option<String>, hint: Hint) -> Self {
         Self {
             machine: Machine {
                 id: id.into(),
@@ -92,11 +97,13 @@ impl Entry {
                 host: None,
                 state: MachineState::Available,
                 error: None,
+                check: None,
                 install: None,
                 snapshot: None,
             },
             via,
             distro,
+            hint,
             run: 0,
             connection: None,
             client: None,
@@ -138,7 +145,13 @@ pub fn start(app: &AppHandle) {
         .expect("the app knows its own path")
         .with_file_name(format!("everyport-sidecar{}", std::env::consts::EXE_SUFFIX));
     app.manage(Mutex::new(Machines {
-        entries: vec![Entry::new(LOCAL, "This computer", None, None)],
+        entries: vec![Entry::new(
+            LOCAL,
+            "This computer",
+            None,
+            None,
+            Hint::default(),
+        )],
         snoozed: HashMap::new(),
         read_at: None,
         sent: updates::Sent::default(),
@@ -154,11 +167,12 @@ struct Listed {
     machine: saved::Machine,
     auto: bool,
     distro: Option<String>,
+    hint: Hint,
 }
 
 /// Saved machines first, then discovered ones that aren't saved already
 /// (by name or connection). Saved machines and WSL distros connect on their
-/// own; ssh and Pane hosts wait until the user picks one.
+/// own; ssh, Pane and Tailscale hosts wait until the user picks one.
 fn roster(saved: Vec<saved::Machine>, found: Vec<Found>) -> Vec<Listed> {
     let distro = |via: &Via, found: &[Found]| {
         found
@@ -170,11 +184,12 @@ fn roster(saved: Vec<saved::Machine>, found: Vec<Found>) -> Vec<Listed> {
         .into_iter()
         .map(|machine| Listed {
             distro: distro(&machine.via, &found),
+            hint: discover::hint(&found, &machine.via),
             machine,
             auto: true,
         })
         .collect();
-    for f in found {
+    for f in found.iter().cloned() {
         let known = list
             .iter()
             .any(|l| l.machine.name == f.machine.name || l.machine.via == f.machine.via);
@@ -182,6 +197,7 @@ fn roster(saved: Vec<saved::Machine>, found: Vec<Found>) -> Vec<Listed> {
             let wsl = f.source == Source::Wsl;
             list.push(Listed {
                 distro: wsl.then(|| f.machine.name.clone()),
+                hint: discover::hint(&found, &f.machine.via),
                 machine: f.machine,
                 auto: wsl,
             });
@@ -221,8 +237,10 @@ pub fn reload(app: &AppHandle) {
                 }
                 let kept = take(&mut old, &name)
                     .filter(|e| e.via.as_ref() == Some(&l.machine.via) && e.distro == l.distro);
-                let entry =
-                    kept.unwrap_or_else(|| Entry::new(&name, &name, Some(l.machine.via), l.distro));
+                let mut entry = kept.unwrap_or_else(|| {
+                    Entry::new(&name, &name, Some(l.machine.via), l.distro, l.hint.clone())
+                });
+                entry.hint = l.hint;
                 // New, or discovered before and saved since.
                 if l.auto && entry.machine.state == MachineState::Available {
                     starts.push(name);
@@ -265,6 +283,7 @@ fn begin(app: &AppHandle, id: &str) -> Option<u64> {
     entry.probe = None;
     entry.machine.state = MachineState::Connecting;
     entry.machine.error = None;
+    entry.machine.check = None;
     entry.machine.install = None;
     Some(entry.run)
 }
@@ -305,23 +324,14 @@ enum Plan {
 fn plan(probe: &Probe) -> Plan {
     match &probe.installed {
         None => Plan::Ask,
-        Some(v) if probe.everyport_path == probe.install_path && older(v, install::VERSION) => {
+        Some(v)
+            if probe.everyport_path == probe.install_path
+                && install::older(v, install::VERSION) =>
+        {
             Plan::Update
         }
         Some(_) => Plan::Connect,
     }
-}
-
-/// True when version `a` is older than `b`, comparing `major.minor.patch`
-/// as numbers. Versions that don't parse are never older, so the app
-/// doesn't replace an everyport it can't place.
-fn older(a: &str, b: &str) -> bool {
-    let parse = |v: &str| -> Option<Vec<u64>> {
-        let core = v.split(['-', '+']).next()?;
-        let parts: Option<Vec<u64>> = core.split('.').map(|n| n.parse().ok()).collect();
-        parts.filter(|p| p.len() == 3)
-    };
-    matches!((parse(a), parse(b)), (Some(a), Some(b)) if a < b)
 }
 
 /// `everyport::client` ends a session with this when the machine's everyport speaks
@@ -331,14 +341,20 @@ fn incompatible(error: &str) -> bool {
 }
 
 /// Connects a remote machine: probes it, updates or asks to install everyport, then
-/// runs `everyport stdio` there.
+/// runs `everyport stdio` there. When the probe fails, it checks each step to
+/// show which one failed and its fix, and tries again later unless only the
+/// user can fix it.
 fn run(app: &AppHandle, id: &str) {
     let Some(run) = begin(app, id) else { return };
-    let via = machines(app)
-        .entries
-        .iter()
-        .find(|e| e.machine.id == id)
-        .and_then(|e| e.via.clone());
+    let (via, label, hint) = {
+        let all = machines(app);
+        let Some(entry) = all.entry(id) else { return };
+        (
+            entry.via.clone(),
+            entry.machine.label.clone(),
+            entry.hint.clone(),
+        )
+    };
     let (app, id) = (app.clone(), id.to_string());
     tauri::async_runtime::spawn(async move {
         let prefix = match via {
@@ -348,23 +364,28 @@ fn run(app: &AppHandle, id: &str) {
             }
             None => return,
         };
-        let mut retry_in = FIRST_RETRY;
+        let mut backoff = Backoff::default();
+        let via = Via::Command {
+            command: prefix.clone(),
+        };
         let probe = loop {
-            match install::probe(&prefix).await {
-                Ok(probe) => break probe,
-                Err(error) => {
-                    let message = format!("{error:#}. Retrying in {} s.", retry_in.as_secs());
-                    eprintln!("machine {id}: {message}");
-                    if !update(&app, &id, run, |e| {
-                        e.machine.state = MachineState::Error;
-                        e.machine.error = Some(message);
-                    }) {
-                        return;
-                    }
-                    tokio::time::sleep(retry_in).await;
-                    retry_in = (retry_in * 2).min(LAST_RETRY);
-                }
+            if let Ok(probe) = install::probe(&prefix).await {
+                break probe;
             }
+            let report = check::check(&label, &via, &hint).await;
+            if let Some(probe) = report.probe {
+                break probe;
+            }
+            eprintln!("machine {id}: can't connect\n{report}");
+            let retry_in = (!report.waits_for_user).then(|| backoff.next_wait());
+            if !update(&app, &id, run, |e| {
+                e.machine.state = MachineState::Error;
+                e.machine.check = Some(report.steps);
+            }) {
+                return;
+            }
+            let Some(retry_in) = retry_in else { return };
+            retry::wait(retry_in).await;
         };
         match plan(&probe) {
             Plan::Ask => {
@@ -372,6 +393,7 @@ fn run(app: &AppHandle, id: &str) {
                 update(&app, &id, run, |e| {
                     e.machine.state = MachineState::Install;
                     e.machine.error = None;
+                    e.machine.check = None;
                     e.machine.install = Some(InstallOffer {
                         version: install::VERSION.into(),
                         path: probe.install_path.clone(),
@@ -386,7 +408,10 @@ fn run(app: &AppHandle, id: &str) {
                     everyport_path: probe.everyport_path.clone(),
                 };
                 // Kept in case its protocol is incompatible, to ask then.
-                update(&app, &id, run, |e| e.probe = Some(probe));
+                update(&app, &id, run, |e| {
+                    e.probe = Some(probe);
+                    e.machine.check = None;
+                });
                 connect(&app, &id, run, connection);
             }
         }
@@ -501,7 +526,10 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
                 entry.raw = None;
                 machine.snapshot = None;
                 machine.state = MachineState::Error;
-                machine.error = Some(format!("{error}. Retrying in {} s.", retry_in.as_secs()));
+                machine.error = Some(match retry_in {
+                    Some(wait) => format!("{error}. Trying again in {} s.", wait.as_secs()),
+                    None => error,
+                });
             }
             Update::Event(Event::Hello(hello)) => {
                 eprintln!(
@@ -515,6 +543,7 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
                 machine.host = Some(hello.host);
                 machine.state = MachineState::Connected;
                 machine.error = None;
+                machine.check = None;
             }
             Update::Event(Event::Snapshot(snapshot)) => {
                 let ports: Vec<u16> = snapshot.servers.iter().map(|s| s.port).collect();
@@ -797,15 +826,19 @@ pub fn install(app: &AppHandle, machine_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Connects a machine the user picked. A discovered one is saved to
-/// `machines.toml` first, so it stays in the list.
+/// Connects a machine the user picked, or tries a failed one again right
+/// away. A discovered one is saved to `machines.toml` first, so it stays in
+/// the list.
 pub fn pick(app: &AppHandle, machine_id: &str) -> Result<(), String> {
     let via = {
         let all = machines(app);
         let entry = all
             .entry(machine_id)
             .ok_or_else(|| format!("no machine {machine_id}"))?;
-        if entry.machine.state != MachineState::Available {
+        if !matches!(
+            entry.machine.state,
+            MachineState::Available | MachineState::Error
+        ) {
             return Ok(());
         }
         entry
@@ -850,6 +883,29 @@ pub async fn call_machine(app: AppHandle, machine_id: String, call: Call) -> Res
 #[tauri::command]
 pub fn connect_machine(app: AppHandle, machine_id: String) -> Result<(), String> {
     pick(&app, &machine_id)
+}
+
+/// Checks each step of reaching a machine, for Settings. A failed machine
+/// that passes connects again right away.
+#[tauri::command]
+pub async fn check_machine(app: AppHandle, machine_id: String) -> Result<Vec<Step>, String> {
+    let (via, label, hint, failed) = {
+        let all = machines(&app);
+        let entry = all
+            .entry(&machine_id)
+            .ok_or_else(|| format!("no machine {machine_id}"))?;
+        let via = entry
+            .via
+            .clone()
+            .ok_or("this computer is always connected")?;
+        let failed = entry.machine.state == MachineState::Error;
+        (via, entry.machine.label.clone(), entry.hint.clone(), failed)
+    };
+    let report = check::check(&label, &via, &hint).await;
+    if failed && report.probe.is_some() {
+        run(&app, &machine_id);
+    }
+    Ok(report.steps)
 }
 
 #[tauri::command]
@@ -943,16 +999,6 @@ mod tests {
         assert_eq!(plan(&probe(ours, Some("99.0.0"))), Plan::Connect);
         // One the user installed themselves, such as with brew, is theirs to update.
         assert_eq!(plan(&probe("everyport", Some("0.0.1"))), Plan::Connect);
-    }
-
-    #[test]
-    fn compares_versions_as_numbers() {
-        assert!(older("0.9.0", "0.10.0"));
-        assert!(older("1.2.3", "1.3.0"));
-        assert!(older("0.1.0-rc.1", "0.2.0"));
-        assert!(!older("0.10.0", "0.9.0"));
-        assert!(!older("0.1.0", "0.1.0"));
-        assert!(!older("nightly", "0.1.0"));
     }
 
     #[test]

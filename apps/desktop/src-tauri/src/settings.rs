@@ -417,7 +417,7 @@ struct Saved {
 #[derive(Serialize)]
 struct Found {
     name: String,
-    source: &'static str,
+    source: String,
     command: String,
 }
 
@@ -442,11 +442,7 @@ pub async fn settings_machines() -> Result<MachineSettings, String> {
             };
             Some(Found {
                 name: f.machine.name,
-                source: match f.source {
-                    discover::Source::SshConfig => "SSH config",
-                    discover::Source::Pane => "Pane",
-                    discover::Source::Wsl => "WSL",
-                },
+                source: f.source.label(),
                 command: shell_words::join(&command),
             })
         })
