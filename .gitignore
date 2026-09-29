@@ -9,3 +9,4 @@ target.noindex/
 apps/desktop/src-tauri/gen/
 worktrees/
 .agent-farm/
+apps/desktop/src-tauri/binaries/
