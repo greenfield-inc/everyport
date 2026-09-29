@@ -58,7 +58,8 @@ jobs:
         include:
           - { target: aarch64-apple-darwin, os: macos-latest, bundles: dmg }
           - { target: x86_64-apple-darwin, os: macos-latest, bundles: dmg }
-          - { target: x86_64-pc-windows-msvc, os: windows-latest, bundles: msi, exe: .exe }
+          # The .msi installs per machine and needs admin. install-app.ps1 uses the per-user NSIS setup.exe.
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, bundles: "msi,nsis", exe: .exe }
           # The static musl ppm serves as the sidecar on glibc Linux too.
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, bundles: "deb,rpm,appimage", sidecar: x86_64-unknown-linux-musl }
     runs-on: ${{ matrix.os }}
@@ -151,6 +152,9 @@ jobs:
           mkdir out
           for file in target.noindex/${{ matrix.target }}/release/bundle/*/*.{dmg,msi,deb,rpm,AppImage}; do
             cp "$file" "out/port-process-manager-$version-$arch.${file##*.}"
+          done
+          for file in target.noindex/${{ matrix.target }}/release/bundle/nsis/*-setup.exe; do
+            cp "$file" "out/port-process-manager-$version-$arch-setup.exe"
           done
           ls -l out
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -5,8 +5,10 @@
 #
 # Serves dist/release over HTTP, then runs install.sh (or install.ps1 on
 # Windows), the npm package and the PyPI package through uvx. Each must install
-# a ppm that prints the release version. Then it serves a copy whose binaries
-# are altered, and each one must refuse to install. Needs node, npm and uv.
+# a ppm that prints the release version. When the release has this OS's desktop
+# app, install-app.sh (or install-app.ps1) must install it and ppm too. Then it
+# serves a copy whose binaries and bundles are altered, and each one must refuse
+# to install. Needs node, npm and uv.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -33,7 +35,7 @@ serve() {
 }
 
 cp -R "$dist/release" "$work/tampered"
-for binary in "$work"/tampered/ppm-*; do
+for binary in "$work"/tampered/ppm-* "$work"/tampered/port-process-manager-*; do
   printf 'tampered' >> "$binary"
 done
 serve "$dist/release" 18765
@@ -52,7 +54,8 @@ install_with() {
   home="$work/home-$name-${url##*:}"
   mkdir -p "$home"
   env PPM_DOWNLOAD_URL="$url" PPM_INSTALL_DIR="$(native "$home/bin")" \
-    HOME="$home" XDG_CACHE_HOME="$home/.cache" LOCALAPPDATA="$(native "$home")" "$@"
+    PPM_APP_DIR="$(native "$home/app")" HOME="$home" XDG_CACHE_HOME="$home/.cache" \
+    XDG_DATA_HOME="$home/.local/share" LOCALAPPDATA="$(native "$home")" "$@"
 }
 
 if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
@@ -60,11 +63,17 @@ if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == MSYS* ]]; then
   npm_bin="$work/npm"
   cmd=.cmd
   installed=ppm.exe
+  app_bundle=(-setup.exe ppm-desktop.exe)
 else
   script=(sh "$dist/release/install.sh")
   npm_bin="$work/npm/bin"
   cmd=
   installed=ppm
+  if [ "$(uname -s)" = Darwin ]; then
+    app_bundle=("-$(uname -m | sed 's/arm64/aarch64/').dmg" "Port Process Manager.app/Contents/MacOS/ppm-desktop")
+  else
+    app_bundle=(.AppImage Port-Process-Manager.AppImage)
+  fi
 fi
 
 failures=0
@@ -99,6 +108,42 @@ expect_version "uvx ppm" install_with uvx2 "$good" uvx --from "$wheel" ppm --ver
 expect_mismatch "install script" install_with script "$bad" "${script[@]}"
 expect_mismatch "npm" install_with npm "$bad" "$npm_bin/ppm$cmd" --version
 expect_mismatch "uvx" install_with uvx "$bad" uvx --from "$wheel" port-process-manager --version
+
+# The app installers, when this release has this OS's desktop app.
+check() {
+  local name="$1"
+  shift
+  if "$@" > /dev/null 2>&1; then echo "ok    $name"; else echo "FAIL  $name"; failures=$((failures + 1)); fi
+}
+no_quarantine() { ! xattr -r "$1" | grep -q quarantine; }
+if compgen -G "$dist/release/port-process-manager-*${app_bundle[0]}" > /dev/null; then
+  if [ "$cmd" = .cmd ]; then
+    app_scripts=("pwsh -NoProfile -File" "powershell -NoProfile -ExecutionPolicy Bypass -File")
+    app_args=("$(native "$dist/release/install-app.ps1")" -NoOpen)
+  else
+    app_scripts=(sh)
+    app_args=("$dist/release/install-app.sh" --no-open)
+  fi
+  for i in "${!app_scripts[@]}"; do
+    read -ra runner <<< "${app_scripts[$i]}"
+    label="app installer (${runner[0]})"
+    home="$work/home-app$i-18765"
+    install_with "app$i" "$good" "${runner[@]}" "${app_args[@]}" > "$work/app$i.log" 2>&1 || cat "$work/app$i.log"
+    check "$label: installs the app" test -e "$home/app/${app_bundle[1]}"
+    expect_version "$label: ppm" "$home/bin/$installed" --version
+    if [ "$(uname -s)" = Darwin ]; then
+      check "$label: no quarantine flag" no_quarantine "$home/app"
+      check "$label: codesign --verify" codesign --verify --deep --strict "$home/app/Port Process Manager.app"
+    elif [ "$cmd" != .cmd ]; then
+      check "$label: icon" test -s "$home/app/icon.png"
+      check "$label: menu entry" test -s "$home/.local/share/applications/port-process-manager.desktop"
+    fi
+    expect_mismatch "$label" install_with "app$i" "$bad" "${runner[@]}" "${app_args[@]}"
+    check "$label: installs nothing from an altered release" test ! -e "$work/home-app$i-18766/app" -a ! -e "$work/home-app$i-18766/bin"
+  done
+else
+  echo "skip  app installer: this release has no desktop app for this OS"
+fi
 
 [ "$failures" = 0 ] || { echo "$failures check(s) failed"; exit 1; }
 echo "all install checks passed"

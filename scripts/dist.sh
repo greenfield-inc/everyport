@@ -29,7 +29,7 @@ fi
 
 rm -rf "$release" "$packages"
 mkdir -p "$release" "$packages"
-cp "$artifacts"/* "$root/scripts/install.sh" "$root/scripts/install.ps1" "$release/"
+cp "$artifacts"/* "$root"/scripts/install{,-app}.{sh,ps1} "$release/"
 (cd "$release" && sha256sum -- * > SHA256SUMS)
 echo "== dist/release (version $version)"
 cat "$release/SHA256SUMS"
