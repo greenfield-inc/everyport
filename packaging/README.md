@@ -1,6 +1,6 @@
 # Packaging
 
-Everything that ships `ppm` and the desktop app, other than the code.
+Files that package and publish `ppm` and the desktop app.
 
 | Path | What |
 |---|---|
@@ -45,8 +45,8 @@ Each step runs when its secrets are set, and logs a notice and skips when they a
 ## Cut a release
 
 1. Set the same version in `Cargo.toml` (`workspace.package`), `apps/desktop/src-tauri/tauri.conf.json`, `packaging/npm/package.json` and `packaging/pypi/pyproject.toml`, then run `cargo check` to update `Cargo.lock`. `scripts/dist.sh` fails when they differ.
-2. Merge, then push the tag: `git tag v0.2.0 && git push origin v0.2.0`.
-3. Submit the winget manifests from the run's `packages` artifact to [winget-pkgs](https://github.com/microsoft/winget-pkgs), for example with `wingetcreate submit`.
+2. Merge the version bump to main, pull, then tag that commit: `git tag v0.2.0 && git push origin v0.2.0`. `scripts/dist.sh` fails when the tag doesn't match the version.
+3. Submit the winget manifests from the `packages` artifact of the tag's Release run to [winget-pkgs](https://github.com/microsoft/winget-pkgs), for example with `wingetcreate submit`.
 
 ## Try it locally
 
@@ -56,3 +56,5 @@ mkdir -p /tmp/artifacts && cp target.noindex/aarch64-apple-darwin/release/ppm /t
 scripts/dist.sh /tmp/artifacts
 scripts/smoke-install.sh
 ```
+
+With one binary, `dist.sh` prints `skipped` for the Homebrew and winget files that need the others. That is expected.
