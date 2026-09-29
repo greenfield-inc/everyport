@@ -1,6 +1,6 @@
 //! Human formats shared by the list, clean up and the TUI, following the popover.
 
-use everyport_core::protocol::{AgentKind, CleanUpReason, OtherPort, Server};
+use everyport::protocol::{AgentKind, CleanUpReason, OtherPort, Server};
 
 /// Read-only listener details when the owning process cannot be inspected.
 pub fn other_port(port: &OtherPort) -> String {

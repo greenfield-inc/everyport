@@ -2,8 +2,8 @@
 //! `wsl.exe -d <distro> --exec`, and ports Windows sees through WSL's relay
 //! show once, under their distro.
 
-use everyport_core::platform::is_wsl_owner;
-use everyport_core::protocol::Snapshot;
+use crate::platform::is_wsl_owner;
+use crate::protocol::Snapshot;
 
 /// The command prefix for a distro. `wsl.exe` runs directly, never through
 /// `cmd.exe` or PowerShell.
@@ -19,11 +19,8 @@ pub async fn distros() -> Vec<String> {
     if !cfg!(windows) {
         return Vec::new();
     }
-    let mut command = crate::remote::command(
-        &[],
-        everyport_core::protocol::Os::Windows,
-        &["wsl.exe", "-l", "-q"],
-    );
+    let mut command =
+        crate::client::remote::command(&[], crate::protocol::Os::Windows, &["wsl.exe", "-l", "-q"]);
     command.env("WSL_UTF8", "1");
     match command.output().await {
         Ok(out) if out.status.success() => parse_list(&out.stdout),
@@ -82,11 +79,11 @@ pub fn dedupe(windows: &mut Snapshot, distros: &[&Snapshot]) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use everyport_core::protocol::OtherPort;
+    use crate::protocol::OtherPort;
 
     fn fixture() -> Snapshot {
         serde_json::from_str(include_str!(
-            "../../../packages/protocol/fixtures/snapshot.json"
+            "../../../../packages/protocol/fixtures/snapshot.json"
         ))
         .unwrap()
     }

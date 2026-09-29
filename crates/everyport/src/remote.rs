@@ -2,10 +2,10 @@
 //! the desktop app, next to the ones everyport discovers.
 
 use crate::machine::{machines_path, RUNTIME};
-use everyport_client::discover::{self, Source};
-use everyport_client::install;
-use everyport_client::machines::{self, Machine, Via};
-use everyport_client::Connection;
+use everyport::client::discover::{self, Source};
+use everyport::client::install;
+use everyport::client::machines::{self, Machine, Via};
+use everyport::client::Connection;
 use std::io;
 use std::path::Path;
 use std::process::ExitCode;

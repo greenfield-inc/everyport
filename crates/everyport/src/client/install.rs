@@ -6,10 +6,10 @@
 //! prefix, so a machine needs no shell tricks beyond what `ssh` or `docker
 //! exec` already give.
 
-use crate::remote;
+use crate::client::remote;
+use crate::protocol::Os;
 use anyhow::{anyhow, bail, Context};
 use base64::Engine as _;
-use everyport_core::protocol::Os;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -192,7 +192,7 @@ async fn binary(target: &str) -> anyhow::Result<Vec<u8>> {
         return Ok(binary);
     }
     let base = format!("{RELEASES}/v{VERSION}");
-    let http = crate::http::builder().build()?;
+    let http = crate::client::http::builder().build()?;
     let get = |file: String| {
         let url = format!("{base}/{file}");
         let http = http.clone();

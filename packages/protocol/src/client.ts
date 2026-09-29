@@ -18,7 +18,7 @@ export interface Machine {
 
 /**
  * What the UI needs from its host app. The Tauri app implements it with
- * everyport-client; Pane can implement it over its daemon; tests use the fixture.
+ * `everyport::client`; Pane can implement it over its daemon; tests use the fixture.
  * @everyport/ui imports only this interface, never Tauri.
  */
 export interface EveryportClient {

@@ -6,7 +6,7 @@
 //! user's shell, so each argument is quoted for that shell. Arguments made of
 //! plain characters mean the same either way, so most commands need no quoting.
 
-use everyport_core::protocol::Os;
+use crate::protocol::Os;
 use std::process::Stdio;
 use tokio::process::Command;
 

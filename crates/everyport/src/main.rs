@@ -121,7 +121,7 @@ enum Remote {
 }
 
 fn main() -> ExitCode {
-    everyport_core::platform::run_helper();
+    everyport::platform::run_helper();
     let cli = Cli::parse();
     let result = run(cli);
     match result {
@@ -182,13 +182,13 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
             Remote::List => remote::list(),
             Remote::Rm { name } => remote::rm(&name),
         },
-        Some(Command::Doctor) => Ok(commands::doctor(everyport_core::config::dir())),
+        Some(Command::Doctor) => Ok(commands::doctor(everyport::config::dir())),
         Some(Command::Connect { port, check }) => connect::run(port, check),
     }
 }
 
 fn serve(listen: SocketAddr, url: Option<String>, origins: Vec<String>) -> io::Result<ExitCode> {
-    let dir = everyport_core::config::dir()
+    let dir = everyport::config::dir()
         .ok_or_else(|| io::Error::other("no config folder for this user"))?;
     let token = serve::token(&dir)?;
     let listener = serve::bind(listen)?;

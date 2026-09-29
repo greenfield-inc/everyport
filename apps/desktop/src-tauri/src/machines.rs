@@ -1,7 +1,7 @@
 //! The machines the app watches and their latest state: this computer through
 //! the bundled `everyport` sidecar, the machines in `machines.toml`, WSL distros,
 //! and the ssh and Pane hosts discovery finds, which connect once picked.
-//! Every machine runs `everyport stdio` through everyport-client, on one code path.
+//! Every machine runs `everyport stdio` through `everyport::client`, on one code path.
 //! Snapshots always update the tray, but reach a page only while it shows.
 
 use std::collections::HashMap;
@@ -10,14 +10,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant, SystemTime};
 
-use everyport_client::discover::{self, Found, Source};
-use everyport_client::forward::{self, Forward};
-use everyport_client::install::{self, Probe};
-use everyport_client::machines::{self as saved, Via};
-use everyport_client::protocol::{
-    AgentSession, Call, Event, HostInfo, Server, ServerStatus, Snapshot,
-};
-use everyport_client::{Client, Connection, Update};
+use everyport::client::discover::{self, Found, Source};
+use everyport::client::forward::{self, Forward};
+use everyport::client::install::{self, Probe};
+use everyport::client::machines::{self as saved, Via};
+use everyport::client::{Client, Connection, Update};
+use everyport::protocol::{AgentSession, Call, Event, HostInfo, Server, ServerStatus, Snapshot};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -326,7 +324,7 @@ fn older(a: &str, b: &str) -> bool {
     matches!((parse(a), parse(b)), (Some(a), Some(b)) if a < b)
 }
 
-/// everyport-client ends a session with this when the machine's everyport speaks
+/// `everyport::client` ends a session with this when the machine's everyport speaks
 /// another protocol version, before any hello reaches the app.
 fn incompatible(error: &str) -> bool {
     error.contains("which speaks protocol")
@@ -444,8 +442,8 @@ async fn install_and_connect(
 fn connect(app: &AppHandle, id: &str, run: u64, connection: Connection) {
     let (app, id) = (app.clone(), id.to_string());
     tauri::async_runtime::spawn(async move {
-        // everyport_client::connect spawns onto the current Tokio runtime.
-        let (client, mut updates) = everyport_client::connect(connection.clone());
+        // everyport::client::connect spawns onto the current Tokio runtime.
+        let (client, mut updates) = everyport::client::connect(connection.clone());
         if !update(&app, &id, run, |e| {
             e.client = Some(client);
             e.connection = Some(connection);
@@ -603,7 +601,7 @@ impl Machines {
             .entry(LOCAL)
             .and_then(|e| e.raw.clone())
             .map(|mut raw| {
-                everyport_client::wsl::dedupe(&mut raw, &distros);
+                everyport::client::wsl::dedupe(&mut raw, &distros);
                 raw.servers.retain(|server| !tunnels.contains(&server.port));
                 raw
             });
@@ -855,7 +853,7 @@ pub fn install_everyport(app: AppHandle, machine_id: String) -> Result<(), Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use everyport_client::protocol::Os;
+    use everyport::protocol::Os;
 
     fn machine(name: &str, command: &[&str]) -> saved::Machine {
         saved::Machine {
@@ -952,7 +950,7 @@ mod tests {
 
     #[test]
     fn recognizes_everyport_clients_protocol_mismatch() {
-        // The message everyport-client's session ends with, for an everyport 0.3.0 speaking protocol 2.
+        // The message an `everyport::client` session ends with, for an everyport 0.3.0 speaking protocol 2.
         assert!(incompatible("This machine runs everyport 0.3.0, which speaks protocol 2. The app speaks protocol 1. Update everyport on the machine."));
         assert!(!incompatible("everyport exited: connection reset"));
     }

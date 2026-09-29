@@ -1,10 +1,8 @@
 //! Connections against stand-ins for `everyport stdio`, `ssh` and `everyport serve`.
 #![cfg(unix)]
 
-use everyport_client::protocol::{
-    Call, Event, Hello, HostInfo, Os, ProcRef, Snapshot, PROTOCOL_VERSION,
-};
-use everyport_client::{connect, install, Connection, Update};
+use everyport::client::{connect, install, Connection, Update};
+use everyport::protocol::{Call, Event, Hello, HostInfo, Os, ProcRef, Snapshot, PROTOCOL_VERSION};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

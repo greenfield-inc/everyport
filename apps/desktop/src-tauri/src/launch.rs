@@ -3,7 +3,7 @@
 
 use std::process::Command;
 
-use everyport_client::protocol::{AgentKind, AgentSession};
+use everyport::protocol::{AgentKind, AgentSession};
 use tauri::AppHandle;
 use tauri_plugin_opener::OpenerExt;
 

@@ -7,8 +7,8 @@ mod view;
 use crate::format;
 use crate::machine::{machines_path, Feed, Install, Machine};
 use crate::palette::Palette;
-use everyport_client::machines;
-use everyport_core::protocol::{Call, Event, Server, Snapshot};
+use everyport::client::machines;
+use everyport::protocol::{Call, Event, Server, Snapshot};
 use ratatui::crossterm::event::{
     self, Event as Input, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
 };

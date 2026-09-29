@@ -39,7 +39,7 @@ pub fn run(
 mod tests {
     use super::*;
     use crate::hub::fixture;
-    use everyport_core::protocol::{Event, RequestResult};
+    use everyport::protocol::{Event, RequestResult};
 
     fn transcript(input: &str) -> Vec<Event> {
         let mut output = Vec::new();

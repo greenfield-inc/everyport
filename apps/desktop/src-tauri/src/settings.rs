@@ -8,11 +8,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use everyport_client::machines as saved;
-use everyport_client::machines::Via;
-use everyport_client::protocol::{Call, Config, ConfigChange};
-use everyport_client::{discover, Connection};
-use everyport_core::config;
+use everyport::client::machines as saved;
+use everyport::client::machines::Via;
+use everyport::client::{discover, Connection};
+use everyport::config;
+use everyport::protocol::{Call, Config, ConfigChange};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
@@ -469,7 +469,7 @@ fn add_machine(path: &Path, name: &str, target: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use everyport_client::protocol::AutoKill;
+    use everyport::protocol::AutoKill;
 
     #[test]
     fn adds_machines_by_command_or_code() {
@@ -502,7 +502,7 @@ mod tests {
                     name: "mini".into(),
                     via: Via::Url {
                         url: "http://127.0.0.1:7767".into(),
-                        token: everyport_client::Token("s3cret".into()),
+                        token: everyport::client::Token("s3cret".into()),
                     },
                 },
             ]

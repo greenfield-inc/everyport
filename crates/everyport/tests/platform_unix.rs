@@ -1,8 +1,8 @@
 //! The macOS and Linux platforms, checked against processes these tests start.
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 
-use everyport_core::platform::{native, Listener, ProcInfo};
-use everyport_core::protocol::ProcRef;
+use everyport::platform::{native, Listener, ProcInfo};
+use everyport::protocol::ProcRef;
 use std::io;
 use std::net::TcpListener;
 use std::os::unix::process::{CommandExt, ExitStatusExt};
@@ -111,7 +111,7 @@ fn listeners_include_sockets_we_bind() {
 /// the test says why it skips.
 #[test]
 fn another_users_listener_shows_port_and_owner() {
-    use everyport_core::platform::OtherListener;
+    use everyport::platform::OtherListener;
     let sudo = || {
         let mut command = Command::new("sudo");
         command.arg("-n");
@@ -192,7 +192,7 @@ fn descends_from(mut pid: u32, ancestor: u32) -> bool {
 fn processes_report_name_parent_and_start_time() {
     // `/proc/<pid>/stat` wraps the name in parentheses.
     let copy = SleepCopy::new("we) ird");
-    let spawned_at = everyport_core::now_ms();
+    let spawned_at = everyport::now_ms();
     let mut child = start(Command::new(&copy.program).arg("30"));
 
     let info = proc_info(child.id());

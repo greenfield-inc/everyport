@@ -1,7 +1,7 @@
 //! The Everyport wire protocol. `everyport stdio` writes one `Event` per line to stdout and
 //! reads one `Request` per line from stdin; `everyport serve` carries the same JSON
 //! over HTTP and server-sent events. Types export to TypeScript through ts-rs
-//! (`cargo test -p everyport-core` writes packages/protocol/src/generated).
+//! (`cargo test -p everyport --lib` writes packages/protocol/src/generated).
 //!
 //! Timestamps are Unix milliseconds. Memory is bytes. CPU is percent of one core.
 

@@ -980,15 +980,6 @@ dependencies = [
 
 [[package]]
 name = "dirs"
-version = "6.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
-dependencies = [
- "dirs-sys 0.5.0",
-]
-
-[[package]]
-name = "dirs"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
@@ -1242,43 +1233,18 @@ dependencies = [
  "base64 0.23.1",
  "clap",
  "dirs 7.0.0",
- "everyport-client",
- "everyport-core",
  "getrandom 0.4.3",
+ "libc",
+ "notify",
  "open",
  "ratatui",
- "serde",
- "serde_json",
- "terminal-colorsaurus",
- "tokio",
-]
-
-[[package]]
-name = "everyport-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "dirs 6.0.0",
- "everyport-core",
  "reqwest",
  "rustls",
  "serde",
  "serde_json",
  "sha2",
+ "terminal-colorsaurus",
  "tokio",
- "toml 0.9.12+spec-1.1.0",
-]
-
-[[package]]
-name = "everyport-core"
-version = "0.1.0"
-dependencies = [
- "dirs 6.0.0",
- "libc",
- "notify",
- "serde",
- "serde_json",
  "toml 0.9.12+spec-1.1.0",
  "ts-rs",
  "windows 0.62.2",
@@ -1288,8 +1254,7 @@ dependencies = [
 name = "everyport-desktop"
 version = "0.1.0"
 dependencies = [
- "everyport-client",
- "everyport-core",
+ "everyport",
  "notify",
  "serde",
  "serde_json",

@@ -3,7 +3,7 @@
 //! as `everyport` does.
 
 fn main() {
-    everyport_core::platform::run_helper();
+    everyport::platform::run_helper();
     #[cfg(windows)]
     {
         windows::ctrl_c_stops_a_server_on_its_own_console();
@@ -14,9 +14,9 @@ fn main() {
 
 #[cfg(windows)]
 mod windows {
-    use everyport_core::engine::Engine;
-    use everyport_core::platform::native;
-    use everyport_core::protocol::{Call, Config};
+    use everyport::engine::Engine;
+    use everyport::platform::native;
+    use everyport::protocol::{Call, Config};
     use std::os::windows::process::CommandExt;
     use std::process::Command;
     use std::time::{Duration, Instant};

@@ -1,15 +1,15 @@
 //! The machine a command runs against: this one, scanned in-process, or
-//! another one running `everyport stdio` through everyport-client. Commands and the
+//! another one running `everyport stdio` through `everyport::client`. Commands and the
 //! terminal UI read the same events from either.
 
 use crate::commands;
 use crate::hub::Hub;
 use anyhow::{bail, Context};
-use everyport_client::forward::{self, Forward};
-use everyport_client::install::{self, Probe};
-use everyport_client::machines::{self, Via};
-use everyport_client::{discover, Client, Connection, Update};
-use everyport_core::protocol::{Call, Event, Request, RequestResult};
+use everyport::client::forward::{self, Forward};
+use everyport::client::install::{self, Probe};
+use everyport::client::machines::{self, Via};
+use everyport::client::{discover, Client, Connection, Update};
+use everyport::protocol::{Call, Event, Request, RequestResult};
 use std::io;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::LazyLock;
@@ -29,7 +29,7 @@ pub static RUNTIME: LazyLock<Runtime> = LazyLock::new(|| {
 /// What a machine reports.
 pub enum Feed {
     Event(Event),
-    /// The connection dropped. everyport-client reconnects on its own.
+    /// The connection dropped. `everyport::client` reconnects on its own.
     Lost(String),
 }
 
@@ -91,7 +91,7 @@ impl Machine {
     pub fn remote(name: &str, install: Install) -> Result<Self, String> {
         let connection = connection(name, install)?;
         let _runtime = RUNTIME.enter();
-        let (client, mut updates) = everyport_client::connect(connection.clone());
+        let (client, mut updates) = everyport::client::connect(connection.clone());
         let (tx, feed) = mpsc::channel();
         let results = tx.clone();
         RUNTIME.spawn(async move {
@@ -234,7 +234,7 @@ async fn reach(name: &str, install: Install) -> anyhow::Result<Connection> {
 type Ask<'a> = &'a mut dyn FnMut(&str) -> io::Result<bool>;
 
 /// Asks before installing or updating, through `ask` when a person can
-/// answer. An older everyport that isn't updated still runs, and everyport-client reports
+/// answer. An older everyport that isn't updated still runs, and `everyport::client` reports
 /// a protocol mismatch if there is one.
 fn should_install(
     name: &str,
@@ -291,7 +291,7 @@ pub fn machines_path() -> anyhow::Result<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use everyport_core::protocol::Os;
+    use everyport::protocol::Os;
 
     fn probe(installed: Option<&str>) -> Probe {
         Probe {

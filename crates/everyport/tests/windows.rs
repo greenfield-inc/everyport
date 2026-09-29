@@ -1,8 +1,8 @@
 //! The Windows platform against a real server. CI runs it on windows-latest.
 #![cfg(windows)]
 
-use everyport_core::platform::{native, Listener, Platform};
-use everyport_core::protocol::ProcRef;
+use everyport::platform::{native, Listener, Platform};
+use everyport::protocol::ProcRef;
 use std::net::TcpListener;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
@@ -80,7 +80,7 @@ fn finds_a_python_server_with_its_details_and_memory() {
         .expect("in the process table");
     assert_eq!(info.name.to_lowercase(), "python.exe");
     assert_eq!(info.parent, Some(std::process::id()));
-    let age = everyport_core::now_ms() - info.proc.started_at;
+    let age = everyport::now_ms() - info.proc.started_at;
     assert!(age < 60_000, "started {age} ms ago");
 
     // Windows variable names ignore case.
