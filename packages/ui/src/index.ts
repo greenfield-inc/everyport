@@ -9,4 +9,4 @@ export { CleanUp, cleanUpCandidates } from "./views/CleanUp.tsx";
 export { MachineSwitcher, MachineStatus } from "./views/MachineSwitcher.tsx";
 export { useViewContext, type ViewContext, type Pending } from "./context.ts";
 export { Themed, themeList, warningColor, DEFAULT_THEME, type Appearance, type ThemeProps } from "./theme.tsx";
-export { DotGrid } from "./icons.tsx";
+export { Socket } from "./icons.tsx";

@@ -4,11 +4,12 @@ import type { ViewContext } from "./context.ts";
 import { BackIcon, LockIcon } from "./icons.tsx";
 import { type Action, actionLabel, protectedNote } from "./model.ts";
 
-/** Centred page title with an optional back button. */
-export function Header({ title, onBack }: { title: string; onBack?: () => void }) {
+/** Centred page title with an optional mark before it and a back button. */
+export function Header({ title, mark, onBack }: { title: string; mark?: ReactNode; onBack?: () => void }) {
   return (
-    <div className="ppm:relative ppm:flex ppm:h-5 ppm:shrink-0 ppm:items-center ppm:justify-center">
-      <h1 className="ppm:clamp-1 ppm:px-7 ppm:text-13 ppm:font-medium ppm:text-fg">{title}</h1>
+    <div className="ppm:relative ppm:flex ppm:h-5 ppm:shrink-0 ppm:items-center ppm:justify-center ppm:gap-1.5 ppm:px-7">
+      {mark}
+      <h1 className="ppm:clamp-1 ppm:text-13 ppm:font-medium ppm:text-fg">{title}</h1>
       {onBack && (
         <button
           type="button"

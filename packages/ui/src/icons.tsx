@@ -153,24 +153,28 @@ export function ReasonIcon({ kind, className }: Props & { kind: CleanUpReason["k
   );
 }
 
-const GRID = [0, 1, 2, 3, 4];
-const COLON = new Set(["2,1", "2,3"]);
+export type SocketState = "idle" | "running" | "attention";
 
 /**
- * The 5×5 dot-grid mark. At rest the colon is lit; on alert every dot turns
- * amber and the colon is knocked out.
+ * The socket mark (brand/socket.svg). The right slot is unlit when idle, plugs in
+ * green when servers run, breathes amber on attention and unplugs when the last
+ * server stops.
  */
-export function DotGrid({ size = 18, alert = false }: { size?: number; alert?: boolean }) {
-  const step = size / 5;
+export function Socket({ size = 18, state = "idle" }: { size?: number; state?: SocketState }) {
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="ppm:shrink-0" aria-hidden>
-      {GRID.map((row) =>
-        GRID.map((col) => {
-          const lit = COLON.has(`${col},${row}`);
-          const fill = alert === lit ? "color-mix(in oklab, currentColor 25%, transparent)" : alert ? "var(--ppm-warn)" : "currentColor";
-          return <circle key={`${col}-${row}`} cx={step * (col + 0.5)} cy={step * (row + 0.5)} r={step * 0.39} fill={fill} />;
-        }),
-      )}
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className="ppm-socket ppm:shrink-0"
+      data-state={state}
+      aria-hidden
+    >
+      <rect x="3" y="3" width="18" height="18" rx="6" fill="none" stroke="currentColor" strokeWidth="2" />
+      <rect x="8" y="8" width="2.4" height="6.5" rx="1.2" />
+      <rect className="ppm-socket-slot" x="13.6" y="8" width="2.4" height="6.5" rx="1.2" />
+      <circle cx="12" cy="16.4" r="1.3" />
     </svg>
   );
 }

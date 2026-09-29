@@ -4,7 +4,7 @@ import { Sparkline } from "../charts.tsx";
 import { Colon, Grow, Header, ProtectedBadge, ProtectedConfirm, useLeaving, useTween } from "../components.tsx";
 import { confirmOf, errorOf, type Pending, type ViewContext } from "../context.ts";
 import { memory, memoryParts, percent, total, totalParts } from "../format.ts";
-import { AgentIcon, BranchIcon, BroomIcon, Chevron, DotGrid, GearIcon, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
+import { AgentIcon, BranchIcon, BroomIcon, Chevron, GearIcon, Socket, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
 import { isGone, preselected, rowContext } from "../model.ts";
 import { cleanUpCandidates } from "./CleanUp.tsx";
 
@@ -36,7 +36,7 @@ export function ServerList({ ctx, selected, onOpen, onCleanUp }: Props) {
         ) : (
           <div className="ppm:flex ppm:flex-col ppm:items-center ppm:gap-3 ppm:py-7 ppm:text-center">
             <span className="ppm:text-fg3">
-              <DotGrid size={48} />
+              <Socket size={48} />
             </span>
             <span className="ppm:text-13 ppm:text-fg2">Nothing listening</span>
             <span className="ppm:text-11 ppm:text-fg3">Dev servers show up here when they start.</span>
@@ -90,7 +90,10 @@ function Summary(props: {
       : `CPU ${percent(system.cpu_percent)}`;
   return (
     <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
-      <Header title={focused ? `${focused.project.name} :${focused.port}` : "Servers"} />
+      <Header
+        title={focused ? `${focused.project.name} :${focused.port}` : "Servers"}
+        mark={<Socket size={14} state={servers.some((s) => s.status === "attention") ? "attention" : servers.length ? "running" : "idle"} />}
+      />
       <div className="ppm:flex ppm:flex-col ppm:gap-1.5">
         <div className="ppm:flex ppm:items-center ppm:gap-1.5">
           <div
