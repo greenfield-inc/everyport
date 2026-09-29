@@ -1,7 +1,7 @@
 import type { Machine, Server } from "@everyport/protocol";
 import { type ReactNode, useEffect, useState } from "react";
 import { memory, total } from "../format.ts";
-import { AgentIcon, BranchIcon, WorkspaceIcon } from "../icons.tsx";
+import { AgentIcon, BranchIcon, CheckIcon, Socket, type SocketState, WorkspaceIcon } from "../icons.tsx";
 import { DEFAULT_ALERT_MEMORY } from "../model.ts";
 import { type ThemeProps, Themed } from "../theme.tsx";
 
@@ -55,45 +55,16 @@ type Props = ThemeProps & {
 const STEPS = ["welcome", "leaks", "tools", "previews", "terminal", "machines", "done"] as const;
 type Step = (typeof STEPS)[number];
 
-// 5x5 dot glyphs: `#` lit, `a` lit amber, `.` unlit.
-const SOCKET = [".....", ".#.#.", ".#.#.", "..#..", "....."];
-const HERO: Record<Step, string[]> = {
-  welcome: SOCKET,
-  leaks: ["....a", "...a.", "..#..", ".#...", "#...."],
-  tools: ["#....", ".#...", "..#..", ".#...", "#.###"],
-  previews: [".....", "..#..", ".###.", "#####", "....."],
-  terminal: [".....", ".#...", ".....", ".#.##", "....."],
-  machines: ["##...", "##...", "..#..", "...##", "...##"],
-  done: SOCKET,
+/** The Socket hero on each step: plugs in, breathes amber, lights, rests, or stays lit. */
+const HERO: Record<Step, { state: SocketState; steady?: boolean }> = {
+  welcome: { state: "running" },
+  leaks: { state: "attention" },
+  tools: { state: "running" },
+  previews: { state: "idle" },
+  terminal: { state: "idle" },
+  machines: { state: "idle" },
+  done: { state: "running", steady: true },
 };
-/** The done step's celebration: spark, burst, fade, then settle into the socket. */
-const CELEBRATION = [
-  [".....", ".....", "..#..", ".....", "....."],
-  [".....", "..#..", ".###.", "..#..", "....."],
-  ["#.#.#", ".....", "#...#", ".....", "#.#.#"],
-  ["#...#", ".....", ".....", ".....", "#...#"],
-  SOCKET,
-];
-/** "Classic loading" from the Flicker gallery, cropped to 5x5. */
-const LOADING = [
-  [".###.", "....#", "....#", ".....", "....."],
-  ["...#.", "....#", "....#", "....#", "...#."],
-  [".....", ".....", "....#", "....#", ".###."],
-  [".....", ".....", "#....", "#....", ".###."],
-  [".#...", "#....", "#....", "#....", ".#..."],
-  [".###.", "#....", "#....", ".....", "....."],
-];
-/** A checkmark drawn a dot at a time. The last frame is the finished mark. */
-const CHECK = [
-  [".....", ".....", "#....", ".....", "....."],
-  [".....", ".....", "#....", ".#...", "....."],
-  [".....", ".....", "#.#..", ".#...", "....."],
-  [".....", "...#.", "#.#..", ".#...", "....."],
-  ["....#", "...#.", "#.#..", ".#...", "....."],
-];
-const FRAME_MS = 100;
-
-const reducedMotion = () => typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * First-run onboarding: a short welcome in steps, with live checks of what
@@ -118,8 +89,9 @@ export function Onboarding({ host, machines, alertMemory = DEFAULT_ALERT_MEMORY,
 
   return (
     <Themed theme={theme} appearance={appearance} className="everyport-onboarding">
-      <div className="everyport:flex everyport:h-full everyport:flex-col">
-        <div className="everyport-scroll everyport:flex everyport:flex-1 everyport:flex-col everyport:items-center everyport:gap-5 everyport:px-8 everyport:pt-9 everyport:pb-5">
+      <div className="everyport:flex everyport:h-full everyport:flex-col" data-glow={step === "leaks" ? "warn" : undefined}>
+        <div className="everyport-scroll everyport:flex everyport:flex-1 everyport:flex-col">
+          <div className="everyport:my-auto everyport:flex everyport:flex-col everyport:items-center everyport:gap-5 everyport:px-8 everyport:py-7">
           <Hero step={step} />
           <div className="everyport:flex everyport:flex-col everyport:items-center everyport:gap-2 everyport:text-center">
             <h1 className="everyport:text-28 everyport:font-semibold everyport:text-fg">{TITLE[step]}</h1>
@@ -127,6 +99,7 @@ export function Onboarding({ host, machines, alertMemory = DEFAULT_ALERT_MEMORY,
           </div>
           <div key={step} className="everyport-view everyport:flex everyport:w-full everyport:flex-col everyport:items-center everyport:gap-4">
             <StepCard step={step} host={host} servers={servers} />
+          </div>
           </div>
         </div>
         <div className="everyport:hairline-t everyport:flex everyport:items-center everyport:justify-between everyport:px-4 everyport:py-3.5">
@@ -383,39 +356,13 @@ function useCheck<T>(check: () => Promise<T>): [T | undefined, string | undefine
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
+/** The Socket mark over a soft glow, remounted per step so each step plays its own motion. */
 function Hero({ step }: { step: Step }) {
-  const [glyph, setGlyph] = useState(HERO[step]);
-  useEffect(() => {
-    if (step !== "done" || reducedMotion()) return setGlyph(HERO[step]);
-    const timers = CELEBRATION.map((frame, i) => window.setTimeout(() => setGlyph(frame), 350 * i));
-    return () => timers.forEach(clearTimeout);
-  }, [step]);
+  const { state, steady } = HERO[step];
   return (
-    <div className="everyport:flex everyport:h-[120px] everyport:items-center">
-      <DotGrid rows={glyph} size={110} animate />
+    <div key={step} className="everyport-onboarding-hero everyport:flex everyport:h-[120px] everyport:items-center everyport:text-fg" data-steady={steady || undefined}>
+      <Socket size={110} state={state} />
     </div>
-  );
-}
-
-/** A 5x5 dot matrix. With `animate`, each dot moves to its next state on its own, staggered by column. */
-function DotGrid({ rows, size, animate = false, color = "var(--foreground)" }: { rows: string[]; size: number; animate?: boolean; color?: string }) {
-  const pitch = size / 5;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden className="everyport:shrink-0">
-      {rows.flatMap((line, row) =>
-        [...line].map((dot, column) => (
-          <circle
-            key={`${row}-${column}`}
-            cx={pitch * (column + 0.5)}
-            cy={pitch * (row + 0.5)}
-            r={pitch * 0.32}
-            fill={dot === "a" ? "var(--everyport-warn)" : color}
-            fillOpacity={dot === "." ? 0.12 : 1}
-            style={animate ? { transition: `fill 280ms ease-in-out ${column * 40}ms, fill-opacity 280ms ease-in-out ${column * 40}ms` } : undefined}
-          />
-        )),
-      )}
-    </svg>
   );
 }
 
@@ -448,29 +395,25 @@ function Confirmation({ state, monospaced = false, onAction }: { state: RowState
   );
 }
 
-/** Only this 20 px slot animates: a dot spinner while checking, then a check drawn a dot at a time. */
+/** A spinner while a check runs, then a check, the amber attention dot, or a minus for not found. */
 function Mark({ state }: { state: RowState }) {
-  const [frame, setFrame] = useState(() => (state.kind === "ok" ? CHECK.length - 1 : 0));
   const kind = state.kind;
-  useEffect(() => {
-    if (reducedMotion()) return setFrame(kind === "ok" ? CHECK.length - 1 : 0);
-    setFrame(0);
-    if (kind !== "loading" && kind !== "ok") return;
-    const timer = window.setInterval(
-      () => setFrame((f) => (kind === "loading" ? (f + 1) % LOADING.length : Math.min(f + 1, CHECK.length - 1))),
-      kind === "loading" ? FRAME_MS : FRAME_MS / 2,
-    );
-    return () => clearInterval(timer);
-  }, [kind]);
-  const label = kind === "ok" ? "Confirmed" : state.label;
   return (
-    <span className="everyport:flex everyport:size-5 everyport:items-center everyport:justify-center" role="img" aria-label={label}>
+    <span
+      className="everyport:flex everyport:size-5 everyport:items-center everyport:justify-center"
+      role="img"
+      aria-label={kind === "ok" ? "Confirmed" : state.label}
+    >
       {kind === "loading" ? (
-        <DotGrid rows={LOADING[frame % LOADING.length]} size={20} color="var(--muted-foreground)" />
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.5" className="everyport-spin" aria-hidden>
+          <path d="M7 1.5a5.5 5.5 0 1 1-5.5 5.5" strokeLinecap="round" />
+        </svg>
       ) : kind === "ok" ? (
-        <DotGrid rows={CHECK[Math.min(frame, CHECK.length - 1)]} size={20} color={SUCCESS} />
+        <span className="everyport-onboarding-check everyport:flex" style={{ color: SUCCESS }}>
+          <CheckIcon className="everyport:size-4" />
+        </span>
       ) : kind === "warn" ? (
-        <DotGrid rows={HERO.leaks} size={20} />
+        <span className="everyport:size-2 everyport:rounded-full everyport:bg-warn" />
       ) : (
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.2" aria-hidden>
           <circle cx="7.5" cy="7.5" r="6.5" />
