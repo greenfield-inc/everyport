@@ -15,7 +15,7 @@ use crate::protocol::ProcRef;
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{AsRawHandle, FromRawHandle};
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -78,17 +78,20 @@ pub fn run_helper() {
             })
         })
         .collect();
-    let mut stdout = std::io::stdout();
+    // AttachConsole can point the standard handles at the console, so keep
+    // the pipe to ppm.
+    let mut reply = unsafe { File::from_raw_handle(std::io::stdout().as_raw_handle()) };
     match send(&tree) {
         Ok(has_cmd) => {
-            let _ = writeln!(stdout, "{SENT}").and_then(|_| stdout.flush());
+            let _ = writeln!(reply, "{SENT}");
+            drop(reply);
             if has_cmd {
                 answer_batch_prompts(&tree);
             }
             std::process::exit(0)
         }
         Err(reason) => {
-            let _ = writeln!(stdout, "{reason}");
+            let _ = writeln!(reply, "{reason}");
             std::process::exit(1)
         }
     }
