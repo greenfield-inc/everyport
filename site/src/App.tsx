@@ -125,7 +125,7 @@ export function App() {
   const [active, setActive] = useState(0);
   const [open, setOpen] = useState(true);
   const [override, setOverride] = useState<{ section: number; port: number } | null>(null);
-  const picked = useRef(false);
+  const [picked, setPicked] = useState(false);
   const desk = useMedia("(min-width: 900px) and (min-aspect-ratio: 1/1)");
 
   const changeOs = (next: Os) => {
@@ -135,7 +135,7 @@ export function App() {
     if (!nextMachines.some((machine) => machine.id === machineId)) setMachineId(LOCAL);
   };
   const pickMachine = (id: string) => {
-    picked.current = true;
+    setPicked(true);
     setMachineId(id);
   };
 
@@ -145,16 +145,16 @@ export function App() {
   useEffect(() => {
     setOverride(null);
     setOpen(true);
-    if (section.local || (section.id !== "machines" && !picked.current)) setMachineId(LOCAL);
+    if (section.local || (section.id !== "machines" && !picked)) setMachineId(LOCAL);
   }, [section]);
 
   // The Machines section walks through every machine until the visitor picks one.
   useEffect(() => {
-    if (section.id !== "machines" || picked.current || reducedMotion()) return;
+    if (section.id !== "machines" || picked || reducedMotion()) return;
     const ids = machines.map((machine) => machine.id);
     const timer = setInterval(() => setMachineId((current) => ids[(ids.indexOf(current) + 1) % ids.length]), 2200);
     return () => clearInterval(timer);
-  }, [section, machines.length]);
+  }, [section, machines.length, picked]);
 
   const controls: ControlProps = {
     os,
@@ -320,6 +320,25 @@ function Desk({
   );
 }
 
+/**
+ * Renders its children only while on screen, so a phone runs one or two
+ * popovers instead of six, and their rows' ids stay unique.
+ */
+function OnScreen({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  const box = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    observer.observe(box.current!);
+    return () => observer.disconnect();
+  }, []);
+  return (
+    <div ref={box} {...props}>
+      {visible && children}
+    </div>
+  );
+}
+
 function Stacked({ controls, screenFor, os, onOs }: { controls: ControlProps; screenFor: (index: number) => React.ReactNode; os: Os; onOs: (os: Os) => void }) {
   const { box, scale } = useFit(PHONE.width);
   const navigate = (id: SectionId) => document.getElementById(id)?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth" });
@@ -336,9 +355,9 @@ function Stacked({ controls, screenFor, os, onOs }: { controls: ControlProps; sc
           </div>
           {section.id !== "install" && (
             <div ref={index === 0 ? box : undefined} className="fit">
-              <div className="fit-inner" style={{ width: PHONE.width * scale, height: PHONE.height * scale }}>
+              <OnScreen className="fit-inner" style={{ width: PHONE.width * scale, height: PHONE.height * scale }}>
                 <div style={{ transform: `scale(${scale})`, transformOrigin: "0 0" }}>{screenFor(index)}</div>
-              </div>
+              </OnScreen>
             </div>
           )}
         </section>

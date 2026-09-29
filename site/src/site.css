@@ -1059,7 +1059,9 @@ footer nav a {
   gap: 8px;
 }
 
-.stacked-controls .cli-line {
+/* Phones keep Reset demo, and leave out the CLI caption. */
+.stacked-controls .cli-line:not(:has(.reset)),
+.stacked-controls .cli-line > :not(.reset) {
   display: none;
 }
 

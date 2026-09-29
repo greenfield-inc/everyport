@@ -186,6 +186,7 @@ export function Screen({ os, client, machine, view, open, onToggle, alert, width
 function PopoverSlot({ client, machine, view }: { client: DemoClient; machine: Machine; view: View }) {
   const scoped = useMemo(() => client.only(machine.id), [client, machine.id]);
   const slot = useRef<HTMLDivElement>(null);
+
   const initialServer = view.kind === "detail" ? { machineId: machine.id, port: view.port } : undefined;
 
   // Clean up opens the way a person opens it: its button on the list.
@@ -197,7 +198,7 @@ function PopoverSlot({ client, machine, view }: { client: DemoClient; machine: M
 
   return (
     <div className="popover-slot" ref={slot}>
-      <Popover key={`${machine.id}-${JSON.stringify(view)}`} client={scoped} appearance="dark" initialServer={initialServer} onReady={onReady} />
+      <Popover key={`${machine.id}-${JSON.stringify(view)}`} autoFocus={false} client={scoped} appearance="dark" initialServer={initialServer} onReady={onReady} />
     </div>
   );
 }
