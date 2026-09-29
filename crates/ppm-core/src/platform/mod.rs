@@ -57,6 +57,25 @@ pub trait Platform: Send + Sync {
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()>;
 }
 
+/// True when a Windows listener belongs to WSL, so its port shows under the
+/// distro instead of as a Windows server. Pass the listener's process name.
+///
+/// - NAT networking (the default): `wslrelay.exe` listens on Windows for each
+///   port a Linux process binds, and relays the traffic into the VM. Inbox
+///   WSL on older Windows 10 builds relays through `wslhost.exe` instead.
+/// - Mirrored networking: `wslservice.exe` reserves the port through the Host
+///   Network Service. If Windows lists an owner at all, it is `wslservice.exe`
+///   or an HNS `svchost.exe`. The latter can't be told apart from other
+///   services by name, so match those ports against the distro's instead.
+/// - `vmmem` (`vmmemWSL` on Windows 11) is the WSL VM itself.
+pub fn is_wsl_owner(process_name: &str) -> bool {
+    let name = process_name.to_ascii_lowercase();
+    matches!(
+        name.strip_suffix(".exe").unwrap_or(&name),
+        "wslrelay" | "wslhost" | "wslservice" | "vmmem" | "vmmemwsl"
+    )
+}
+
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(target_os = "macos")]
@@ -72,4 +91,26 @@ pub fn native() -> Box<dyn Platform> {
     return Box::new(linux::Linux::new());
     #[cfg(windows)]
     return Box::new(windows::Windows::new());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_wsl_owner;
+
+    #[test]
+    fn wsl_owners_are_the_relay_the_service_and_the_vm() {
+        for name in [
+            "wslrelay.exe",
+            "wslhost.exe",
+            "WslService.exe",
+            "vmmem",
+            "vmmemWSL",
+            "WSLRELAY.EXE",
+        ] {
+            assert!(is_wsl_owner(name), "{name}");
+        }
+        for name in ["node.exe", "svchost.exe", "wsl.exe", "relay.exe", ""] {
+            assert!(!is_wsl_owner(name), "{name}");
+        }
+    }
 }
