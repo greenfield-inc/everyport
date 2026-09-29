@@ -5,8 +5,14 @@ export interface Machine {
   id: string;
   label: string;
   host: HostInfo | null;
-  state: "connecting" | "connected" | "installing" | "error";
+  /**
+   * `available`: discovered, and connects when picked (`connectMachine`).
+   * `install`: ppm isn't on the machine; `install` says what installing does,
+   * and `installPpm` does it once the user says yes.
+   */
+  state: "available" | "connecting" | "install" | "installing" | "connected" | "error";
   error?: string;
+  install?: { version: string; path: string };
   snapshot: Snapshot | null;
 }
 
@@ -29,4 +35,8 @@ export interface PpmClient {
   openInEditor?(machineId: string, path: string): Promise<void>;
   resumeSession?(machineId: string, session: AgentSession): Promise<void>;
   openSettings?(): void;
+  /** Connects a discovered machine the user picked. */
+  connectMachine?(machineId: string): Promise<void>;
+  /** Installs ppm on a machine in the `install` state, then connects. */
+  installPpm?(machineId: string): Promise<void>;
 }

@@ -54,7 +54,7 @@ export function Popover({ client, alertMemory, initialServer, onReady, theme, ap
             <div className="ppm:px-4 ppm:pt-3 ppm:pb-4">
               <Header title="Servers" />
             </div>
-            <div className="ppm:hairline-t">{machine ? <MachineStatus machine={machine} /> : null}</div>
+            <div className="ppm:hairline-t">{machine ? <MachineStatus machine={machine} client={client} /> : null}</div>
           </div>
         )}
       </div>
