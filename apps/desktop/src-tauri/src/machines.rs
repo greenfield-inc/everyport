@@ -458,6 +458,7 @@ fn connect(app: &AppHandle, id: &str, run: u64, connection: Connection) {
 /// Applies an update to the machine's current run. False once the run ended.
 fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
     let mut alert = None;
+    let connected = matches!(update, Update::Event(Event::Hello(_)));
     {
         let mut all = machines(app);
         let Some(entry) = all
@@ -538,10 +539,26 @@ fn apply(app: &AppHandle, id: &str, run: u64, update: Update) -> bool {
         }
     }
     changed(app);
+    if connected {
+        configure(app, id);
+    }
     if let Some((server, event)) = alert {
         notify::show(app, id, server, event);
     }
     true
+}
+
+/// Sends the user's settings to a machine that just connected.
+fn configure(app: &AppHandle, id: &str) {
+    let (app, id) = (app.clone(), id.to_string());
+    tauri::async_runtime::spawn(async move {
+        let Some(change) = settings::change_for(&app, &id) else {
+            return;
+        };
+        if let Err(error) = call(&app, &id, Call::Configure(change)).await {
+            eprintln!("configure {id}: {error}");
+        }
+    });
 }
 
 impl Machines {

@@ -2,9 +2,10 @@
 # Screenshots and a GIF of the desktop app on macOS, for PR evidence:
 # the tray icon (idle, running, attention), the popover in light and dark
 # mode, the popover over a full-screen app, on a second display when one is
-# attached, the alert card, an open/close GIF, and other machines: the
+# attached, the alert card, an open/close GIF, other machines (the
 # switcher, the install question, installing, a remote server list, a
-# discovered host, and a failed connection.
+# discovered host, and a failed connection), and each Settings pane in light
+# and dark mode. It only looks at Settings; it changes none of them.
 #
 # The terminal app running this needs Screen Recording and Accessibility, and
 # Docker for the remote machine. It starts throwaway servers on ports
@@ -81,6 +82,16 @@ if args[1] == "screens" {
         print(Int(f.minX), Int(top - f.maxY), Int(f.width), Int(f.height))
     }
     exit(0)
+}
+if args[1] == "window" {
+    // The window id and top-left point of a window by owner pid and title.
+    let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as! [[String: Any]]
+    for w in windows where (w[kCGWindowOwnerPID as String] as? Int) == Int(args[2]) && (w[kCGWindowName as String] as? String) == args[3] {
+        let b = w[kCGWindowBounds as String] as! [String: Double]
+        print(w[kCGWindowNumber as String] as! Int, Int(b["X"]!), Int(b["Y"]!))
+        exit(0)
+    }
+    exit(1)
 }
 let point = CGPoint(x: Double(args[2])!, y: Double(args[3])!)
 for type in [CGEventType.leftMouseDown, .leftMouseUp] {
@@ -252,5 +263,22 @@ sleep 8
 shot_tray "tray-attention-dark"
 read -r mx my mw _ < <(sed -n 1p <<<"$screens")
 screencapture -x -R "$((mx + mw - 420)),$my,420,180" "$out/alert-card-dark.png"
+
+# Settings, opened from the tray menu. Each pane in both modes.
+osascript -e "tell application \"System Events\" to tell (first process whose unix id is $app_pid)" \
+  -e 'perform action "AXShowMenu" of menu bar item 1 of menu bar 2' \
+  -e 'click menu item "Settings…" of menu 1 of menu bar item 1 of menu bar 2' -e 'end tell' >/dev/null
+sleep 1.5
+read -r window wx wy < <(mouse window "$app_pid" Settings) || fail "the Settings window didn't open"
+for mode in dark light; do
+  set_dark "$([[ $mode == dark ]] && echo true || echo false)"
+  # Sidebar rows, in points below the title bar.
+  for pane in "general 58" "machines 88" "clean-up 118"; do
+    read -r name offset <<<"$pane"
+    mouse click "$((wx + 60))" "$((wy + offset))"
+    sleep 0.6
+    screencapture -x -o -l "$window" "$out/settings-$name-$mode.png"
+  done
+done
 
 echo "qa-visual: wrote $(ls "$out"/*.png "$out"/*.gif | wc -l | tr -d ' ') files to $out"

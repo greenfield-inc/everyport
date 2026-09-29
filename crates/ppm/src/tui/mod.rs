@@ -279,7 +279,10 @@ impl App {
         self.cores = slot.cores;
         if matches!(slot.state, State::Idle | State::Failed(_)) {
             slot.state = match slot.name.clone() {
-                None => State::Ready(Machine::local()),
+                None => match Machine::local() {
+                    Ok(machine) => State::Ready(machine),
+                    Err(error) => State::Failed(error.to_string()),
+                },
                 Some(name) => {
                     let (tx, rx) = mpsc::channel();
                     thread::spawn(move || {

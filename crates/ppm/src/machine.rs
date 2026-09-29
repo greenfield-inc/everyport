@@ -66,8 +66,8 @@ enum Link {
 }
 
 impl Machine {
-    pub fn local() -> Self {
-        let hub = Hub::start(commands::engine());
+    pub fn local() -> io::Result<Self> {
+        let hub = Hub::start(commands::engine()?);
         let (events, rx) = mpsc::channel();
         hub.subscribe(events.clone());
         let (tx, feed) = mpsc::channel();
@@ -78,12 +78,12 @@ impl Machine {
                 }
             }
         });
-        Self {
+        Ok(Self {
             name: None,
             feed,
             link: Link::Local { hub, events },
             next_id: 1,
-        }
+        })
     }
 
     /// Connects to a saved or discovered machine, installing ppm there first

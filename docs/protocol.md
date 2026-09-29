@@ -193,7 +193,7 @@ A server crossed a threshold. `ppm` sends it once, and again only after the serv
 { "type": "alert", "port": 6006, "kind": "leaking", "memory": 3017089024 }
 ```
 
-`kind` is `over_threshold` (memory above [`alert_memory`](#configure)) or `leaking` (grew by [`leak_growth`](#configure) over the history window).
+`kind` is `over_threshold` (memory above [`alert_memory`](#configure)), `leaking` (grew by [`leak_growth`](#configure) over the history window), or `clean_up` (Clean up started to suggest stopping it and [`auto_kill`](#configure) is `ask`).
 
 ### result
 
@@ -208,7 +208,7 @@ A line that isn't a valid request still gets a `result` with an error. Its `id` 
 
 ## Requests
 
-A request has a numeric `id` that you choose, a `method`, and `params` for the methods that take them. Every field of `params` is required. Requests run one at a time, in order.
+A request has a numeric `id` that you choose, a `method`, and `params` for the methods that take them. Every field of `params` is required, except in `configure`, which takes only the fields to change. Requests run one at a time, in order.
 
 Use ids from 1 up to 2^53, so JavaScript clients keep them exact. `ppm` only echoes them back, so they need to be unique only among your requests in flight.
 
@@ -244,7 +244,7 @@ A protected server needs `confirm_protected: true`, as for `stop`. An error `res
 
 ### configure
 
-Replace all scanner settings. Send every field; there are no partial updates. On stdio, they apply to that connection's scanner. Over HTTP, one scanner serves every client, so they apply to all of them.
+Change scanner settings. Fields you leave out keep their current value; `ppm` starts from `config.toml`. On stdio, they apply to that connection's scanner. Over HTTP, one scanner serves every client, so they apply to all of them.
 
 ```json
 {
@@ -258,7 +258,9 @@ Replace all scanner settings. Send every field; there are no partial updates. On
     "leak_growth": 524288000,
     "idle_after_secs": 14400,
     "long_running_after_secs": 259200,
-    "protected": ["postgres", "redis-server", "mongod", "mysqld", "mysql"]
+    "protected": ["postgres", "redis-server", "mongod", "mysqld", "mysql"],
+    "auto_kill": "off",
+    "vercel_previews": false
   }
 }
 ```
@@ -274,6 +276,10 @@ These are the defaults.
 | `idle_after_secs` | Idle time after which Clean up suggests a server |
 | `long_running_after_secs` | Uptime after which Clean up suggests a server |
 | `protected` | Process names that protect a server: Clean up never suggests it, and `stop` and `restart` need `confirm_protected` |
+| `auto_kill` | What happens when a server starts to qualify for Clean up while `ppm` watches: `off` lists it, `ask` also sends a `clean_up` alert, `act` stops it. Servers that already qualify when `ppm` starts or when `auto_kill` changes are only listed, and so are leaking servers and servers whose process tree runs a protected process. |
+| `vercel_previews` | Look up each branch's Vercel preview through the GitHub CLI (`gh`), which goes online |
+
+Every `ppm` command starts from `config.toml` in the ppm config folder (see [ppm serve](#ppm-serve) for where it is), which the desktop app writes from Settings. It holds these same fields, and any it leaves out take their defaults. `ppm` never auto-kills on its own: `auto_kill` starts `off` whatever the file says, and only a client that sends it in `configure` turns it on. The desktop app does that for its own computer only.
 
 ## Versioning
 

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import { useFitWindow } from "./fit";
+import { useSettings } from "./settings/useSettings";
 
 type Notice = { machineId: string; server: Server; alert: Alert };
 
@@ -11,6 +12,7 @@ type Notice = { machineId: string; server: Server; alert: Alert };
 export function NotificationWindow() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const ref = useFitWindow<HTMLDivElement>();
+  const settings = useSettings();
 
   useEffect(() => {
     const off = listen<Notice>("notification", ({ payload }) => setNotice(payload));
@@ -25,6 +27,9 @@ export function NotificationWindow() {
         <NotificationCard
           server={notice.server}
           alert={notice.alert}
+          theme={settings?.app.theme ?? undefined}
+          appearance={settings?.app.appearance}
+          alertMemory={settings?.config.alert_memory}
           onDetails={() => act("details")}
           onStop={() => act("stop")}
           onSnooze={() => act("snooze")}

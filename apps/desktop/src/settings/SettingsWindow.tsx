@@ -1,0 +1,60 @@
+import { DotGrid, Themed } from "@ppm/ui";
+import { useEffect, useState } from "react";
+import { CleanUpPane } from "./CleanUpPane";
+import { GeneralPane } from "./GeneralPane";
+import { MachinesPane } from "./MachinesPane";
+import "./settings.css";
+import { useSettings } from "./useSettings";
+
+const PANES = [
+  { title: "General", view: GeneralPane },
+  { title: "Machines", view: MachinesPane },
+  { title: "Clean up", view: CleanUpPane },
+] as const;
+
+/** The Settings window: a sidebar of panes, in the active theme. */
+export function SettingsWindow() {
+  const settings = useSettings();
+  const [pane, setPane] = useState<(typeof PANES)[number]["title"]>("General");
+  // A save that failed, such as an unwritable settings folder.
+  const [failure, setFailure] = useState<string | null>(null);
+  useEffect(() => {
+    const onFailure = (event: PromiseRejectionEvent) => setFailure(String(event.reason));
+    window.addEventListener("unhandledrejection", onFailure);
+    return () => window.removeEventListener("unhandledrejection", onFailure);
+  }, []);
+  useEffect(() => setFailure(null), [settings]);
+  if (!settings) return null;
+  const View = PANES.find((p) => p.title === pane)!.view;
+  return (
+    <Themed theme={settings.app.theme ?? undefined} appearance={settings.app.appearance} className="settings">
+      <nav className="settings-nav" aria-label="Settings">
+        {PANES.map(({ title }) => (
+          <button
+            key={title}
+            type="button"
+            aria-current={title === pane ? "page" : undefined}
+            onClick={() => setPane(title)}
+          >
+            <DotGrid size={14} />
+            {title}
+          </button>
+        ))}
+      </nav>
+      <main className="settings-pane">
+        <h1>{pane}</h1>
+        {[settings.config_error, settings.app_error].filter(Boolean).map((error) => (
+          <p key={error} className="settings-error" role="alert">
+            Fix this settings file to change settings here. Until then, the last settings that could be read stay in use. {error}
+          </p>
+        ))}
+        {failure && (
+          <p className="settings-error" role="alert">
+            Couldn't save that change. {failure}
+          </p>
+        )}
+        <View settings={settings} />
+      </main>
+    </Themed>
+  );
+}

@@ -14,9 +14,6 @@ mod windows;
 use std::sync::Mutex;
 
 use tauri::{AppHandle, LogicalSize, WebviewWindow};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-
-const SHORTCUT: &str = "CommandOrControl+Alt+P";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -38,17 +35,8 @@ pub fn run() {
             let handle = app.handle();
             tray::create(handle)?;
             popover::setup(handle)?;
+            settings::setup(handle);
             machines::start(handle);
-            if let Err(error) = handle
-                .global_shortcut()
-                .on_shortcut(SHORTCUT, |app, _, event| {
-                    if event.state == ShortcutState::Pressed {
-                        popover::toggle(app);
-                    }
-                })
-            {
-                eprintln!("shortcut {SHORTCUT}: {error}");
-            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -72,6 +60,12 @@ pub fn run() {
             settings::open_settings,
             settings::launch_at_login,
             settings::set_launch_at_login,
+            settings::settings_get,
+            settings::settings_set_config,
+            settings::settings_set_app,
+            settings::settings_machines,
+            settings::machine_add,
+            settings::machine_remove,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Port Process Manager");

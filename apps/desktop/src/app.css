@@ -35,17 +35,3 @@ a {
 .window-content {
   width: fit-content;
 }
-
-.settings {
-  padding: 20px 24px;
-}
-.settings h1 {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0 0 12px;
-}
-.settings label {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}

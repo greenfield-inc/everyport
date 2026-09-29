@@ -16,7 +16,6 @@ use hub::Hub;
 use machine::{Install, Machine};
 use std::io::{self, IsTerminal};
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
@@ -121,10 +120,6 @@ enum Remote {
     Rm { name: String },
 }
 
-fn config_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|dir| dir.join("port-process-manager"))
-}
-
 fn main() -> ExitCode {
     ppm_core::platform::run_helper();
     let cli = Cli::parse();
@@ -143,7 +138,7 @@ fn main() -> ExitCode {
 fn run(cli: Cli) -> io::Result<ExitCode> {
     let install = if cli.yes { Install::Yes } else { Install::Ask };
     let machine = || match &cli.on {
-        None => Ok(Machine::local()),
+        None => Machine::local(),
         Some(name) => Machine::remote(name, install).map_err(io::Error::other),
     };
     let tty = io::stdin().is_terminal() && io::stdout().is_terminal();
@@ -169,7 +164,7 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
             "--on works with list, watch, stop, restart, open, clean and the terminal UI",
         )),
         Some(Command::Stdio) => {
-            let hub = Hub::start(commands::engine());
+            let hub = Hub::start(commands::engine()?);
             stdio::run(hub, io::BufReader::new(io::stdin()), io::stdout().lock())
                 .map(|()| ExitCode::SUCCESS)
         }
@@ -187,13 +182,14 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
             Remote::List => remote::list(),
             Remote::Rm { name } => remote::rm(&name),
         },
-        Some(Command::Doctor) => Ok(commands::doctor(config_dir())),
+        Some(Command::Doctor) => Ok(commands::doctor(ppm_core::config::dir())),
         Some(Command::Connect { port, check }) => connect::run(port, check),
     }
 }
 
 fn serve(listen: SocketAddr, url: Option<String>, origins: Vec<String>) -> io::Result<ExitCode> {
-    let dir = config_dir().ok_or_else(|| io::Error::other("no config folder for this user"))?;
+    let dir = ppm_core::config::dir()
+        .ok_or_else(|| io::Error::other("no config folder for this user"))?;
     let token = serve::token(&dir)?;
     let listener = serve::bind(listen)?;
     let url = url.unwrap_or_else(|| format!("http://{}", listener.local_addr().unwrap_or(listen)));
@@ -201,6 +197,6 @@ fn serve(listen: SocketAddr, url: Option<String>, origins: Vec<String>) -> io::R
     println!("Connection code (it holds the token, so keep it private):");
     println!("{}", serve::connection_code(&url, &token));
     let access = serve::Access { token, origins };
-    serve::run(Hub::start(commands::engine()), listener, access)?;
+    serve::run(Hub::start(commands::engine()?), listener, access)?;
     Ok(ExitCode::SUCCESS)
 }

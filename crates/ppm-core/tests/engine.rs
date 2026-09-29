@@ -6,7 +6,8 @@ use ppm_core::platform::{
     Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage,
 };
 use ppm_core::protocol::{
-    AlertKind, Call, CleanUpReason, Config, OtherPort, ProcRef, Server, ServerStatus, Snapshot,
+    AlertKind, AutoKill, Call, CleanUpReason, Config, ConfigChange, OtherPort, ProcRef, Server,
+    ServerStatus, Snapshot,
 };
 use std::collections::{HashMap, HashSet};
 use std::io;
@@ -643,6 +644,168 @@ fn protected_servers_are_never_cleaned_up_or_alerted() {
     assert!(alerts.is_empty());
 }
 
+/// A busy server (:3000, one connection) and one that goes idle after four
+/// hours (:8000, pid 300).
+fn busy_and_soon_idle(fake: &Fake, auto_kill: AutoKill) -> Engine {
+    next_dev(fake);
+    fake.run(
+        300,
+        1,
+        "python3",
+        &["python3", "app.py"],
+        project_dir(),
+        HOUR,
+    );
+    fake.listen(8000, 300, "127.0.0.1");
+    fake.world().connections = Some(HashMap::from([(3000, 1)]));
+    let config = Config {
+        auto_kill,
+        ..Config::default()
+    };
+    Engine::new(Box::new(fake.clone()), config)
+}
+
+#[test]
+fn auto_kill_ask_alerts_once_when_a_server_starts_to_qualify() {
+    let fake = Fake::new();
+    let mut engine = busy_and_soon_idle(&fake, AutoKill::Ask);
+    assert!(engine.scan().1.is_empty());
+
+    fake.advance(4 * HOUR);
+    let (_, alerts) = engine.scan();
+
+    let asked: Vec<(u16, AlertKind)> = alerts.iter().map(|a| (a.port, a.kind)).collect();
+    assert_eq!(asked, [(8000, AlertKind::CleanUp)]);
+    assert!(engine.scan().1.is_empty());
+    assert!(fake.world().signals.is_empty());
+}
+
+#[test]
+fn auto_kill_act_stops_only_the_server_that_starts_to_qualify() {
+    let fake = Fake::new();
+    let mut engine = busy_and_soon_idle(&fake, AutoKill::Act);
+    engine.scan();
+
+    fake.advance(4 * HOUR);
+    let (_, alerts) = engine.scan();
+
+    assert!(alerts.is_empty());
+    assert_eq!(fake.world().signals, [(300, false)]);
+}
+
+#[test]
+fn turning_auto_kill_on_leaves_servers_that_already_qualify() {
+    let fake = Fake::new();
+    let mut engine = busy_and_soon_idle(&fake, AutoKill::Off);
+    engine.scan();
+    fake.advance(4 * HOUR);
+    let (snapshot, alerts) = engine.scan();
+    assert_eq!(
+        snapshot.servers[1].clean_up,
+        Some(CleanUpReason::Idle { seconds: 14_400 })
+    );
+    assert!(alerts.is_empty());
+
+    let act = ConfigChange {
+        auto_kill: Some(AutoKill::Act),
+        ..ConfigChange::default()
+    };
+    engine.call(&Call::Configure(act)).unwrap();
+    engine.scan();
+
+    assert!(fake.world().signals.is_empty());
+}
+
+#[test]
+fn auto_kill_leaves_servers_that_qualify_when_ppm_starts() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    fake.run(
+        90,
+        1,
+        "uvicorn",
+        &["uvicorn", "app:main"],
+        "/nonexistent/wt",
+        HOUR,
+    );
+    fake.listen(8000, 90, "127.0.0.1");
+    let config = Config {
+        auto_kill: AutoKill::Act,
+        ..Config::default()
+    };
+    let mut engine = Engine::new(Box::new(fake.clone()), config);
+
+    engine.scan();
+    let (snapshot, _) = engine.scan();
+
+    assert_eq!(
+        snapshot.servers[1].clean_up,
+        Some(CleanUpReason::WorktreeDeleted)
+    );
+    assert!(fake.world().signals.is_empty());
+}
+
+/// Auto-kill set to act, with servers long-running after `secs`.
+fn acting_on_long_running(fake: &Fake, secs: u64) -> Engine {
+    let config = Config {
+        auto_kill: AutoKill::Act,
+        long_running_after_secs: secs,
+        ..Config::default()
+    };
+    Engine::new(Box::new(fake.clone()), config)
+}
+
+#[test]
+fn auto_kill_never_stops_a_leaking_server() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    // `next_dev` is up an hour. It leaks from two minutes on, and counts as
+    // long-running from two and a half.
+    let mut engine = acting_on_long_running(&fake, 3600 + 150);
+    for memory_mb in [1000, 1500, 1500, 1500, 1500, 1500, 1500] {
+        fake.set_usage(220, memory_mb * MB, 0);
+        engine.scan();
+        fake.advance(30_000);
+    }
+    let (snapshot, _) = engine.scan();
+
+    // Long-running is the reason shown, but it's leaking all the same.
+    let server = only_server(&snapshot);
+    assert!(matches!(
+        server.clean_up,
+        Some(CleanUpReason::LongRunning { .. })
+    ));
+    assert_eq!(server.status, ServerStatus::Attention);
+    assert!(fake.world().signals.is_empty());
+}
+
+#[test]
+fn auto_kill_never_stops_a_tree_that_runs_a_protected_process() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    // `npm run dev` also started Redis, which listens on its own port.
+    fake.run(
+        240,
+        200,
+        "redis-server",
+        &["redis-server"],
+        project_dir(),
+        HOUR,
+    );
+    fake.listen(6379, 240, "127.0.0.1");
+    // `next_dev` is up an hour, and turns long-running a minute from now.
+    let mut engine = acting_on_long_running(&fake, 3600 + 60);
+
+    engine.scan();
+    fake.advance(90_000);
+    let (snapshot, _) = engine.scan();
+
+    // Redis protects the whole tree, :3000 included.
+    assert!(snapshot.servers[0].protected);
+    assert_eq!(snapshot.servers[0].clean_up, None);
+    assert!(fake.world().signals.is_empty());
+}
+
 #[test]
 fn stop_and_restart_refuse_a_protected_tree_until_confirmed() {
     let fake = Fake::new();
@@ -825,4 +988,24 @@ fn restart_reruns_the_launch_command_with_its_environment() {
     std::thread::sleep(std::time::Duration::from_millis(100));
     assert_eq!(std::fs::read_to_string(&output).unwrap(), "hello");
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
+fn configure_changes_only_the_fields_it_sends() {
+    let fake = Fake::new();
+    let config = Config {
+        protected: vec!["caddy".into()],
+        ..Config::default()
+    };
+    let mut engine = Engine::new(Box::new(fake.clone()), config);
+
+    let threshold = ConfigChange {
+        alert_memory: Some(512 * MB),
+        ..ConfigChange::default()
+    };
+    engine.call(&Call::Configure(threshold)).unwrap();
+
+    assert_eq!(engine.config().alert_memory, 512 * MB);
+    assert_eq!(engine.config().protected, ["caddy"]);
+    assert_eq!(engine.config().idle_after_secs, 4 * 3600);
 }
