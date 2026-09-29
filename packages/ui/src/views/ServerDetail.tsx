@@ -92,7 +92,7 @@ function InfoRow({ label, value, title }: Row) {
 }
 
 const Value = ({ children, mono = false, strong = false }: { children: ReactNode; mono?: boolean; strong?: boolean }) => (
-  <span className={`selectable clamp-1 text-13 ${mono ? "ppm:font-mono" : ""} ${strong ? "ppm:text-fg" : "ppm:text-fg2"}`}>{children}</span>
+  <span className={`selectable ppm:clamp-1 ppm:text-13 ${mono ? "ppm:font-mono" : ""} ${strong ? "ppm:text-fg" : "ppm:text-fg2"}`}>{children}</span>
 );
 
 function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
@@ -267,7 +267,7 @@ function Processes({ server }: { server: Server }) {
             const indent = process.depth > 0 ? `${"  ".repeat(process.depth - 1)}└ ` : "";
             return (
               <div key={process.proc.pid} className="ppm:flex ppm:items-center" title={process.name}>
-                <span className={`selectable clamp-1 flex-1 whitespace-pre font-mono text-13 ${main ? "ppm:text-fg" : "ppm:text-fg/80"}`}>
+                <span className={`selectable ppm:clamp-1 ppm:flex-1 ppm:whitespace-pre ppm:font-mono ppm:text-13 ${main ? "ppm:text-fg" : "ppm:text-fg/80"}`}>
                   {indent}
                   {process.name}
                 </span>

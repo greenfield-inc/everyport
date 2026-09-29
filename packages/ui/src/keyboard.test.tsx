@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-// Keyboard use from the intent brief, item 8, through a rendered <Popover>.
-// jsdom reports no Mac platform, so the command key is Ctrl here.
+// Keyboard use from the intent brief, item 8, through a rendered <Popover>,
+// and the class prefix every view relies on. jsdom reports no Mac platform,
+// so the command key is Ctrl here.
 import { fixtureSnapshot, type Machine, type PpmClient } from "@ppm/protocol";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -102,5 +103,35 @@ describe("keyboard", () => {
     press("ArrowDown");
     press(" ");
     expect(checked()).toEqual(["5173"]);
+  });
+});
+
+describe("styles", () => {
+  // Tailwind utilities only apply with the ppm: prefix. The rest are the
+  // package's own classes from styles.css.
+  const OWN = new Set(["ppm-root", "ppm-panel", "ppm-view", "ppm-grow", "ppm-scroll", "ppm-spin", "selectable"]);
+  const unstyled = () =>
+    [...document.querySelectorAll("[class]")].flatMap((element) =>
+      [...element.classList].filter((name) => !name.startsWith("ppm:") && !OWN.has(name)),
+    );
+  const click = (text: string) => {
+    const button = [...document.querySelectorAll("button")].find((candidate) => candidate.textContent?.startsWith(text));
+    act(() => button?.click());
+  };
+
+  it("prefixes every utility on the list, the expanded detail and Clean up", () => {
+    press("ArrowDown");
+    act(() => document.getElementById("ppm-server-3000")?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true })));
+    expect(unstyled()).toEqual([]);
+    press("Enter");
+    click("6 more");
+    click("Processes");
+    click("Dot-grid menu bar icon");
+    expect(document.querySelector("[role=menu]")).not.toBeNull();
+    expect(unstyled()).toEqual([]);
+    press("Escape");
+    press("Escape");
+    click("Clean up");
+    expect(unstyled()).toEqual([]);
   });
 });
