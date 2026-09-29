@@ -2,6 +2,7 @@ import type { Machine, Server } from "@everyport/protocol";
 import { type ReactNode, useEffect, useState } from "react";
 import { memory, total } from "../format.ts";
 import { AgentIcon, BranchIcon, CheckIcon, Socket, type SocketState, WorkspaceIcon } from "../icons.tsx";
+import { StatusSlot } from "../components.tsx";
 import { DEFAULT_ALERT_MEMORY } from "../model.ts";
 import { type ThemeProps, Themed } from "../theme.tsx";
 
@@ -206,24 +207,20 @@ function StepCard({ step, host, servers }: { step: Step; host: OnboardingHost; s
   }
 }
 
-/** This computer's heaviest servers, live, marked amber when they need attention. */
+/** This computer's heaviest servers, live, with the status slot the server list shows. */
 function Leaks({ servers }: { servers: Server[] }) {
   const heaviest = [...servers].sort((a, b) => b.memory - a.memory).slice(0, 3);
   const used = servers.reduce((sum, server) => sum + server.memory, 0);
   return (
     <Card>
       <Summary title={servers.length ? `Watching ${count(servers.length, "server")}` : "Watching for servers"} detail={`${total(used)} in use`} />
-      {heaviest.map((server) => {
-        const warn = server.status === "attention";
-        return (
-          <Row key={server.port} title={`:${server.port} ${server.project.name}`} divider>
-            <Confirmation
-              state={warn ? { kind: "warn", label: memory(server.memory) } : { kind: "ok", label: memory(server.memory) }}
-              monospaced
-            />
-          </Row>
-        );
-      })}
+      {heaviest.map((server) => (
+        <Row key={server.port} title={`:${server.port} ${server.project.name}`} icon={<StatusSlot status={server.status} color={SUCCESS} />} divider>
+          <span className={`everyport:font-mono everyport:text-11 ${server.status === "attention" ? "everyport:text-warn" : "everyport:text-fg2"}`}>
+            {memory(server.memory)}
+          </span>
+        </Row>
+      ))}
     </Card>
   );
 }
@@ -369,7 +366,6 @@ function Hero({ step }: { step: Step }) {
 type RowState =
   | { kind: "loading"; label: string }
   | { kind: "ok"; label: string }
-  | { kind: "warn"; label: string }
   | { kind: "none"; label: string }
   | { kind: "action"; label: string; button: string };
 
@@ -385,7 +381,7 @@ function Confirmation({ state, monospaced = false, onAction }: { state: RowState
         </Pill>
       ) : (
         <span
-          className={`everyport:text-right everyport:text-11 ${state.kind === "warn" ? "everyport:text-warn" : "everyport:text-fg2"} ${monospaced && state.kind !== "loading" && state.kind !== "none" ? "everyport:font-mono" : ""}`}
+          className={`everyport:text-right everyport:text-11 everyport:text-fg2 ${monospaced && state.kind !== "loading" && state.kind !== "none" ? "everyport:font-mono" : ""}`}
         >
           {state.label}
         </span>
@@ -395,7 +391,7 @@ function Confirmation({ state, monospaced = false, onAction }: { state: RowState
   );
 }
 
-/** A spinner while a check runs, then a check, the amber attention dot, or a minus for not found. */
+/** A spinner while a check runs, then a check, or a minus for not found. */
 function Mark({ state }: { state: RowState }) {
   const kind = state.kind;
   return (
@@ -412,8 +408,6 @@ function Mark({ state }: { state: RowState }) {
         <span className="everyport-onboarding-check everyport:flex" style={{ color: SUCCESS }}>
           <CheckIcon className="everyport:size-4" />
         </span>
-      ) : kind === "warn" ? (
-        <span className="everyport:size-2 everyport:rounded-full everyport:bg-warn" />
       ) : (
         <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="var(--muted-foreground)" strokeWidth="1.2" aria-hidden>
           <circle cx="7.5" cy="7.5" r="6.5" />
