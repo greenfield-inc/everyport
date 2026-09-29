@@ -28,7 +28,7 @@ export function Toggle({ label, checked, onChange }: { label: string; checked: b
     <input
       type="checkbox"
       role="switch"
-      className="settings-switch"
+      className="everyport-switch"
       aria-label={label}
       checked={checked}
       onChange={(event) => onChange(event.target.checked)}

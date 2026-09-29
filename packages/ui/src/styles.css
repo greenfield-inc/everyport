@@ -314,3 +314,50 @@ html[data-hidden] .everyport-panel {
     transition: none !important;
   }
 }
+
+/* Onboarding fills its window, on the panel color. */
+.everyport-onboarding {
+  height: 100%;
+  background: color-mix(in oklab, var(--popover) var(--everyport-tint), transparent);
+}
+
+.everyport-pager-dot {
+  transition: opacity 250ms ease-in-out;
+}
+
+/* An on/off switch, as in the host's settings. */
+.everyport-switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: color-mix(in oklab, var(--foreground) 18%, transparent);
+  transition: background 150ms ease-out;
+}
+
+.everyport-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  transition: transform 150ms ease-out;
+}
+
+.everyport-switch:checked {
+  background: var(--primary);
+}
+
+.everyport-switch:checked::after {
+  transform: translateX(12px);
+}
+
+.everyport-switch:disabled {
+  opacity: 0.4;
+}
