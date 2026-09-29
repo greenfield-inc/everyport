@@ -100,12 +100,13 @@ mod tests {
             height: 1032.0,
         };
         let icon = Rect {
-            x: 1700.0,
+            x: 1500.0,
             y: 1040.0,
             width: 24.0,
             height: 32.0,
         };
-        assert_eq!(place(icon, (400.0, 520.0), area, 12.0), (1512.0, 500.0));
+        // Centered: 1512 - 200. Above the taskbar: 1032 - 520 - 12.
+        assert_eq!(place(icon, (400.0, 520.0), area, 12.0), (1312.0, 500.0));
     }
 
     #[test]

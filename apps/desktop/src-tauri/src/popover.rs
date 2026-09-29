@@ -67,7 +67,7 @@ pub mod panel {
 /// Turns the configured window into the native popover.
 pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     let window = window(app);
-    let vibrancy = native_look(&window);
+    let vibrancy = native_look(&window, 16.0);
     app.manage(Mutex::new(State {
         vibrancy,
         ..State::default()
@@ -105,9 +105,10 @@ pub fn setup(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Native blur behind the transparent page, and on Windows rounded corners
-/// and no browser shortcuts or context menu. Returns whether blur applied.
-pub fn native_look(window: &WebviewWindow) -> bool {
+/// Native blur behind the transparent page, clipped to the page's corner
+/// `radius` on macOS. On Windows also rounded corners and no browser
+/// shortcuts or context menu. Returns whether blur applied.
+pub fn native_look(window: &WebviewWindow, radius: f64) -> bool {
     #[cfg(target_os = "macos")]
     {
         use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial, NSVisualEffectState};
@@ -115,12 +116,13 @@ pub fn native_look(window: &WebviewWindow) -> bool {
             window,
             NSVisualEffectMaterial::Popover,
             Some(NSVisualEffectState::Active),
-            Some(16.0),
+            Some(radius),
         )
         .is_ok()
     }
     #[cfg(windows)]
     {
+        let _ = radius;
         crate::windows::round_corners(window);
         crate::windows::disable_browser_keys(window);
         window_vibrancy::apply_mica(window, None).is_ok()
@@ -128,7 +130,7 @@ pub fn native_look(window: &WebviewWindow) -> bool {
     }
     #[cfg(target_os = "linux")]
     {
-        let _ = window;
+        let _ = (window, radius);
         false
     }
 }

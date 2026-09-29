@@ -70,10 +70,11 @@ button {
 }
 
 .window-content {
-  width: 400px;
+  width: fit-content;
 }
 
 .panel {
+  width: 400px;
   background: var(--popover);
   border: 0.5px solid var(--border);
   border-radius: 16px;
@@ -121,6 +122,8 @@ ul {
 }
 
 .notification {
+  width: 356px;
+  border-radius: 22px;
   padding: 12px 14px;
 }
 .notification p {

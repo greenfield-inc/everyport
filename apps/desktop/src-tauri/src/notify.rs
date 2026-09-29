@@ -111,7 +111,7 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     }
     let window = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html".into()))
         .title("Port Process Manager")
-        .inner_size(400.0, 120.0)
+        .inner_size(356.0, 120.0)
         .decorations(false)
         .transparent(true)
         .resizable(false)
@@ -120,7 +120,7 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .focused(false)
         .visible(false)
         .build()?;
-    popover::native_look(&window);
+    popover::native_look(&window, 22.0);
     #[cfg(target_os = "macos")]
     {
         use tauri_nspanel::objc2_app_kit::NSWindowStyleMask;
