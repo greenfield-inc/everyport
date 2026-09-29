@@ -14,10 +14,12 @@ use crate::protocol::ProcRef;
 use std::collections::{HashMap, HashSet};
 use std::ffi::{c_char, c_void, CStr};
 use std::io;
+use std::io::Read;
 use std::mem;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use std::process::Command;
-use std::sync::Mutex;
+use std::process::{Command, Stdio};
+use std::sync::{Arc, Condvar, Mutex, OnceLock, Weak};
+use std::thread;
 use std::time::{Duration, Instant};
 
 /// A scan asks for connections and listeners back to back, so one socket
@@ -27,14 +29,25 @@ const SOCKETS_MAX_AGE: Duration = Duration::from_millis(500);
 /// Other users' ports change rarely, and each read starts `nettop`.
 const OTHERS_MAX_AGE: Duration = Duration::from_secs(10);
 
+/// `nettop -L 1` exits after one sample, in milliseconds. One that runs
+/// longer is killed.
+const NETTOP_TIMEOUT: Duration = Duration::from_secs(2);
+
 pub struct Macos {
     host: libc::mach_port_t,
     /// Mach time units to nanoseconds, as numerator and denominator.
     timebase: (u64, u64),
     cpu: unix::CpuSampler,
     sockets: Mutex<Option<(Instant, Sockets)>>,
-    others: Mutex<Option<(Instant, Vec<OtherListener>)>>,
-    users: Mutex<HashMap<u32, String>>,
+    others: OnceLock<Arc<Others>>,
+}
+
+/// The latest `nettop` read, which a background thread replaces every
+/// `OTHERS_MAX_AGE`, or its error.
+#[derive(Default)]
+struct Others {
+    latest: Mutex<Option<Result<Vec<OtherListener>, String>>>,
+    ready: Condvar,
 }
 
 impl Macos {
@@ -47,8 +60,7 @@ impl Macos {
             timebase: (u64::from(timebase.numer), u64::from(timebase.denom.max(1))),
             cpu: unix::CpuSampler::default(),
             sockets: Mutex::new(None),
-            others: Mutex::new(None),
-            users: Mutex::new(HashMap::new()),
+            others: OnceLock::new(),
         }
     }
 }
@@ -65,17 +77,6 @@ impl Macos {
         *cached = Some((Instant::now(), sockets.clone()));
         Ok(sockets)
     }
-
-    /// The user name for `uid`, or the number when it has none, as `ls -l`
-    /// shows it. Each uid is looked up once.
-    fn user_name(&self, uid: u32) -> String {
-        self.users
-            .lock()
-            .unwrap()
-            .entry(uid)
-            .or_insert_with(|| passwd_name(uid).unwrap_or_else(|| uid.to_string()))
-            .clone()
-    }
 }
 
 impl Platform for Macos {
@@ -83,40 +84,30 @@ impl Platform for Macos {
         Ok(self.sockets()?.listeners)
     }
 
-    /// Listeners from `nettop` whose process runs as another user. Root sees
-    /// every socket through libproc, so it has none.
+    /// Listeners from `nettop` whose process runs as another user, as last
+    /// read in the background. The first call waits for the first read. Root
+    /// sees every socket through libproc, so it has none.
     fn other_listeners(&self) -> io::Result<Vec<OtherListener>> {
         let me = unsafe { libc::geteuid() };
         if me == 0 {
             return Ok(Vec::new());
         }
-        let mut cached = self.others.lock().unwrap();
-        if let Some((at, others)) = cached.as_ref() {
-            if at.elapsed() < OTHERS_MAX_AGE {
-                return Ok(others.clone());
-            }
+        let others = self.others.get_or_init(|| {
+            let others = Arc::new(Others::default());
+            let weak = Arc::downgrade(&others);
+            thread::spawn(move || refresh_others(&weak, me));
+            others
+        });
+        let latest = others.latest.lock().unwrap();
+        let (latest, _) = others
+            .ready
+            .wait_timeout_while(latest, NETTOP_TIMEOUT, |latest| latest.is_none())
+            .unwrap();
+        match latest.as_ref() {
+            None => Ok(Vec::new()),
+            Some(Ok(listeners)) => Ok(listeners.clone()),
+            Some(Err(error)) => Err(io::Error::other(error.clone())),
         }
-        let output = Command::new("/usr/bin/nettop")
-            .args(["-L", "1", "-n", "-m", "tcp", "-J", "state"])
-            .output()?;
-        if !output.status.success() {
-            return Err(io::Error::other("nettop failed"));
-        }
-        let others: Vec<_> = nettop_listeners(&String::from_utf8_lossy(&output.stdout))
-            .filter_map(|(pid, port, address)| {
-                // Unlike the full info, the short info is readable for every process.
-                let info = pidinfo::<libc::proc_bsdshortinfo>(pid, libc::PROC_PIDT_SHORTBSDINFO)?;
-                (info.pbsi_uid != me).then(|| OtherListener {
-                    port,
-                    address,
-                    owner: Some(self.user_name(info.pbsi_uid)),
-                    pid: Some(pid),
-                    process_name: Some(c_string(&info.pbsi_comm)),
-                })
-            })
-            .collect();
-        *cached = Some((Instant::now(), others.clone()));
-        Ok(others)
     }
 
     fn connections(&self) -> Option<HashMap<u16, u32>> {
@@ -255,6 +246,86 @@ impl Sockets {
     }
 }
 
+/// Reads other users' listeners every `OTHERS_MAX_AGE`, failures included,
+/// until the platform is dropped.
+fn refresh_others(others: &Weak<Others>, me: u32) {
+    let mut users = HashMap::new();
+    loop {
+        let result = nettop()
+            .map(|csv| others_in(&csv, me, &mut users))
+            .map_err(|error| error.to_string());
+        let Some(others) = others.upgrade() else {
+            return;
+        };
+        *others.latest.lock().unwrap() = Some(result);
+        others.ready.notify_all();
+        drop(others);
+        thread::sleep(OTHERS_MAX_AGE);
+    }
+}
+
+/// The listeners in `nettop` output whose process doesn't run as `me`.
+/// `users` caches user names by uid; one with no name shows its number, as
+/// `ls -l` does.
+fn others_in(csv: &str, me: u32, users: &mut HashMap<u32, String>) -> Vec<OtherListener> {
+    nettop_listeners(csv)
+        .filter_map(|(pid, port, address)| {
+            // Unlike the full info, the short info is readable for every process.
+            let info = pidinfo::<libc::proc_bsdshortinfo>(pid, libc::PROC_PIDT_SHORTBSDINFO)?;
+            let uid = info.pbsi_uid;
+            if uid == me {
+                return None;
+            }
+            let owner = users
+                .entry(uid)
+                .or_insert_with(|| passwd_name(uid).unwrap_or_else(|| uid.to_string()));
+            Some(OtherListener {
+                port,
+                address,
+                owner: Some(owner.clone()),
+                pid: Some(pid),
+                process_name: Some(c_string(&info.pbsi_comm)),
+            })
+        })
+        .collect()
+}
+
+/// The output of `nettop -L 1 -n -m tcp -J state`, killed after
+/// `NETTOP_TIMEOUT`.
+fn nettop() -> io::Result<String> {
+    let mut child = Command::new("/usr/bin/nettop")
+        .args(["-L", "1", "-n", "-m", "tcp", "-J", "state"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    // Read while waiting, so a full pipe can't stall nettop.
+    let mut stdout = child.stdout.take().expect("piped");
+    let reader = thread::spawn(move || {
+        let mut csv = String::new();
+        stdout.read_to_string(&mut csv).map(|_| csv)
+    });
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        if started.elapsed() > NETTOP_TIMEOUT {
+            let _ = child.kill();
+            child.wait()?;
+            return Err(io::Error::new(io::ErrorKind::TimedOut, "nettop timed out"));
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    let csv = reader
+        .join()
+        .map_err(|_| io::Error::other("nettop reader panicked"))??;
+    if !status.success() {
+        return Err(io::Error::other(format!("nettop failed: {status}")));
+    }
+    Ok(csv)
+}
+
 /// `(pid, port, address)` for each listener in the output of
 /// `nettop -L 1 -n -m tcp -J state`: a `name.pid,,` line per process, then
 /// its sockets, such as `tcp4 127.0.0.1:8317<->*:*,Listen,` or
@@ -262,21 +333,27 @@ impl Sockets {
 fn nettop_listeners(csv: &str) -> impl Iterator<Item = (u32, u16, String)> + '_ {
     let mut pid = None;
     csv.lines().filter_map(move |line| {
-        let (socket, state) = line.split_once(',')?;
-        let Some((family, local)) = socket
-            .split_once(' ')
-            .filter(|(family, _)| family.starts_with("tcp"))
+        // The last two columns are the state and an empty one, so a comma in
+        // a process name stays in the first column.
+        let mut columns = line.rsplitn(3, ',');
+        let (Some(""), Some(state), Some(first)) = (columns.next(), columns.next(), columns.next())
         else {
-            pid = socket.rsplit_once('.').and_then(|(_, p)| p.parse().ok());
             return None;
         };
-        if !state.starts_with("Listen,") {
+        // A process line has no state; a socket line always has one.
+        if state.is_empty() {
+            pid = first.rsplit_once('.').and_then(|(_, p)| p.parse().ok());
             return None;
         }
-        let local = local.split("<->").next()?;
+        if state != "Listen" {
+            return None;
+        }
+        let (family, sockets) = first.split_once(' ')?;
+        let local = sockets.split("<->").next()?;
         let (address, port) = match family {
             "tcp4" => local.rsplit_once(':')?,
-            _ => local.rsplit_once('.')?,
+            "tcp6" => local.rsplit_once('.')?,
+            _ => return None,
         };
         let address = match (address, family) {
             ("*", "tcp4") => "0.0.0.0",
@@ -545,6 +622,10 @@ tcp6 fe80::1c2b:3aff:fe4d:5e6f.5060<->*.*,Listen,
 cliproxyapi.2118,,
 tcp4 127.0.0.1:8317<->*:*,Listen,
 tcp4 127.0.0.1:59736<->127.0.0.1:8317,Established,
+tcp worker.321,,
+tcp4 127.0.0.1:4100<->*:*,Listen,
+a,b.654,,
+tcp6 ::1.4200<->*.*,Listen,
 ";
         let found: Vec<_> = nettop_listeners(csv).collect();
         let expected = [
@@ -552,6 +633,8 @@ tcp4 127.0.0.1:59736<->127.0.0.1:8317,Established,
             (1420, 49452, "::"),
             (94042, 5060, "fe80::1c2b:3aff:fe4d:5e6f"),
             (2118, 8317, "127.0.0.1"),
+            (321, 4100, "127.0.0.1"),
+            (654, 4200, "::1"),
         ]
         .map(|(pid, port, address)| (pid, port, address.to_string()));
         assert_eq!(found, expected);
