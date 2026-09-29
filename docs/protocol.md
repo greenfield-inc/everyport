@@ -147,17 +147,17 @@ The full state. It's sent after `hello`, after every scan where something other 
 |---|---|
 | `port` | The listening TCP port |
 | `pid` | The process that owns the socket |
-| `root` | The topmost process of the server's tree, such as `npm run dev`. Pass it to `stop` and `restart`. |
+| `root` | The topmost process of the server's tree, such as `npm run dev`. When one command runs several servers, such as `concurrently` starting an API and Vite, each server's tree starts just below where their trees meet, so `stop` and `restart` cover that server only. Pass it to `stop` and `restart`. |
 | `process_name` | Name of the process that owns the socket |
 | `addresses` | Bound addresses, such as `127.0.0.1` and `::1` |
 | `cwd`, `cwd_exists` | The server's folder (or `null`), and whether it still exists. It's `false` once a worktree is deleted. |
 | `command`, `launch_dir` | The root's command line and the folder it started in, or `null`. `restart` runs `command` in `launch_dir`. |
 | `started_at` | When the root process started, or `null` |
-| `project` | `name` (from `package.json`, the repo folder or the folder) is always set. `root`, `framework`, `branch`, `worktree`, `github` (`owner/repo`) and `vercel` are `null` when unknown. |
+| `project` | `name` (from `package.json`, the repo folder or the folder) is always set. For `/` and folders under a package manager or the OS, such as `/opt/homebrew/var/postgresql@15`, it's the process name. `root`, `framework`, `branch`, `worktree`, `github` (`owner/repo`) and `vercel` are `null` when unknown. |
 | `workspace` | The Conductor workspace, Pane worktree or git worktree the server runs in, or `null`. `kind` is `conductor`, `pane` or `git_worktree`. `open_url` opens it in its app, such as `pane://open?pane=<id>&panel=<id>`, or is `null`. |
 | `agent` | The Claude Code or Codex session that started the server, or `null`. `kind` is `claude_code` or `codex`. `resume_command` resumes it in `directory`. |
 | `processes` | The whole tree, depth first and root first. `depth` is 0 for the root. |
-| `memory`, `cpu_percent` | Sums over `processes` |
+| `memory`, `cpu_percent` | Sums over `processes`. A process that several servers hold, such as one listening on two ports, counts only on the lowest port, so the servers' sum counts each process once. |
 | `connections` | Open connections to the port |
 | `history` | Samples covering up to the last 10 minutes, oldest first. Don't assume a fixed spacing. |
 | `last_active` | Last time the server had connections or used CPU |

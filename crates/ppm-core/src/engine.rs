@@ -8,7 +8,7 @@ mod control;
 mod tree;
 
 use crate::links;
-use crate::platform::{Platform, ProcDetails, ProcInfo};
+use crate::platform::{Listener, Platform, ProcDetails, ProcInfo};
 use crate::protocol::{
     AgentSession, Alert, AlertKind, AutoKill, Call, CleanUpReason, Config, HostInfo, OtherPort,
     ProcRef, Project, Sample, Server, ServerProcess, ServerStatus, Snapshot, SystemStats,
@@ -89,6 +89,7 @@ impl Engine {
         let mut ports: BTreeMap<u16, (u32, Vec<String>)> = BTreeMap::new();
         let listeners = self.platform.listeners().unwrap_or_default();
         self.advance(&table, &listeners, now);
+        let roots = self.roots(&table, &listeners);
         for l in listeners.into_iter().filter(|l| range.contains(&l.port)) {
             let (pid, addresses) = ports.entry(l.port).or_insert((l.pid, Vec::new()));
             if *pid == l.pid && !addresses.contains(&l.address) {
@@ -96,21 +97,26 @@ impl Engine {
             }
         }
 
-        let mut usage = HashMap::new();
-        let mut servers = Vec::new();
+        let mut seen = Vec::new();
         for (port, (pid, addresses)) in ports {
             let Some(listener) = table.get(pid).filter(|_| pid != own_pid) else {
                 continue;
             };
+            let root = roots[&listener.proc];
             let connections = connections
                 .as_ref()
                 .map(|counts| counts.get(&port).copied().unwrap_or(0));
-            let seen = Seen {
+            seen.push(Seen {
                 port,
                 listener,
+                root,
                 addresses,
                 connections,
-            };
+            });
+        }
+        let mut usage = HashMap::new();
+        let mut servers = Vec::new();
+        for seen in seen {
             if let Some(server) = self.server(seen, &table, &mut usage, now) {
                 servers.push(server);
             }
@@ -226,8 +232,9 @@ impl Engine {
     }
 
     /// Builds the server behind one listening port. `usage` holds each
-    /// process's memory and CPU for this scan, so trees shared by several
-    /// ports are measured once.
+    /// process's memory and CPU for this scan. A process counts toward the
+    /// first server that holds it, so one listening on several ports adds
+    /// its memory once and servers always sum to what they use.
     fn server(
         &mut self,
         seen: Seen,
@@ -235,11 +242,7 @@ impl Engine {
         usage: &mut HashMap<ProcRef, (u64, f32)>,
         now: u64,
     ) -> Option<Server> {
-        let (port, listener) = (seen.port, seen.listener);
-        let root = table.root(listener, |p| {
-            let details = self.details(p);
-            tree::is_agent(p, details.as_deref())
-        });
+        let (port, listener, root) = (seen.port, seen.listener, seen.root);
         let listener_details = self.details(listener);
         let root_details = self.details(root);
         let cwd = self.cwd(listener, root);
@@ -255,10 +258,16 @@ impl Engine {
 
         let members = table.tree(root);
         let mut processes = Vec::with_capacity(members.len());
+        let (mut memory, mut cpu_percent) = (0, 0.0);
         for (info, depth) in &members {
-            let (memory, cpu_percent) = *usage
+            let counted = usage.contains_key(&info.proc);
+            let (process_memory, process_cpu) = *usage
                 .entry(info.proc)
                 .or_insert_with(|| self.measure(info.proc, now));
+            if !counted {
+                memory += process_memory;
+                cpu_percent += process_cpu;
+            }
             let name = match self.details(info) {
                 Some(d) => command::display_name(&d.args, &info.name),
                 None => info.name.clone(),
@@ -267,19 +276,19 @@ impl Engine {
                 proc: info.proc,
                 name,
                 depth: *depth,
-                memory,
-                cpu_percent,
+                memory: process_memory,
+                cpu_percent: process_cpu,
             });
         }
-        let memory = processes.iter().map(|p| p.memory).sum();
-        let cpu_percent = processes.iter().map(|p| p.cpu_percent).sum();
 
         let tracked = self.tracked.entry((port, root.proc)).or_insert(Tracked {
             history: Vec::new(),
             last_active: now,
         });
         // Unknown connections could hide a server in use, so it stays active.
-        if cpu_percent >= ACTIVE_CPU_PERCENT || seen.connections != Some(0) {
+        // Activity counts the whole tree, even processes a lower port counts.
+        let busy = processes.iter().map(|p| p.cpu_percent).sum::<f32>() >= ACTIVE_CPU_PERCENT;
+        if busy || seen.connections != Some(0) {
             tracked.last_active = now;
         }
         match tracked.history.last_mut() {
@@ -300,7 +309,7 @@ impl Engine {
         let history = tracked.history.clone();
         let last_active = tracked.last_active;
 
-        let launcher = self.launcher(&members);
+        let launcher = self.launcher(table, listener, root);
         let launch_dir = self.details(launcher).and_then(|d| d.cwd.clone());
         let command = root_details.map(|d| command::pretty(&d.args, &root.name));
         let (workspace, agent) = self.links(table, listener, root, cwd.as_deref());
@@ -314,7 +323,7 @@ impl Engine {
             addresses: seen.addresses,
             cwd_exists: cwd.as_deref().is_none_or(|c| Path::new(c).exists()),
             project: match &cwd {
-                Some(cwd) => links::project(cwd, command.as_deref()),
+                Some(cwd) => links::project(cwd, command.as_deref(), &listener.name),
                 None => unknown_project(&listener.name),
             },
             command,
@@ -355,14 +364,73 @@ impl Engine {
         of(self.details(listener)).or_else(|| of(self.details(root)))
     }
 
-    /// Restart runs from the highest process whose argv wasn't overwritten by
-    /// a title, such as the `sh -c "next dev -p 3000"` that npm spawns.
-    fn launcher<'a>(&mut self, members: &[(&'a ProcInfo, u32)]) -> &'a ProcInfo {
-        let intact = members.iter().find(|(p, _)| {
+    /// The command the user ran to start `listener`. See `Table::root`.
+    fn climb<'a>(&mut self, table: &'a Table, listener: &'a ProcInfo) -> &'a ProcInfo {
+        table.root(listener, |p| {
+            let details = self.details(p);
+            tree::is_agent(p, details.as_deref())
+        })
+    }
+
+    /// Each listening process's root. It's the command the user ran, unless
+    /// that command runs several listening processes, such as `concurrently`
+    /// starting an API and Vite. Then each root is the highest process below
+    /// where their trees meet, so Stop and Restart cover one server only.
+    /// Ports outside the range count, so a server never takes one along.
+    fn roots<'a>(
+        &mut self,
+        table: &'a Table,
+        listeners: &[Listener],
+    ) -> HashMap<ProcRef, &'a ProcInfo> {
+        // Per command the user ran, the path down to each listener.
+        let mut groups: HashMap<ProcRef, Vec<Vec<&ProcInfo>>> = HashMap::new();
+        let mut listening = HashSet::new();
+        for info in listeners.iter().filter_map(|l| table.get(l.pid)) {
+            if listening.insert(info.proc) {
+                let top = self.climb(table, info);
+                let mut path = path_up(table, info, top);
+                path.reverse();
+                groups.entry(top.proc).or_default().push(path);
+            }
+        }
+        let mut roots = HashMap::new();
+        for paths in groups.values() {
+            let first = &paths[0];
+            let meet = (0..first.len())
+                .take_while(|&i| {
+                    paths
+                        .iter()
+                        .all(|p| p.get(i).map(|x| x.proc) == Some(first[i].proc))
+                })
+                .count();
+            for path in paths {
+                let listener = path[path.len() - 1];
+                let root = match paths.len() {
+                    1 => path[0],
+                    // A listener where the trees meet is its own root.
+                    _ => path.get(meet).copied().unwrap_or(listener),
+                };
+                roots.insert(listener.proc, root);
+            }
+        }
+        roots
+    }
+
+    /// Restart runs the highest process from the root down to the listener
+    /// whose argv wasn't overwritten by a title, such as the
+    /// `sh -c "next dev -p 3000"` that npm spawns.
+    fn launcher<'a>(
+        &mut self,
+        table: &'a Table,
+        listener: &'a ProcInfo,
+        root: &'a ProcInfo,
+    ) -> &'a ProcInfo {
+        let path = path_up(table, listener, root);
+        let intact = path.iter().rev().find(|p| {
             self.details(p)
                 .is_some_and(|d| command::has_intact_args(&d.args))
         });
-        intact.unwrap_or(&members[0]).0
+        intact.copied().unwrap_or(root)
     }
 
     /// Memory and CPU for one process. CPU is the CPU time used since the
@@ -426,6 +494,18 @@ impl Engine {
     }
 }
 
+/// `from` and its ancestors up to `to`, nearest first.
+fn path_up<'a>(table: &'a Table, from: &'a ProcInfo, to: &ProcInfo) -> Vec<&'a ProcInfo> {
+    let mut path = vec![from];
+    while path[path.len() - 1].proc != to.proc {
+        match table.parent(path[path.len() - 1]) {
+            Some(parent) => path.push(parent),
+            None => break,
+        }
+    }
+    path
+}
+
 /// The first process of a tree on the protected list.
 fn protected<'a>(members: &[(&'a ProcInfo, u32)], config: &Config) -> Option<&'a ProcInfo> {
     members.iter().map(|(p, _)| *p).find(|p| {
@@ -438,6 +518,8 @@ fn protected<'a>(members: &[(&'a ProcInfo, u32)], config: &Config) -> Option<&'a
 struct Seen<'a> {
     port: u16,
     listener: &'a ProcInfo,
+    /// The tree the server's memory, stop and restart cover.
+    root: &'a ProcInfo,
     addresses: Vec<String>,
     connections: Option<u32>,
 }

@@ -253,6 +253,142 @@ fn builds_the_tree_from_the_command_the_user_ran() {
     assert_eq!(server.clean_up, None);
 }
 
+/// `node start.mjs` launching a LiteLLM proxy and two forwarders, each on
+/// its own port, as a model router does.
+#[test]
+fn servers_sharing_a_launcher_each_show_their_own_process() {
+    let fake = Fake::new();
+    let dir = project_dir();
+    fake.run(100, 1, "zsh", &["-zsh"], dir, 5 * HOUR);
+    fake.run(200, 100, "node", &["node", "start.mjs"], dir, HOUR);
+    let litellm = ["python", "litellm", "--port", "4200"];
+    fake.run(210, 200, "python3.12", &litellm, dir, HOUR);
+    fake.run(211, 210, "python3.12", &["python", "worker.py"], dir, HOUR);
+    fake.run(
+        220,
+        200,
+        "node",
+        &["node", "oauth-forwarder.mjs"],
+        dir,
+        HOUR,
+    );
+    fake.run(230, 200, "node", &["node", "api-forwarder.mjs"], dir, HOUR);
+    fake.listen(4200, 210, "127.0.0.1");
+    fake.listen(4201, 220, "127.0.0.1");
+    fake.listen(4203, 230, "127.0.0.1");
+    for (pid, memory) in [(200, 32), (210, 268), (211, 40), (220, 27), (230, 29)] {
+        fake.set_usage(pid, memory * MB, 0);
+    }
+    fake.world().used_memory = 10 * 1024 * MB;
+
+    let mut engine = fake.engine();
+    let (snapshot, _) = engine.scan();
+
+    let rows: Vec<(u16, ProcRef, u64)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.root, s.memory / MB))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (4200, fake.proc_ref(210), 308),
+            (4201, fake.proc_ref(220), 27),
+            (4203, fake.proc_ref(230), 29),
+        ]
+    );
+    // The launcher belongs to no row, so it counts as another app.
+    assert_eq!(
+        snapshot.system.memory_other_apps,
+        (10 * 1024 - 308 - 27 - 29) * MB
+    );
+
+    // Stopping one port leaves the launcher and the other servers running.
+    engine
+        .call(&Call::Stop {
+            port: 4201,
+            root: fake.proc_ref(220),
+            force: false,
+            confirm_protected: false,
+        })
+        .unwrap();
+    assert_eq!(fake.world().signals, [(220, false)]);
+}
+
+/// An ssh connection multiplexer forwarding three ports.
+/// `npm run dev` runs the app on :3000 and a proxy on :808, below the range.
+#[test]
+fn a_launcher_sharing_with_a_port_outside_the_range_still_splits() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    fake.run(
+        240,
+        200,
+        "node",
+        &["node", "proxy.mjs"],
+        project_dir(),
+        HOUR,
+    );
+    fake.listen(808, 240, "127.0.0.1");
+    fake.set_usage(220, 100 * MB, 0);
+    fake.set_usage(240, 50 * MB, 0);
+
+    let (snapshot, _) = fake.engine().scan();
+    let server = only_server(&snapshot);
+
+    assert_eq!(server.root, fake.proc_ref(210));
+    assert_eq!(server.memory, 100 * MB);
+}
+
+#[test]
+fn a_process_on_several_ports_counts_its_memory_once() {
+    let fake = Fake::new();
+    fake.run(10, 1, "ssh", &["ssh.sock [mux]"], project_dir(), HOUR);
+    for port in [17721, 17740, 55465] {
+        fake.listen(port, 10, "127.0.0.1");
+    }
+    fake.set_usage(10, 13 * MB, 0);
+    fake.world().used_memory = 10 * 1024 * MB;
+
+    let (snapshot, _) = fake.engine().scan();
+
+    let rows: Vec<(u16, u64)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.memory / MB))
+        .collect();
+    assert_eq!(rows, [(17721, 13), (17740, 0), (55465, 0)]);
+    assert_eq!(snapshot.servers[2].processes[0].memory, 13 * MB);
+    assert_eq!(snapshot.system.memory_other_apps, (10 * 1024 - 13) * MB);
+}
+
+/// The process's CPU counts on :17721, but it keeps :17740 active too, so
+/// Clean up never calls a busy process idle.
+#[test]
+fn a_busy_process_keeps_all_its_ports_active() {
+    let fake = Fake::new();
+    fake.run(10, 1, "ssh", &["ssh.sock [mux]"], project_dir(), HOUR);
+    fake.listen(17721, 10, "127.0.0.1");
+    fake.listen(17740, 10, "127.0.0.1");
+    let mut engine = fake.engine();
+    engine.scan();
+
+    fake.advance(5 * HOUR);
+    engine.scan();
+    // 1 s of CPU over the next 2 s.
+    fake.advance(2000);
+    fake.set_usage(10, 0, 1_000_000_000);
+    let (snapshot, _) = engine.scan();
+
+    let rows: Vec<(u16, f32, u64)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.cpu_percent, s.last_active))
+        .collect();
+    let now = T0 + 5 * HOUR + 2000;
+    assert_eq!(rows, [(17721, 50.0, now), (17740, 0.0, now)]);
+}
+
 #[test]
 fn other_users_ports_show_once_each_with_owner_and_process_name() {
     let fake = Fake::new();
@@ -792,7 +928,7 @@ fn auto_kill_never_stops_a_leaking_server() {
 }
 
 #[test]
-fn auto_kill_never_stops_a_tree_that_runs_a_protected_process() {
+fn auto_kill_stops_a_server_but_never_a_protected_process_beside_it() {
     let fake = Fake::new();
     next_dev(&fake);
     // `npm run dev` also started Redis, which listens on its own port.
@@ -812,10 +948,17 @@ fn auto_kill_never_stops_a_tree_that_runs_a_protected_process() {
     fake.advance(90_000);
     let (snapshot, _) = engine.scan();
 
-    // Redis protects the whole tree, :3000 included.
-    assert!(snapshot.servers[0].protected);
-    assert_eq!(snapshot.servers[0].clean_up, None);
-    assert!(fake.world().signals.is_empty());
+    // Each port has its own tree, so stopping :3000 leaves Redis running.
+    let ports: Vec<(u16, bool)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.protected))
+        .collect();
+    assert_eq!(ports, [(3000, false), (6379, true)]);
+    assert_eq!(
+        fake.world().signals,
+        [(230, false), (220, false), (210, false)]
+    );
 }
 
 #[test]
@@ -999,6 +1142,105 @@ fn restart_reruns_the_launch_command_with_its_environment() {
     }
     std::thread::sleep(std::time::Duration::from_millis(100));
     assert_eq!(std::fs::read_to_string(&output).unwrap(), "hello");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// `npm run dev` → `concurrently "nodemon api.js" vite`, with the API on
+/// :4000 and Vite on :5173. The scripts stand in for `nodemon api.js` and
+/// `vite`, and record that they ran.
+fn concurrently(fake: &Fake, dir: &str) {
+    fake.run(100, 1, "zsh", &["-zsh"], dir, 5 * HOUR);
+    fake.run(200, 100, "node", &["npm run dev"], dir, HOUR);
+    let both = r#"concurrently "nodemon api.js" vite"#;
+    fake.run(210, 200, "sh", &["sh", "-c", both], dir, HOUR);
+    let concurrently = [
+        "node",
+        "node_modules/.bin/concurrently",
+        "nodemon api.js",
+        "vite",
+    ];
+    fake.run(220, 210, "node", &concurrently, dir, HOUR);
+    fake.run(
+        230,
+        220,
+        "sh",
+        &["sh", "-c", "printf api > api.txt"],
+        dir,
+        HOUR,
+    );
+    fake.run(240, 230, "node", &["node", "nodemon", "api.js"], dir, HOUR);
+    fake.run(250, 240, "node", &["node", "api.js"], dir, HOUR);
+    fake.run(
+        260,
+        220,
+        "sh",
+        &["sh", "-c", "printf vite > vite.txt"],
+        dir,
+        HOUR,
+    );
+    fake.run(270, 260, "node", &["node", "vite"], dir, HOUR);
+    fake.listen(4000, 250, "127.0.0.1");
+    fake.listen(5173, 270, "127.0.0.1");
+}
+
+/// Each server's tree starts below `concurrently`, where the two meet.
+#[test]
+fn stop_of_a_server_sharing_its_launcher_stops_only_that_branch() {
+    let fake = Fake::new();
+    concurrently(&fake, project_dir());
+    let mut engine = fake.engine();
+
+    let (snapshot, _) = engine.scan();
+    let roots: Vec<(u16, u32)> = snapshot
+        .servers
+        .iter()
+        .map(|s| (s.port, s.root.pid))
+        .collect();
+    assert_eq!(roots, [(4000, 230), (5173, 260)]);
+    let stop = Call::Stop {
+        port: 4000,
+        root: fake.proc_ref(230),
+        force: false,
+        confirm_protected: false,
+    };
+    assert_eq!(engine.call(&stop), Ok(()));
+    assert_eq!(
+        fake.world().signals,
+        [(250, false), (240, false), (230, false)]
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn restart_of_a_server_sharing_its_launcher_reruns_only_that_branch() {
+    let dir = std::env::temp_dir().join(format!("ppm-restart-shared-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let fake = Fake::new();
+    concurrently(&fake, dir.to_str().unwrap());
+    let mut engine = fake.engine();
+    engine.scan();
+
+    let restart = Call::Restart {
+        port: 4000,
+        root: fake.proc_ref(230),
+        confirm_protected: false,
+    };
+    assert_eq!(engine.call(&restart), Ok(()));
+    engine.scan();
+    assert!(!engine.pending());
+
+    assert_eq!(
+        fake.world().signals,
+        [(250, false), (240, false), (230, false)]
+    );
+    let api = dir.join("api.txt");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !api.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    assert_eq!(std::fs::read_to_string(&api).unwrap(), "api");
+    assert!(!dir.join("vite.txt").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
