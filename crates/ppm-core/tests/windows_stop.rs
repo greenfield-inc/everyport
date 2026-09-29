@@ -75,6 +75,7 @@ mod windows {
                 port,
                 root,
                 force: false,
+                confirm_protected: false,
             })
             .unwrap();
         while engine.pending() || shell.try_wait().unwrap().is_none() {

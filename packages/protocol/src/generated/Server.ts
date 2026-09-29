@@ -49,7 +49,9 @@ memory: number, cpu_percent: number, connections: number,
  */
 history: Array<Sample>, last_active: number, 
 /**
- * Matches the protected list (databases and similar). Never stopped by clean up.
+ * A process in its tree matches the protected list (databases and
+ * similar). Clean up never suggests it, and stop and restart need
+ * `confirm_protected`.
  */
 protected: boolean, status: ServerStatus, 
 /**

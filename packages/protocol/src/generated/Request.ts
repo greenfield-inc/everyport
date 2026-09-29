@@ -2,4 +2,4 @@
 import type { Config } from "./Config";
 import type { ProcRef } from "./ProcRef";
 
-export type Request = { id: number, } & ({ "method": "refresh" } | { "method": "stop", "params": { port: number, root: ProcRef, force: boolean, } } | { "method": "restart", "params": { port: number, root: ProcRef, } } | { "method": "configure", "params": Config });
+export type Request = { id: number, } & ({ "method": "refresh" } | { "method": "stop", "params": { port: number, root: ProcRef, force: boolean, confirm_protected: boolean, } } | { "method": "restart", "params": { port: number, root: ProcRef, confirm_protected: boolean, } } | { "method": "configure", "params": Config });

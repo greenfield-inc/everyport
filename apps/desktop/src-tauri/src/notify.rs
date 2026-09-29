@@ -186,6 +186,7 @@ pub async fn notification_action(app: AppHandle, action: Action) -> Result<(), S
                 port,
                 root: notice.server.root,
                 force: false,
+                confirm_protected: false,
             };
             machines::call(&app, &machine_id, call).await?;
         }

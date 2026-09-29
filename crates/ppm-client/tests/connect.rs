@@ -86,6 +86,7 @@ fn stop() -> Call {
             started_at: 1,
         },
         force: false,
+        confirm_protected: false,
     }
 }
 

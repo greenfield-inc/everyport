@@ -4,7 +4,7 @@
 
 use super::tree::Table;
 use super::{command, Engine};
-use crate::platform::Listener;
+use crate::platform::{Listener, ProcInfo};
 use crate::protocol::ProcRef;
 use std::fs::File;
 use std::io;
@@ -41,14 +41,25 @@ impl Engine {
     }
 
     /// Terminates the tree under `root`, leaves first, or kills it with `force`.
-    pub(super) fn stop(&mut self, root: ProcRef, force: bool) -> Result<(), String> {
-        self.begin_stop(root, force, None)
+    pub(super) fn stop(
+        &mut self,
+        port: u16,
+        root: ProcRef,
+        force: bool,
+        confirm_protected: bool,
+    ) -> Result<(), String> {
+        self.begin_stop(port, root, force, confirm_protected, None)
     }
 
     /// Stops the server, then reruns its launch command in the folder it
     /// started from, with its original environment when the platform can
     /// read it. The new server runs detached, with output in a log file.
-    pub(super) fn restart(&mut self, port: u16, root: ProcRef) -> Result<(), String> {
+    pub(super) fn restart(
+        &mut self,
+        port: u16,
+        root: ProcRef,
+        confirm_protected: bool,
+    ) -> Result<(), String> {
         let table = self.table()?;
         let root_info = table.live(root).ok_or_else(|| gone(root))?;
         let members = table.tree(root_info);
@@ -80,7 +91,7 @@ impl Engine {
             dir,
             environment,
         };
-        self.begin_stop(root, false, Some(relaunch))
+        self.begin_stop(port, root, false, confirm_protected, Some(relaunch))
     }
 
     /// Kills what outlived its grace period, and relaunches a restarted
@@ -115,11 +126,26 @@ impl Engine {
 
     fn begin_stop(
         &mut self,
+        port: u16,
         root: ProcRef,
         force: bool,
+        confirm_protected: bool,
         relaunch: Option<Relaunch>,
     ) -> Result<(), String> {
-        let targets = targets(&self.table()?, root)?;
+        let table = self.table()?;
+        let members = table.tree(table.live(root).ok_or_else(|| gone(root))?);
+        if let Some(p) = super::protected(&members, &self.config).filter(|_| !confirm_protected) {
+            let action = if relaunch.is_some() {
+                "restart"
+            } else {
+                "stop"
+            };
+            return Err(format!(
+                "{} :{port} is protected; send confirm_protected to {action} it anyway",
+                p.name
+            ));
+        }
+        let targets = targets(members);
         self.signal(&targets, force)?;
         let now = self.platform.now_ms();
         self.pending.push(Pending {
@@ -156,14 +182,12 @@ impl Engine {
     }
 }
 
-/// The live tree under `root`, deepest first. Never includes init or ppm.
-fn targets(table: &Table, root: ProcRef) -> Result<Vec<ProcRef>, String> {
-    let root = table.live(root).ok_or_else(|| gone(root))?;
+/// A tree's processes, deepest first. Never includes init or ppm.
+fn targets(mut members: Vec<(&ProcInfo, u32)>) -> Vec<ProcRef> {
     let own_pid = std::process::id();
-    let mut members = table.tree(root);
     members.retain(|(p, _)| p.proc.pid > 1 && p.proc.pid != own_pid);
     members.sort_by_key(|(_, depth)| std::cmp::Reverse(*depth));
-    Ok(members.into_iter().map(|(p, _)| p.proc).collect())
+    members.into_iter().map(|(p, _)| p.proc).collect()
 }
 
 fn gone(root: ProcRef) -> String {

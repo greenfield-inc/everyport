@@ -558,35 +558,95 @@ fn running_for_three_days_is_cleaned_up() {
     );
 }
 
+/// `postgres -D data` listening on :5432, idle for three days.
+fn postgres(fake: &Fake) {
+    let args = ["postgres", "-D", "data"];
+    fake.run(500, 1, "postgres", &args, project_dir(), 72 * HOUR);
+    fake.listen(5432, 500, "127.0.0.1");
+}
+
 #[test]
 fn protected_servers_are_never_cleaned_up_or_alerted() {
     let fake = Fake::new();
     let dir = project_dir();
-    fake.run(
-        500,
-        1,
-        "postgres",
-        &["postgres", "-D", "data"],
-        dir,
-        72 * HOUR,
-    );
+    postgres(&fake);
     fake.set_usage(500, 3000 * MB, 0);
-    fake.listen(5432, 500, "127.0.0.1");
-    // Only the listening process decides: a redis child doesn't protect :3000.
+    // A redis child protects the dev server that started it.
     next_dev(&fake);
     fake.run(240, 200, "redis-server", &["redis-server"], dir, HOUR);
+    fake.run(300, 1, "python3", &["python3", "app.py"], dir, HOUR);
+    fake.listen(8000, 300, "127.0.0.1");
     let mut engine = fake.engine();
     engine.scan();
 
     fake.advance(5 * HOUR);
     let (snapshot, alerts) = engine.scan();
-    let (next, server) = (&snapshot.servers[0], &snapshot.servers[1]);
+    let [next, database, python] = &snapshot.servers[..] else {
+        panic!("{:#?}", snapshot.servers);
+    };
 
-    assert!(!next.protected);
-    assert_eq!(next.clean_up, Some(CleanUpReason::Idle { seconds: 18_000 }));
-    assert!(server.protected);
-    assert_eq!(server.clean_up, None);
+    assert!(next.protected);
+    assert_eq!(next.clean_up, None);
+    assert!(database.protected);
+    assert_eq!(database.clean_up, None);
+    assert!(!python.protected);
+    assert_eq!(
+        python.clean_up,
+        Some(CleanUpReason::Idle { seconds: 18_000 })
+    );
     assert!(alerts.is_empty());
+}
+
+#[test]
+fn stop_and_restart_refuse_a_protected_tree_until_confirmed() {
+    let fake = Fake::new();
+    postgres(&fake);
+    let root = fake.proc_ref(500);
+    let mut engine = fake.engine();
+    let stop = |confirm_protected| Call::Stop {
+        port: 5432,
+        root,
+        force: false,
+        confirm_protected,
+    };
+    let restart = Call::Restart {
+        port: 5432,
+        root,
+        confirm_protected: false,
+    };
+    let refusal = "postgres :5432 is protected; send confirm_protected to stop it anyway";
+
+    assert_eq!(engine.call(&stop(false)), Err(refusal.into()));
+    let refusal = "postgres :5432 is protected; send confirm_protected to restart it anyway";
+    assert_eq!(engine.call(&restart), Err(refusal.into()));
+    assert!(fake.world().signals.is_empty());
+
+    assert_eq!(engine.call(&stop(true)), Ok(()));
+    assert_eq!(fake.world().signals, [(500, false)]);
+}
+
+#[test]
+fn stop_refuses_a_server_with_a_protected_child() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    fake.run(
+        240,
+        200,
+        "redis-server.exe",
+        &["redis-server"],
+        project_dir(),
+        HOUR,
+    );
+    let stop = Call::Stop {
+        port: 3000,
+        root: fake.proc_ref(200),
+        force: true,
+        confirm_protected: false,
+    };
+
+    let refusal = "redis-server.exe :3000 is protected; send confirm_protected to stop it anyway";
+    assert_eq!(fake.engine().call(&stop), Err(refusal.into()));
+    assert!(fake.world().signals.is_empty());
 }
 
 #[test]
@@ -599,6 +659,7 @@ fn stop_terminates_leaves_first() {
         port: 3000,
         root,
         force: false,
+        confirm_protected: false,
     };
     assert_eq!(fake.engine().call(&stop), Ok(()));
 
@@ -621,6 +682,7 @@ fn a_later_scan_kills_what_ignores_terminate_for_three_seconds() {
         port: 3000,
         root,
         force: false,
+        confirm_protected: false,
     };
     assert_eq!(engine.call(&stop), Ok(()));
     let terminated = [(230, false), (220, false), (210, false), (200, false)];
@@ -652,6 +714,7 @@ fn interrupted_processes_get_no_terminate_and_are_killed_after_three_seconds() {
         port: 3000,
         root,
         force: false,
+        confirm_protected: false,
     };
     assert_eq!(engine.call(&stop), Ok(()));
     assert_eq!(fake.world().interrupted, [[220, 210, 200]]);
@@ -674,6 +737,7 @@ fn stop_refuses_a_reused_pid() {
         port: 3000,
         root,
         force: true,
+        confirm_protected: false,
     };
     assert!(fake.engine().call(&stop).is_err());
 
@@ -697,7 +761,11 @@ fn restart_reruns_the_launch_command_with_its_environment() {
     let root = fake.proc_ref(200);
 
     let mut engine = fake.engine();
-    let restart = Call::Restart { port: 3000, root };
+    let restart = Call::Restart {
+        port: 3000,
+        root,
+        confirm_protected: false,
+    };
     assert_eq!(engine.call(&restart), Ok(()));
     // The next scan sees the old tree gone and the port free.
     engine.scan();
