@@ -7,7 +7,6 @@ mod notify;
 mod placement;
 mod popover;
 mod settings;
-mod sidecar;
 mod tray;
 #[cfg(windows)]
 mod windows;

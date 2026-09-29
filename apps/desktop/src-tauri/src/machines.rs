@@ -3,14 +3,14 @@
 //! tray, but reach the page only while the popover is visible.
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use ppm_client::protocol::{Call, Event, HostInfo, Server, ServerStatus, Snapshot};
+use ppm_client::{Client, Connection, Update};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::sidecar::{self, Client, Update};
 use crate::{notify, popover, tray};
 
 pub const LOCAL: &str = "local";
@@ -39,7 +39,7 @@ pub enum MachineState {
 #[derive(Default)]
 pub struct Machines {
     list: Vec<Machine>,
-    clients: HashMap<String, Arc<Client>>,
+    clients: HashMap<String, Client>,
     snoozed: HashMap<(String, u16), Instant>,
 }
 
@@ -55,7 +55,9 @@ pub fn start(app: &AppHandle) {
     let path = std::env::current_exe()
         .expect("the app knows its own path")
         .with_file_name(format!("ppm{}", std::env::consts::EXE_SUFFIX));
-    let (client, mut updates) = sidecar::connect(path);
+    // ppm_client::connect spawns onto the current Tokio runtime.
+    let (client, mut updates) =
+        tauri::async_runtime::block_on(async { ppm_client::connect(Connection::Sidecar { path }) });
     app.manage(Mutex::new(Machines {
         list: vec![Machine {
             id: LOCAL.into(),
@@ -65,7 +67,7 @@ pub fn start(app: &AppHandle) {
             error: None,
             snapshot: None,
         }],
-        clients: HashMap::from([(LOCAL.to_string(), Arc::new(client))]),
+        clients: HashMap::from([(LOCAL.to_string(), client)]),
         snoozed: HashMap::new(),
     }));
     let app = app.clone();
