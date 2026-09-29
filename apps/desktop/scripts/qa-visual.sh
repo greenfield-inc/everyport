@@ -2,12 +2,20 @@
 # Screenshots and a GIF of the desktop app on macOS, for PR evidence:
 # the tray icon (idle, running, attention), the popover in light and dark
 # mode, the popover over a full-screen app, on a second display when one is
-# attached, the alert card, and an open/close GIF.
+# attached, the alert card, an open/close GIF, and other machines: the
+# switcher, the install question, installing, a remote server list, a
+# discovered host, and a failed connection.
 #
-# The terminal app running this needs Screen Recording and Accessibility.
-# It starts throwaway servers on ports 39101-39106 and stops only those, by
-# PID. It never stops, restarts or cleans anything through ppm. It switches
-# the system between light and dark mode, and puts it back when it exits.
+# The terminal app running this needs Screen Recording and Accessibility, and
+# Docker for the remote machine. It starts throwaway servers on ports
+# 39101-39106 here and 39301-39302 in a container it creates, and stops only
+# those, by PID or by removing the container. It never stops, restarts or
+# cleans anything through ppm. It switches the system between light and dark
+# mode, and puts it back when it exits.
+#
+# The app runs with a scratch HOME, so its machines.toml (a Docker machine,
+# and an ssh host to discover) never touches yours. ppm for the container is
+# built in Docker and installed from PPM_BINARY_DIR, since no release has it.
 #
 #   apps/desktop/scripts/qa-visual.sh [app binary] [output folder]
 #
@@ -23,9 +31,11 @@ tools="$out/.tools"
 mkdir -p "$tools"
 
 pids=()
+box=ppm-qa-box
 dark_before="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')"
 cleanup() {
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
+  docker rm -f "$box" >/dev/null 2>&1 || true
   osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $dark_before" >/dev/null
 }
 trap cleanup EXIT
@@ -38,6 +48,26 @@ screencapture -x "$tools/probe.png" 2>/dev/null || fail "Screen Recording is off
 osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' >/dev/null 2>&1 \
   || fail "Accessibility is off for this terminal app (System Settings → Privacy & Security)."
 command -v ffmpeg >/dev/null || fail "the GIF needs ffmpeg: brew install ffmpeg"
+docker info >/dev/null 2>&1 || fail "the remote machine needs Docker running"
+
+# A container as a remote machine, with its own servers and no ppm yet.
+docker rm -f "$box" >/dev/null 2>&1 || true
+docker run -d --name "$box" python:3.12-slim sleep infinity >/dev/null
+for port in 39301 39302; do docker exec -d -w /tmp "$box" python3 -m http.server "$port"; done
+arch="$(docker exec "$box" uname -m)"
+echo "qa-visual: building ppm for Linux $arch in Docker"
+docker run --rm -v "$root":/src:ro -v "$out/.linux-target":/target -w /src -e CARGO_TARGET_DIR=/target \
+  rust:1-bookworm cargo build --release -q -p port-process-manager
+mkdir -p "$tools/bin"
+# Named as the release file the app asks for. The glibc build runs in this Debian image.
+cp "$out/.linux-target/release/ppm" "$tools/bin/ppm-$arch-unknown-linux-musl"
+
+home="$tools/home"
+config="$home/Library/Application Support/port-process-manager"
+mkdir -p "$config" "$home/.ssh"
+printf '[[machine]]\nname = "%s"\ncommand = ["docker", "exec", "-i", "%s"]\n' "$box" "$box" >"$config/machines.toml"
+# Discovered, never reachable: ssh reads the real config, where it doesn't exist.
+printf 'Host qa-devbox\n' >"$home/.ssh/config"
 
 # Posts a real mouse click, and lists the screens, through CoreGraphics.
 cat >"$tools/mouse.swift" <<'SWIFT'
@@ -89,6 +119,29 @@ shot_tray() {
 
 press_escape() { osascript -e 'tell application "System Events" to key code 53'; sleep 0.4; }
 
+# Clicks the control in the popover whose accessible name starts with $1,
+# such as a machine chip ("ppm-qa-box") or a button ("Install ppm").
+click_named() {
+  osascript - "$app_pid" "$1" <<'APPLESCRIPT' >/dev/null
+on run {pid, label}
+  tell application "System Events" to tell (first process whose unix id is (pid as integer))
+    repeat with w in windows
+      repeat with e in (entire contents of w)
+        try
+          if (name of e starts with label) or (description of e starts with label) or (title of e starts with label) then
+            click e
+            return
+          end if
+        end try
+      end repeat
+    end repeat
+  end tell
+  error "nothing named " & label
+end run
+APPLESCRIPT
+  sleep 0.8
+}
+
 start_server() { # port [extra python]
   local dir
   dir="$(mktemp -d "${TMPDIR:-/tmp}/ppm-qa-$1.XXXX")"
@@ -99,7 +152,7 @@ socketserver.TCPServer(('127.0.0.1', $1), http.server.SimpleHTTPRequestHandler).
 }
 
 # ---------------------------------------------------------------- run
-"$app" &
+DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}" HOME="$home" PPM_BINARY_DIR="$tools/bin" "$app" 2>"$out/app.log" &
 app_pid=$!
 pids+=("$app_pid")
 for _ in $(seq 1 40); do tray_rect >/dev/null 2>&1 && break; sleep 0.25; done
@@ -120,7 +173,40 @@ for mode in dark light; do
   shot_popover "popover-$mode"
   press_escape
 done
+
+# Other machines: the switcher, the install question, then the container's
+# servers once ppm is on it, and a discovered host that can't be reached.
+for mode in dark light; do
+  set_dark "$([[ $mode == dark ]] && echo true || echo false)"
+  click_tray
+  shot_popover "machines-switcher-$mode"
+  click_named "$box"
+  shot_popover "machine-install-question-$mode"
+  click_named "qa-devbox"
+  shot_popover "machine-discovered-$mode"
+  press_escape
+done
 set_dark true
+click_tray
+click_named "$box"
+click_named "Install ppm"
+shot_popover "machine-installing-dark"
+for _ in $(seq 1 60); do grep -q "machine $box: connected" "$out/app.log" && break; sleep 1; done
+sleep 3
+for mode in dark light; do
+  set_dark "$([[ $mode == dark ]] && echo true || echo false)"
+  [[ $mode == light ]] && { click_tray; click_named "$box"; }
+  shot_popover "machine-remote-list-$mode"
+  press_escape
+  shot_tray "tray-all-machines-$mode"
+done
+set_dark true
+click_tray
+click_named "qa-devbox"
+click_named "Connect"
+sleep 3
+shot_popover "machine-error-dark"
+press_escape
 
 # Open and close, recorded.
 read -r x y w h < <(tray_rect)
