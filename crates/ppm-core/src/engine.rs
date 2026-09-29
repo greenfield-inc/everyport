@@ -177,7 +177,9 @@ impl Engine {
                 port: l.port,
                 addresses: Vec::new(),
                 owner: l.owner,
-                process_name: l.pid.and_then(|pid| table.get(pid)).map(|p| p.name.clone()),
+                process_name: l
+                    .process_name
+                    .or_else(|| l.pid.and_then(|pid| table.get(pid)).map(|p| p.name.clone())),
             });
             if !port.addresses.contains(&l.address) {
                 port.addresses.push(l.address);

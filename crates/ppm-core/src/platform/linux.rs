@@ -132,6 +132,7 @@ impl Platform for Linux {
                 address: row.address.to_string(),
                 owner: Some(self.user_name(row.uid)),
                 pid: None,
+                process_name: None,
             })
             .collect())
     }

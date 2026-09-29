@@ -106,8 +106,8 @@ fn listeners_include_sockets_we_bind() {
 }
 
 /// Root's listener, as a normal user sees it. Starting it takes passwordless
-/// sudo, which CI's Linux runner has; elsewhere the test says why it skips.
-#[cfg(target_os = "linux")]
+/// sudo, which CI's runners have, so it fails there rather than skip. Elsewhere
+/// the test says why it skips.
 #[test]
 fn another_users_listener_shows_port_and_owner() {
     use ppm_core::platform::OtherListener;
@@ -118,7 +118,9 @@ fn another_users_listener_shows_port_and_owner() {
     };
     let can_sudo = sudo().arg("true").status().is_ok_and(|s| s.success());
     if unsafe { libc::geteuid() } == 0 || !can_sudo {
-        eprintln!("skipped: needs a user other than root with passwordless sudo");
+        let why = "needs a user other than root with passwordless sudo";
+        assert!(std::env::var_os("CI").is_none(), "{why}");
+        eprintln!("skipped: {why}");
         return;
     }
     let port = TcpListener::bind("127.0.0.1:0")
@@ -133,26 +135,56 @@ fn another_users_listener_shows_port_and_owner() {
     // sudo runs as root, so only root can stop it.
     let kill = || sudo().args(["kill", &root.id().to_string()]).status();
 
-    let expected = OtherListener {
-        port,
-        address: "127.0.0.1".into(),
-        owner: Some("root".into()),
-        pid: None,
+    let shown = |l: &OtherListener| {
+        l.port == port && l.address == "127.0.0.1" && l.owner.as_deref() == Some("root")
     };
-    let platform = native();
     let mut found = Vec::new();
     for _ in 0..200 {
-        found = platform.other_listeners().unwrap();
-        if found.contains(&expected) {
+        // A new platform each time, so macOS doesn't serve a cached answer.
+        found = native().other_listeners().unwrap();
+        if found.iter().any(shown) {
             break;
         }
         sleep(Duration::from_millis(50));
     }
-    let listed = platform.listeners().unwrap();
+    let listed = native().listeners().unwrap();
+    let listener = found.iter().find(|l| shown(l)).cloned();
+    // Checked while the process runs.
+    let from_sudo = listener
+        .as_ref()
+        .and_then(|l| l.pid)
+        .map(|pid| descends_from(pid, root.id()));
     kill().unwrap();
     root.wait().unwrap();
-    assert!(found.contains(&expected), "{expected:?} not in {found:?}");
+
+    let listener = listener.unwrap_or_else(|| panic!("root on {port} not in {found:?}"));
     assert!(listed.iter().all(|l| l.port != port), "{listed:?}");
+    // Linux can't tell a normal user which process holds the socket; macOS can.
+    if cfg!(target_os = "macos") {
+        assert_eq!(from_sudo, Some(true), "{listener:?} vs sudo {}", root.id());
+        let name = listener.process_name.as_deref().unwrap_or_default();
+        assert!(name.to_lowercase().starts_with("python"), "{listener:?}");
+    } else {
+        assert_eq!((listener.pid, listener.process_name), (None, None));
+    }
+}
+
+/// Whether `ancestor` is `pid` or one of its parents, as `ps` shows them.
+fn descends_from(mut pid: u32, ancestor: u32) -> bool {
+    while pid > 1 {
+        if pid == ancestor {
+            return true;
+        }
+        let ps = Command::new("ps")
+            .args(["-o", "ppid=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        let Ok(parent) = String::from_utf8_lossy(&ps.stdout).trim().parse() else {
+            return false;
+        };
+        pid = parent;
+    }
+    false
 }
 
 /// An outgoing connection on another address can share the listener's port

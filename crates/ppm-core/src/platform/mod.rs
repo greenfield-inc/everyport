@@ -25,6 +25,8 @@ pub struct OtherListener {
     pub owner: Option<String>,
     /// When the OS says which process holds the socket.
     pub pid: Option<u32>,
+    /// The process's name, when the OS gives it but ppm can't list the process.
+    pub process_name: Option<String>,
 }
 
 /// Cheap per-process facts, read for every process on every scan.

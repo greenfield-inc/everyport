@@ -263,11 +263,17 @@ fn other_users_ports_show_once_each_with_owner_and_process_name() {
         address: address.into(),
         owner: Some(owner.into()),
         pid,
+        process_name: None,
     };
     fake.world().others = vec![
         other(5432, "0.0.0.0", "root", Some(900)),
         other(5432, "::", "root", Some(900)),
         other(4000, "127.0.0.1", "postgres", None),
+        // macOS names a process that isn't in the process table.
+        OtherListener {
+            process_name: Some("mysqld".into()),
+            ..other(4001, "127.0.0.1", "_mysql", Some(901))
+        },
         // Below the default range, and a port already shown as a server.
         other(631, "127.0.0.1", "root", None),
         other(3000, "0.0.0.0", "root", None),
@@ -283,6 +289,12 @@ fn other_users_ports_show_once_each_with_owner_and_process_name() {
                 addresses: vec!["127.0.0.1".into()],
                 owner: Some("postgres".into()),
                 process_name: None,
+            },
+            OtherPort {
+                port: 4001,
+                addresses: vec!["127.0.0.1".into()],
+                owner: Some("_mysql".into()),
+                process_name: Some("mysqld".into()),
             },
             OtherPort {
                 port: 5432,

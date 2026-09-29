@@ -166,6 +166,7 @@ impl Platform for Windows {
                 port: l.listener.port,
                 owner: l.user.and_then(|sid| self.account_name(&sid)),
                 pid: Some(l.listener.pid),
+                process_name: None,
                 address: l.listener.address,
             })
             .collect())
