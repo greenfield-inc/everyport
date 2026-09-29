@@ -8,6 +8,10 @@ on:
         description: Also build the desktop app bundles
         type: boolean
         default: false
+      sign:
+        description: Sign and notarize the bundles, and fail when a signing secret is missing
+        type: boolean
+        default: false
 
 jobs:
   binaries:
@@ -24,16 +28,16 @@ jobs:
           - { target: aarch64-pc-windows-msvc, os: windows-latest, build: build, exe: .exe }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: "${{ matrix.target }}" }
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with: { toolchain: stable, targets: "${{ matrix.target }}" }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with: { workspaces: ". -> target.noindex", key: "${{ matrix.target }}" }
       - if: matrix.build == 'zigbuild'
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with: { version: 0.14.1 }
       - if: matrix.build == 'zigbuild'
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@4cef1412cce204788f482e778a0b9187f9626a29 # v2.87.21
         with: { tool: cargo-zigbuild }
       - name: Build
         shell: bash
@@ -41,7 +45,7 @@ jobs:
           cargo ${{ matrix.build }} -p port-process-manager --release --locked --target ${{ matrix.target }}
           mkdir out
           cp target.noindex/${{ matrix.target }}/release/ppm${{ matrix.exe }} out/ppm-${{ matrix.target }}${{ matrix.exe }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: "bin-${{ matrix.target }}", path: out/*, if-no-files-found: error }
 
   bundles:
@@ -59,18 +63,18 @@ jobs:
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, bundles: "deb,rpm,appimage", sidecar: x86_64-unknown-linux-musl }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with: { targets: "${{ matrix.target }}" }
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with: { toolchain: stable, targets: "${{ matrix.target }}" }
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with: { workspaces: ". -> target.noindex", key: "app-${{ matrix.target }}" }
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with: { name: "bin-${{ matrix.sidecar || matrix.target }}", path: sidecar }
       - name: Stage the ppm sidecar
         shell: bash
@@ -79,58 +83,58 @@ jobs:
           cp sidecar/* apps/desktop/src-tauri/binaries/ppm-${{ matrix.target }}${{ matrix.exe }}
           chmod +x apps/desktop/src-tauri/binaries/*
 
-      - name: Set up macOS signing
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-        run: |
-          put() { { echo "$1<<__PPM_ENV__"; echo "$2"; echo "__PPM_ENV__"; } >> "$GITHUB_ENV"; }
-          if [ -n "$CSC_LINK" ] && [ -n "$CSC_KEY_PASSWORD" ]; then
-            put APPLE_CERTIFICATE "$CSC_LINK"
-            put APPLE_CERTIFICATE_PASSWORD "$CSC_KEY_PASSWORD"
-            echo "Signing with the CSC_LINK certificate."
-            if [ -n "$APPLE_ID" ] && [ -n "$APPLE_TEAM_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-              put APPLE_ID "$APPLE_ID"
-              put APPLE_TEAM_ID "$APPLE_TEAM_ID"
-              put APPLE_PASSWORD "$APPLE_APP_SPECIFIC_PASSWORD"
-              echo "Notarizing with APPLE_ID."
-            else
-              echo "::notice::Skipping notarization: APPLE_ID, APPLE_TEAM_ID or APPLE_APP_SPECIFIC_PASSWORD is not set."
-            fi
-          else
-            put APPLE_SIGNING_IDENTITY "-"
-            echo "::notice::Skipping macOS signing and notarization: CSC_LINK or CSC_KEY_PASSWORD is not set. The app is ad hoc signed."
-          fi
-      - name: Set up Windows signing
-        if: runner.os == 'Windows'
+      - name: Import the Windows signing certificate
+        if: inputs.sign && runner.os == 'Windows'
         shell: pwsh
         env:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if (-not $env:WINDOWS_CERTIFICATE -or -not $env:WINDOWS_CERTIFICATE_PASSWORD) {
-            Write-Output "::notice::Skipping Windows signing: WINDOWS_CERTIFICATE or WINDOWS_CERTIFICATE_PASSWORD is not set."
-            exit 0
+            Write-Output "::error::Signed builds need the WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD secrets. For a test release, run Release with unsigned."
+            exit 1
           }
           $pfx = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
           [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
           $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
           $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
           Remove-Item $pfx
-          $config = Join-Path $env:RUNNER_TEMP 'signing.json'
           @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint; digestAlgorithm = 'sha256'; timestampUrl = 'http://timestamp.digicert.com' } } } |
-            ConvertTo-Json -Depth 4 | Set-Content $config
-          "TAURI_SIGNING_CONFIG=$config" >> $env:GITHUB_ENV
+            ConvertTo-Json -Depth 4 | Set-Content (Join-Path $env:RUNNER_TEMP 'tauri-signing.json')
           Write-Output "Signing with certificate $($cert.Thumbprint)."
 
       - name: Build the app
         shell: bash
-        run: pnpm --filter @ppm/desktop tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${TAURI_SIGNING_CONFIG:+--config "$TAURI_SIGNING_CONFIG"}
+        env:
+          SIGN: ${{ inputs.sign }}
+          APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ inputs.sign && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ inputs.sign && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_PASSWORD: ${{ inputs.sign && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+        run: |
+          args=(--target ${{ matrix.target }} --bundles ${{ matrix.bundles }})
+          if [ "$SIGN" = true ]; then
+            if [ "$RUNNER_OS" = macOS ]; then
+              for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_PASSWORD; do
+                if [ -z "${!name}" ]; then
+                  echo "::error::Signed builds need the CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_TEAM_ID and APPLE_APP_SPECIFIC_PASSWORD secrets. For a test release, run Release with unsigned."
+                  exit 1
+                fi
+              done
+            fi
+            if [ "$RUNNER_OS" = Windows ]; then
+              args+=(--config "$RUNNER_TEMP/tauri-signing.json")
+            fi
+          else
+            # Tauri treats a set but empty variable as a certificate to import.
+            unset APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_PASSWORD
+            if [ "$RUNNER_OS" = macOS ]; then
+              export APPLE_SIGNING_IDENTITY=-
+            fi
+            echo "::notice::Unsigned build: signing and notarization are skipped."
+          fi
+          pnpm --filter @ppm/desktop tauri build "${args[@]}"
       - name: Collect bundles
         shell: bash
         run: |
@@ -143,7 +147,7 @@ jobs:
             cp "$file" "out/port-process-manager-$version-$arch.${file##*.}"
           done
           ls -l out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: "bundle-${{ matrix.target }}", path: out/*, if-no-files-found: error }
 
   dist:
@@ -151,16 +155,16 @@ jobs:
     if: ${{ !cancelled() && needs.binaries.result == 'success' && needs.bundles.result != 'failure' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 22 }
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with: { path: artifacts, merge-multiple: true }
       - run: scripts/dist.sh artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: release, path: dist/release, if-no-files-found: error }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with: { name: packages, path: dist/packages, if-no-files-found: error }
 
   install:
@@ -172,13 +176,13 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with: { node-version: 22 }
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/download-artifact@v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with: { name: release, path: dist/release }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with: { name: packages, path: dist/packages }
       - run: scripts/smoke-install.sh dist
         shell: bash
