@@ -21,7 +21,7 @@ studio-mac (ssh studio-mac.tail1234.ts.net)
 ✓ studio-mac.tail1234.ts.net resolves to 100.64.0.7
 ✗ Nothing listens on port 22
   SSH is off on studio-mac. On studio-mac, turn on System Settings > General > Sharing > Remote Login.
-    Connection refused (os error 61)
+    100.64.0.7:22: Connection refused (os error 61)
 ```
 
 `everyport doctor` without `--on` checks this computer, then every saved and found machine. For an `everyport serve` machine, it checks the name and port, then that the server accepts the connection code.
