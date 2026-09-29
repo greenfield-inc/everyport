@@ -41,16 +41,17 @@ fn write_script(path: &Path, body: &str) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
-/// An `everyport` that prints a banner, `hello` and the fixture snapshot, answers
+/// This release's `everyport`: it prints a banner, `hello` and the fixture snapshot, answers
 /// two requests (refresh succeeds, anything else fails), then exits with an
 /// error on stderr.
 fn fake_everyport(path: &Path) {
     let hello = serde_json::to_string(&hello()).unwrap();
     let snapshot = serde_json::to_string(&Event::Snapshot(fixture())).unwrap();
+    let version = install::VERSION;
     write_script(
         path,
         &format!(
-            r#"[ "$1" = --version ] && {{ echo "everyport 0.1.0"; exit 0; }}
+            r#"[ "$1" = --version ] && {{ echo "everyport {version}"; exit 0; }}
 echo 'Welcome to box'
 cat <<'EOF'
 {hello}

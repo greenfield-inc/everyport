@@ -15,12 +15,17 @@ $ProgressPreference = 'SilentlyContinue'
 $repo = 'https://github.com/greenfield-inc/everyport'
 $installDir = if ($env:EVERYPORT_INSTALL_DIR) { $env:EVERYPORT_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
 
-$arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture) {
-  'X64' { 'x86_64' }
-  'Arm64' { 'aarch64' }
-  default { throw "everyport install: unsupported CPU: $_" }
+# The OS architecture, also from 32-bit PowerShell on 64-bit Windows. Windows PowerShell 5.1
+# can't be trusted with RuntimeInformation.OSArchitecture, which can come back empty.
+function Get-WindowsArch {
+  $cpu = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+  switch ($cpu) {
+    'AMD64' { 'x86_64' }
+    'ARM64' { 'aarch64' }
+    default { throw "everyport install: unsupported CPU: '$cpu'" }
+  }
 }
-$asset = "everyport-$arch-pc-windows-msvc.exe"
+$asset = "everyport-$(Get-WindowsArch)-pc-windows-msvc.exe"
 
 $base = if ($env:EVERYPORT_DOWNLOAD_URL) { $env:EVERYPORT_DOWNLOAD_URL }
   elseif ($env:EVERYPORT_VERSION) { "$repo/releases/download/v$($env:EVERYPORT_VERSION.TrimStart('v'))" }
