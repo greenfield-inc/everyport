@@ -1,11 +1,12 @@
 // One desktop: the OS's chrome, a wallpaper, and the real @ppm/ui popover
 // under (or above) its tray icon.
-import type { Machine, Os } from "@ppm/protocol";
-import { DotGrid, NotificationCard, Popover } from "@ppm/ui";
+import type { Machine, Os, Server } from "@ppm/protocol";
+import { NotificationCard, Popover } from "@ppm/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DemoClient } from "./client.ts";
 import type { View } from "./sections.ts";
-import { Terminal } from "./Terminal.tsx";
+import { Socket } from "./Socket.tsx";
+import { Terminal, TerminalWindow } from "./Terminal.tsx";
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -38,6 +39,66 @@ const Speaker = () => (
     <path d="M9.2 3.5a3.5 3.5 0 0 1 0 5M11 1.8a6 6 0 0 1 0 8.4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
   </svg>
 );
+
+/** What each dev server prints once it's up. */
+function readyLine({ port, project }: Server) {
+  switch (project.framework) {
+    case "Next.js":
+      return `  ▲ Next.js ready on http://localhost:${port}`;
+    case "Vite":
+      return `  VITE v6 ready in 412 ms  ➜  http://localhost:${port}/`;
+    case "Rails":
+      return `* Listening on http://0.0.0.0:${port}`;
+    case "FastAPI":
+      return `INFO:     Uvicorn running on http://0.0.0.0:${port}`;
+    case "Storybook":
+      return `Storybook started on http://localhost:${port}`;
+    default:
+      return `listening on :${port}`;
+  }
+}
+
+const LOCAL_SHELL: Record<Os, { title: string; prompt: string }> = {
+  macos: { title: "zsh", prompt: "dev@mac ~ %" },
+  windows: { title: "PowerShell", prompt: "PS C:\\Users\\dev>" },
+  linux: { title: "dev@pc: ~", prompt: "dev@pc:~$" },
+};
+
+/** How each demo machine's own shell looks from here. */
+const REMOTE_SHELL: Record<string, { title: string; prompt: string }> = {
+  devbox: { title: "ssh devbox", prompt: "devbox:~$" },
+  wsl: { title: "Ubuntu", prompt: "dev@ubuntu:~$" },
+  docker: { title: "docker exec api-container", prompt: "root@3f9c2a1b7d4e:/app#" },
+};
+
+/**
+ * A faint terminal behind the popover, where the machine's servers were
+ * started, so the list visibly comes from somewhere. It only decorates.
+ */
+function Backdrop({ os, machine }: { os: Os; machine: Machine }) {
+  const { title, prompt } = REMOTE_SHELL[machine.id] ?? LOCAL_SHELL[os];
+  const started = (machine.snapshot?.servers ?? []).filter((server) => !server.protected && server.command).slice(0, 3);
+  return (
+    <div className="backdrop" aria-hidden inert>
+      <TerminalWindow os={os} title={title}>
+        <pre className="terminal-body">
+          {started.map((server) => (
+            <div key={server.port}>
+              <div>
+                <span className="dim">{prompt}</span> {server.command}
+              </div>
+              <div className="dim">{readyLine(server)}</div>
+              <div> </div>
+            </div>
+          ))}
+          <div>
+            <span className="dim">{prompt}</span> <span className="cursor" />
+          </div>
+        </pre>
+      </TerminalWindow>
+    </div>
+  );
+}
 
 type Props = {
   os: Os;
@@ -73,8 +134,12 @@ export function Screen({ os, client, machine, view, open, onToggle, alert, width
 
   const tray = (
     <button type="button" className="tray" data-open={open} onClick={onToggle} aria-label={open ? "Close Port Process Manager" : "Open Port Process Manager"} aria-expanded={open}>
-      <DotGrid size={os === "windows" ? 16 : 15} alert={attention} />
-      {servers.length > 0 && <span>{servers.length}</span>}
+      <Socket size={os === "windows" ? 17 : 16} state={servers.length === 0 ? "off" : attention && alert !== undefined ? "alert" : "on"} />
+      {servers.length > 0 && (
+        <span key={servers.length} className="tray-count">
+          {servers.length}
+        </span>
+      )}
     </button>
   );
 
@@ -89,7 +154,9 @@ export function Screen({ os, client, machine, view, open, onToggle, alert, width
 
   return (
     <div className="screen" data-os={os} data-compact={compact || undefined} style={{ width, height }}>
-      <div className="wallpaper" aria-hidden />
+      {(["macos", "windows", "linux"] as Os[]).map((wall) => (
+        <div key={wall} className="wallpaper" data-wall={wall} data-active={wall === os || undefined} aria-hidden />
+      ))}
       {os === "macos" && (
         <div className="menubar">
           <span className="menubar-app">Terminal</span>
@@ -155,6 +222,8 @@ export function Screen({ os, client, machine, view, open, onToggle, alert, width
         </div>
       )}
 
+      {view.kind !== "terminal" && !compact && machine && <Backdrop os={os} machine={machine} />}
+
       {view.kind === "terminal" && (
         <div className="terminal-slot">
           <Terminal key={machine?.id} client={client} machine={machine} os={os} columns={compact ? 46 : 62} />
@@ -174,7 +243,7 @@ export function Screen({ os, client, machine, view, open, onToggle, alert, width
         </div>
       )}
 
-      {showPopover && machine && <PopoverSlot client={client} machine={machine} view={view} />}
+      {showPopover && machine && <PopoverSlot key={os} client={client} machine={machine} view={view} />}
 
       <div className="notice" data-visible={notice !== null} role="status">
         {notice}

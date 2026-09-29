@@ -1,7 +1,7 @@
 // A look-alike of `ppm`'s terminal UI over the demo client: arrow keys select,
 // Enter opens details, s stops, Esc goes back and q quits to a prompt.
 import type { Machine, Os, Server } from "@ppm/protocol";
-import { type KeyboardEvent, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useState } from "react";
 import type { DemoClient } from "./client.ts";
 
 function size(bytes: number) {
@@ -59,6 +59,39 @@ const HINTS: Record<Screen["view"], [string, string][]> = {
 
 const TITLE: Record<Os, string> = { macos: "zsh · ppm", windows: "PowerShell", linux: "dev@pc: ~" };
 
+/** A terminal window in the chosen OS's style: macOS Terminal, Windows Terminal with tabs, or GNOME Console. */
+export function TerminalWindow({ os, title, className, children }: { os: Os; title: string; className?: string; children: ReactNode }) {
+  return (
+    <div className={`terminal ${className ?? ""}`} data-os={os}>
+      <div className="terminal-bar">
+        {os === "windows" ? (
+          <>
+            <span className="wt-tab">{title}</span>
+            <span className="wt-new" aria-hidden>
+              +
+            </span>
+            <span className="wt-controls" aria-hidden>
+              <i>─</i>
+              <i>☐</i>
+              <i>✕</i>
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="lights" aria-hidden>
+              <i />
+              <i />
+              <i />
+            </span>
+            <span>{title}</span>
+          </>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 /** `columns` is the terminal's width in characters. */
 export function Terminal({ client, machine, os, columns }: { client: DemoClient; machine: Machine | undefined; os: Os; columns: number }) {
   const [screen, setScreen] = useState<Screen>({ view: "list" });
@@ -115,15 +148,7 @@ export function Terminal({ client, machine, os, columns }: { client: DemoClient;
   const protectedNote = shown.view !== "shell" && (shown.view === "detail" ? detail : current)?.protected;
 
   return (
-    <div className="terminal" data-os={os}>
-      <div className="terminal-bar">
-        <span className="lights" aria-hidden>
-          <i />
-          <i />
-          <i />
-        </span>
-        <span>{TITLE[os]}</span>
-      </div>
+    <TerminalWindow os={os} title={TITLE[os]}>
       <div
         className="terminal-body"
         tabIndex={0}
@@ -152,6 +177,6 @@ export function Terminal({ client, machine, os, columns }: { client: DemoClient;
           {shown.view === "shell" && <span className="cursor" />}
         </pre>
       </div>
-    </div>
+    </TerminalWindow>
   );
 }

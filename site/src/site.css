@@ -42,11 +42,20 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  inset: -120px 0;
   pointer-events: none;
   background-image: radial-gradient(#ffffff12 1.1px, transparent 1.2px);
   background-size: 22px 22px;
-  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 45%, #000 30%, transparent 85%);
+  transform: translateY(calc(var(--scroll, 0) * -0.04px));
+  animation: drift 40s linear infinite;
+}
+
+/* Very slow, one grid cell per loop, so it never jumps. */
+@keyframes drift {
+  to {
+    background-position: 22px 22px;
+  }
 }
 
 a {
@@ -68,6 +77,7 @@ button {
 :focus-visible:not(.ppm-root *) {
   outline: 2px solid var(--green);
   outline-offset: 2px;
+  border-radius: 6px;
 }
 
 main {
@@ -105,6 +115,52 @@ code {
   text-decoration: none;
 }
 
+/* The Socket mark (Socket.tsx). */
+.socket {
+  flex: none;
+  transition: transform 150ms ease-out;
+}
+
+.socket .slot {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transition:
+    fill 200ms ease-out,
+    opacity 250ms ease-out;
+}
+
+/* Plug-in: on load, the header mark's slot fills from the bottom. */
+.brand .socket .slot {
+  animation: plug-in 400ms cubic-bezier(0.2, 0.8, 0.2, 1) 250ms both;
+}
+
+@keyframes plug-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.brand:hover .socket {
+  transform: translateY(-1px);
+}
+
+/* A leak: the lit slot breathes amber. */
+.socket[data-state="alert"] .slot {
+  fill: var(--amber);
+  animation: slot-breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes slot-breathe {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* Unplugged: the last server stopped. */
+.socket[data-state="off"] .slot {
+  opacity: 0.25;
+}
+
 .header nav {
   display: flex;
   gap: 2px;
@@ -130,7 +186,6 @@ code {
 
 .header nav a[aria-current] {
   color: var(--fg);
-  background: #ffffff17;
 }
 
 .github {
@@ -176,9 +231,31 @@ code {
   flex-direction: column;
   justify-content: center;
   max-width: 520px;
-  transform: translateY(calc(var(--d, 0) * -56px));
-  opacity: calc(1 - var(--a, 0) * 1.6);
-  filter: blur(calc(var(--a, 0) * 6px));
+}
+
+/* The section on screen fades and rises in: the heading first, then the rest. */
+.track .copy-block > * {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 160ms ease-out,
+    transform 160ms ease-out;
+}
+
+.track .copy-block[data-active] > * {
+  opacity: 1;
+  transform: none;
+  transition-duration: 240ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition-delay: 40ms;
+}
+
+.track .copy-block[data-active] > :is(h1, h2) {
+  transition-delay: 0ms;
+}
+
+.track .copy-block[data-active] > :is(.lede, .install) {
+  transition-delay: 70ms;
 }
 
 .stage-right {
@@ -277,9 +354,49 @@ code {
   font-size: 15px;
 }
 
+.button {
+  transition:
+    transform 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
 .button:hover {
   text-decoration: none;
   background: #ffffff0d;
+  border-color: #ffffff2e;
+  transform: translateY(-1px);
+}
+
+.button:active {
+  transform: none;
+}
+
+.header nav a,
+.github,
+.tabs button,
+.segmented button,
+.command button,
+.reset,
+footer nav a,
+.others a {
+  transition:
+    color 150ms ease-out,
+    background-color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
+.github:hover,
+.command button:hover,
+.reset:hover {
+  text-decoration: none;
+  background: #ffffff14;
+  color: var(--fg);
+}
+
+.tabs button:hover,
+.segmented button:hover {
+  color: var(--fg);
 }
 
 .button.primary {
@@ -366,8 +483,42 @@ code {
 
 .tabs button[aria-selected="true"],
 .segmented button[aria-checked="true"] {
-  background: #ffffff1c;
   color: var(--fg);
+}
+
+/* Sliding pills (pill.ts): the selected item's box, drawn behind the items. */
+[data-pill] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-pill]::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--pill-w);
+  transform: translateX(var(--pill-x));
+  border-radius: 7px;
+  background: #ffffff1c;
+}
+
+[data-pill="off"]::before {
+  opacity: 0;
+}
+
+.header nav[data-pill]::before {
+  border-radius: 999px;
+  background: #ffffff17;
+}
+
+[data-pill-ready]::before {
+  transition:
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 150ms;
 }
 
 .install-label {
@@ -409,12 +560,99 @@ code {
 
 .command button {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 3px 9px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #ffffff0a;
   color: var(--muted);
   font-size: 12px;
+}
+
+.command button[data-copied] {
+  color: var(--green);
+}
+
+/* The copy icon morphs into a check. */
+.copy-icon > * {
+  transform-origin: 7px 7px;
+  transition:
+    opacity 160ms ease-out,
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.icon-check {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+[data-copied] .icon-copy {
+  opacity: 0;
+  transform: scale(0.6);
+}
+
+[data-copied] .icon-check {
+  opacity: 1;
+  transform: none;
+}
+
+/* The app's one-line install. */
+.command[data-primary] {
+  margin-top: 18px;
+  padding: 12px 10px 12px 16px;
+  border-color: #7fd89d40;
+  background: #7fd89d0d;
+}
+
+.command[data-primary] code {
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.command[data-primary] code span {
+  color: var(--green);
+}
+
+.downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.button.download {
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 14px;
+}
+
+.download-detail {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.others {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+
+.others span {
+  color: var(--faint);
+}
+
+.others a {
+  color: var(--muted);
+}
+
+.others a:hover {
+  color: var(--fg);
 }
 
 /* ─── Controls above the stage ───────────────────────── */
@@ -444,6 +682,16 @@ code {
 
 .controls .machines [role="tablist"] {
   padding: 0;
+}
+
+.controls .machines [role="tablist"][data-pill]::before {
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+}
+
+.controls .machines [role="tab"][aria-selected="true"] {
+  background: transparent;
 }
 
 .controls .machines [role="tab"] {
@@ -498,6 +746,8 @@ code {
   position: absolute;
   inset: 0;
   z-index: -1;
+  opacity: 0;
+  transition: opacity 240ms ease-out;
   background:
     radial-gradient(70% 60% at 22% 30%, color-mix(in oklab, var(--glow) 26%, transparent), transparent 70%),
     radial-gradient(60% 60% at 90% 100%, color-mix(in oklab, var(--glow) 12%, transparent), transparent 70%),
@@ -513,20 +763,82 @@ code {
   mask-image: linear-gradient(115deg, #000 10%, transparent 60%);
 }
 
-.screen[data-os="macos"] {
+.wallpaper[data-active] {
+  opacity: 1;
+}
+
+.wallpaper[data-wall="macos"] {
   --wall: linear-gradient(160deg, #1c2a25 0%, #0f1512 55%, #121a20 100%);
 }
 
-.screen[data-os="windows"] {
+.wallpaper[data-wall="windows"] {
   --wall: radial-gradient(120% 90% at 70% 120%, #173a5c 0%, #0c1a2a 50%, #0a0f16 100%);
 }
 
-.screen[data-os="linux"] {
+.wallpaper[data-wall="linux"] {
   --wall: linear-gradient(170deg, #241a26 0%, #16121a 55%, #141512 100%);
 }
 
+/* Switching OS: the new chrome fades in, and the popover slides out of the tray. */
+.menubar,
+.topbar,
+.taskbar {
+  animation: fade-in 220ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.popover-slot {
+  animation: from-tray 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes from-tray {
+  from {
+    opacity: 0;
+    translate: 0 var(--from, -10px);
+  }
+}
+
+.screen[data-os="windows"] .popover-slot {
+  --from: 10px;
+}
+
+/* The tray count rolls in when it changes. */
+.tray-count {
+  display: inline-block;
+  animation: roll-in 200ms ease-out;
+}
+
+@keyframes roll-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+}
+
+/* Live demo data: the memory bar's segments resize smoothly. */
+.screen [aria-label="Memory by server"] > button {
+  transition:
+    flex-grow 250ms ease-out,
+    opacity 100ms;
+}
+
+/* The leaking server's dots breathe. */
+.screen [style*="0 0 5px var(--ppm-warn)"] {
+  animation: breathe 1.8s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.45;
+  }
+}
+
 .tray {
-  --ppm-warn: var(--amber);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -809,6 +1121,28 @@ code {
   font-size: 12px;
 }
 
+/* A faint terminal on the left of the desktop, where the servers were started. */
+.backdrop {
+  position: absolute;
+  top: 64px;
+  left: 28px;
+  width: 440px;
+  height: 330px;
+  opacity: 0.35;
+  pointer-events: none;
+  user-select: none;
+}
+
+.screen[data-os="windows"] .backdrop {
+  top: 32px;
+}
+
+.backdrop .terminal-body {
+  display: block;
+  overflow: hidden;
+  font-size: 12.5px;
+}
+
 /* Native materials: vibrancy on macOS, Mica-ish on Windows, solid on GNOME. */
 .screen[data-os="macos"] .ppm-root {
   --ppm-tint: 72%;
@@ -917,23 +1251,50 @@ code {
   background: #28c840;
 }
 
+/* Windows Terminal: tabs on the title bar, window controls on the right. */
 .terminal[data-os="windows"] .terminal-bar {
   justify-content: flex-start;
-  padding-left: 14px;
+  align-items: flex-end;
+  padding-left: 8px;
   background: #202020;
 }
 
-.terminal[data-os="windows"] .lights,
+.wt-tab {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  min-width: 150px;
+  padding: 0 14px;
+  border-radius: 8px 8px 0 0;
+  background: #121412;
+  color: #e8e8e8;
+}
+
+.wt-new {
+  align-self: center;
+  padding: 0 12px;
+  color: #aaa;
+  font-size: 15px;
+}
+
+.wt-controls {
+  display: flex;
+  align-self: stretch;
+  margin-left: auto;
+}
+
+.wt-controls i {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  font-style: normal;
+  font-size: 11px;
+  color: #ccc;
+}
+
 .terminal[data-os="linux"] .lights {
   left: auto;
   right: 12px;
-}
-
-.terminal[data-os="windows"] .lights i {
-  width: 10px;
-  height: 1.5px;
-  border-radius: 0;
-  background: #ccc;
 }
 
 .terminal[data-os="linux"] .terminal-bar {
@@ -1077,9 +1438,6 @@ footer nav a {
 
 .stacked .copy-block {
   position: static;
-  transform: none;
-  opacity: 1;
-  filter: none;
   margin-bottom: 28px;
 }
 
@@ -1108,17 +1466,23 @@ footer nav a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  main {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 
-  .copy-block {
+  body::before {
     transform: none;
-    filter: none;
   }
 
-  .cursor {
-    animation: none;
+  .track .copy-block > * {
+    transform: none;
+  }
+
+  .button:hover {
+    transform: none;
   }
 }
 

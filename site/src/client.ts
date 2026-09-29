@@ -14,7 +14,7 @@ export type DemoClient = PpmClient & {
   only(machineId: string): PpmClient;
 };
 
-const TICK = 3000;
+const TICK = 2000;
 
 /** Moves every server's history forward one scan, with a little noise, like a live sidecar. */
 function tick(snapshot: Snapshot): Snapshot {

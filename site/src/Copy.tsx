@@ -1,66 +1,128 @@
 import type { Os } from "@ppm/protocol";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { usePill } from "./pill.ts";
 import { OS_NAMES, RELEASES, REPO, type SectionId } from "./sections.ts";
 
 const RAW = "https://github.com/greenfield-inc/port-process-manager/releases/latest/download";
 
-/** Install commands from the README, per OS. */
-const INSTALL: Record<Os, { app: { label: string; command?: string; note: string }; cli: string[] }> = {
-  macos: {
-    app: { label: "macOS 13 or later", command: "brew install --cask greenfield-inc/tap/port-process-manager", note: "Or download the .dmg. Signed and notarized." },
-    cli: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/ppm"],
-  },
-  windows: {
-    app: { label: "Windows 10 and 11", command: "winget install Greenfield.PortProcessManager", note: "Or download the .msi. Signed." },
-    cli: [`irm ${RAW}/install.ps1 | iex`, "npx port-process-manager"],
-  },
-  linux: {
-    app: { label: "Linux (x86_64)", note: "Download the .deb, .rpm or .AppImage. On GNOME, the tray icon needs the AppIndicator extension." },
-    cli: [`curl -fsSL ${RAW}/install.sh | sh`, "npx port-process-manager"],
-  },
+/** The one-line app install, served from the site root. */
+const APP_COMMAND: Record<Os, string> = {
+  macos: `curl -fsSL ${__SITE_URL__}install.sh | sh`,
+  windows: `irm ${__SITE_URL__}install.ps1 | iex`,
+  linux: `curl -fsSL ${__SITE_URL__}install.sh | sh`,
 };
 
-function Command({ text }: { text: string }) {
+/** CLI-only installs from the README. */
+const CLI_COMMANDS: Record<Os, string[]> = {
+  macos: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/ppm"],
+  windows: [`irm ${RAW}/install.ps1 | iex`, "npx port-process-manager"],
+  linux: [`curl -fsSL ${RAW}/install.sh | sh`, "npx port-process-manager"],
+};
+
+type Download = { id: string; os: Os; label: string; detail: string; arch: "aarch64" | "x86_64"; ext: string };
+
+/** Release files, as the release workflow names them. */
+const DOWNLOADS: Download[] = [
+  { id: "mac-arm", os: "macos", label: "macOS", detail: "Apple Silicon", arch: "aarch64", ext: "dmg" },
+  { id: "mac-intel", os: "macos", label: "macOS", detail: "Intel", arch: "x86_64", ext: "dmg" },
+  { id: "windows", os: "windows", label: "Windows", detail: ".msi", arch: "x86_64", ext: "msi" },
+  { id: "appimage", os: "linux", label: "Linux", detail: ".AppImage", arch: "x86_64", ext: "AppImage" },
+  { id: "deb", os: "linux", label: "Linux", detail: ".deb", arch: "x86_64", ext: "deb" },
+  { id: "rpm", os: "linux", label: "Linux", detail: ".rpm", arch: "x86_64", ext: "rpm" },
+];
+
+const href = ({ arch, ext }: Download) => `${RAW}/port-process-manager-${__PPM_VERSION__}-${arch}.${ext}`;
+
+/**
+ * Apple Silicon unless the browser says Intel. Chromium tells through
+ * userAgentData; Safari and Firefox report every Mac as Intel, so they get the default.
+ */
+function useIntelMac() {
+  const [intel, setIntel] = useState(false);
+  useEffect(() => {
+    const data = (navigator as { userAgentData?: { getHighEntropyValues(hints: string[]): Promise<{ architecture?: string }> } }).userAgentData;
+    data
+      ?.getHighEntropyValues(["architecture"])
+      .then((values) => setIntel(values.architecture === "x86"))
+      .catch(() => {});
+  }, []);
+  return intel;
+}
+
+const CopyIcon = () => (
+  <svg className="copy-icon" width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+    <g className="icon-copy">
+      <rect x="4.5" y="4.5" width="8" height="8" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M9.5 2.8V2.6A1.6 1.6 0 0 0 7.9 1H3A2 2 0 0 0 1 3v4.9a1.6 1.6 0 0 0 1.6 1.6h.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    </g>
+    <path className="icon-check" d="M2.5 7.4 5.6 10.4 11.5 3.8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
+function Command({ text, primary = false }: { text: string; primary?: boolean }) {
   const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const copy = () => {
     void navigator.clipboard?.writeText(text).then(() => {
       setCopied(true);
-      setTimeout(() => setCopied(false), 1400);
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 1500);
     });
   };
   return (
-    <div className="command">
+    <div className="command" data-primary={primary || undefined}>
       <code>
         <span aria-hidden>$ </span>
         {text}
       </code>
-      <button type="button" onClick={copy} aria-label={`Copy ${text}`}>
-        {copied ? "Copied" : "Copy"}
+      <button type="button" onClick={copy} data-copied={copied || undefined} aria-label={copied ? "Copied" : `Copy ${text}`}>
+        <CopyIcon />
+        <span aria-live="polite">{copied ? "Copied" : "Copy"}</span>
       </button>
     </div>
   );
 }
 
 function Install({ os, onOs }: { os: Os; onOs: (os: Os) => void }) {
-  const { app, cli } = INSTALL[os];
+  const intel = useIntelMac();
+  const primary = os === "macos" ? [intel ? "mac-intel" : "mac-arm"] : os === "windows" ? ["windows"] : ["appimage", "deb"];
+  const files = DOWNLOADS.filter((file) => primary.includes(file.id));
+  const others = DOWNLOADS.filter((file) => !primary.includes(file.id));
   return (
     <div className="install">
-      <div role="tablist" aria-label="Operating system" className="tabs">
+      <div ref={usePill(os)} role="tablist" aria-label="Operating system" className="tabs">
         {(Object.keys(OS_NAMES) as Os[]).map((name) => (
           <button key={name} type="button" role="tab" aria-selected={name === os} onClick={() => onOs(name)}>
             {OS_NAMES[name]}
           </button>
         ))}
       </div>
-      <p className="install-label">
-        Desktop app · {app.label} · <a href={RELEASES}>Releases</a>
+      <Command text={APP_COMMAND[os]} primary />
+      <div className="downloads">
+        {files.map((file) => (
+          <a key={file.id} className="button download" href={href(file)}>
+            <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+              <path d="M7 1.5v8M3.5 6.5 7 10l3.5-3.5M2 12.5h10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            Download .{file.ext}
+            {file.os === "macos" && <span className="download-detail">{file.detail}</span>}
+          </a>
+        ))}
+      </div>
+      <p className="note">The command downloads the app, installs it and opens it, without the unsigned-app prompt a browser download shows.</p>
+      <p className="others">
+        <span>Other platforms</span>
+        {others.map((file) => (
+          <a key={file.id} href={href(file)}>
+            {file.label} {file.detail}
+          </a>
+        ))}
+        <a href={RELEASES}>All releases</a>
       </p>
-      {app.command && <Command text={app.command} />}
-      <p className="note">{app.note}</p>
       <p className="install-label">
         CLI only · also npm, PyPI and cargo, <a href={`${REPO}#cli-only`}>see all</a>
       </p>
-      {cli.map((text) => (
+      {CLI_COMMANDS[os].map((text) => (
         <Command key={text} text={text} />
       ))}
     </div>

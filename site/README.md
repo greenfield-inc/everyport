@@ -10,6 +10,8 @@ pnpm --filter @ppm/site og       # renders og.html to public/og.png
 
 `.github/workflows/pages.yml` builds and deploys it on every push to `main` that changes the site, `@ppm/ui` or `@ppm/protocol`.
 
+The install section's one-line command fetches `install.sh` and `install.ps1` from the site root. They come from `scripts/install-app.sh` and `scripts/install-app.ps1`. Direct downloads link to the release files for the version in `Cargo.toml`.
+
 `public/og.png` is the social preview for the site and for the GitHub repository (Settings, Social preview).
 
 ## Moving to a custom domain

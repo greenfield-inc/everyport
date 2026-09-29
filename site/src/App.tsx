@@ -4,17 +4,12 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState, useSyncEx
 import { demoClient } from "./client.ts";
 import { Credit, SectionCopy } from "./Copy.tsx";
 import { cliName, demoMachines, LOCAL } from "./machines.ts";
+import { usePill } from "./pill.ts";
 import { Screen } from "./Screen.tsx";
+import { Socket } from "./Socket.tsx";
 import { OS_NAMES, REPO, SECTIONS, type SectionId, visitorOs } from "./sections.ts";
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-// Each section holds still for most of its scroll distance, then moves quickly to the next.
-const HOLD = 0.3;
-const eased = (progress: number) => {
-  const base = Math.floor(progress);
-  return base + ease(clamp((progress - base - HOLD) / (1 - 2 * HOLD), 0, 1));
-};
 
 function useMedia(query: string) {
   return useSyncExternalStore(
@@ -46,28 +41,15 @@ function useFit(width: number, height = 0) {
 function Brand() {
   return (
     <a className="brand" href="#" onClick={() => scrollTo({ top: 0 })}>
-      <DotGridMark />
+      <Socket size={22} accent="var(--green)" />
       Port Process Manager
     </a>
   );
 }
 
-/** The logo: the tray icon's grid with the colon lit green. */
-function DotGridMark() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 25 25" aria-hidden>
-      {Array.from({ length: 25 }, (_, index) => {
-        const [row, col] = [Math.floor(index / 5), index % 5];
-        const lit = col === 2 && (row === 1 || row === 3);
-        return <circle key={index} cx={col * 5 + 2.5} cy={row * 5 + 2.5} r="1.8" fill={lit ? "var(--green)" : "#ffffff40"} />;
-      })}
-    </svg>
-  );
-}
-
 function OsSwitcher({ os, onOs }: { os: Os; onOs: (os: Os) => void }) {
   return (
-    <div role="radiogroup" aria-label="Operating system" className="segmented">
+    <div ref={usePill(os)} role="radiogroup" aria-label="Operating system" className="segmented">
       {(Object.keys(OS_NAMES) as Os[]).map((name) => (
         <button key={name} type="button" role="radio" aria-checked={name === os} onClick={() => onOs(name)}>
           {OS_NAMES[name]}
@@ -83,9 +65,11 @@ function Controls({ os, onOs, machines, machine, onMachine, changed, onReset }: 
   return (
     <div className="controls">
       <OsSwitcher os={os} onOs={onOs} />
-      <Themed appearance="dark" className="machines">
-        <MachineSwitcher machines={machines} current={machine} onSelect={onMachine} />
-      </Themed>
+      <div ref={usePill(`${machine}-${machines.length}`, "[role=tablist]")} className="machines">
+        <Themed appearance="dark">
+          <MachineSwitcher machines={machines} current={machine} onSelect={onMachine} />
+        </Themed>
+      </div>
       <p className="cli-line">
         <code>
           <span aria-hidden>$ </span>ppm {name ? `--on ${name} ` : ""}list
@@ -127,6 +111,17 @@ export function App() {
   const [override, setOverride] = useState<{ section: number; port: number } | null>(null);
   const [picked, setPicked] = useState(false);
   const desk = useMedia("(min-width: 900px) and (min-aspect-ratio: 1/1)");
+
+  // The background grid moves a little slower than the page.
+  useEffect(() => {
+    let frame = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => document.documentElement.style.setProperty("--scroll", String(Math.round(scrollY))));
+    };
+    addEventListener("scroll", onScroll, { passive: true });
+    return () => removeEventListener("scroll", onScroll);
+  }, []);
 
   const changeOs = (next: Os) => {
     const nextMachines = demoMachines(next);
@@ -203,11 +198,12 @@ export function App() {
 }
 
 function Header({ active, onNavigate }: { active?: number; onNavigate?: (id: SectionId) => void }) {
+  const pill = usePill(active);
   return (
     <header className="header">
       <Brand />
       {onNavigate && (
-        <nav aria-label="Sections">
+        <nav ref={pill} aria-label="Sections">
           {SECTIONS.map((section, index) => (
             <a
               key={section.id}
@@ -256,15 +252,12 @@ function Desk({
     let frame = 0;
     const update = () => {
       frame = 0;
-      const progress = clamp(-element.getBoundingClientRect().top / innerHeight, 0, SECTIONS.length - 1);
-      const position = reducedMotion() ? Math.round(progress) : eased(progress);
+      const active = Math.round(clamp(-element.getBoundingClientRect().top / innerHeight, 0, SECTIONS.length - 1));
       blocks.forEach((block, index) => {
-        const distance = position - index;
-        block.style.setProperty("--d", distance.toFixed(4));
-        block.style.setProperty("--a", Math.min(1, Math.abs(distance)).toFixed(4));
-        block.inert = Math.abs(distance) > 0.5;
+        block.toggleAttribute("data-active", index === active);
+        block.inert = index !== active;
       });
-      setActive(Math.round(progress));
+      setActive(active);
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(update);
