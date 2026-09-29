@@ -3,6 +3,10 @@
 //! command line, cwd and environment. A process we can't open (elevated or
 //! protected) still shows with its port and name.
 
+mod console;
+
+pub use console::run_helper;
+
 use super::{Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
@@ -211,7 +215,8 @@ impl Platform for Windows {
     }
 
     /// Graceful stop closes the process's windows. A console process has no
-    /// window of its own, so it is terminated, as Node's `process.kill` does.
+    /// window of its own, so it is terminated, as Node's `process.kill` does,
+    /// unless `interrupt` already sent its console a Ctrl+C.
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()> {
         // Holding the handle keeps the pid from being reused until we're done.
         let process = Process::open(
@@ -229,6 +234,10 @@ impl Platform for Windows {
         }
         unsafe { TerminateProcess(*process.0, 1) }?;
         Ok(())
+    }
+
+    fn interrupt(&self, tree: &[ProcRef]) -> Vec<ProcRef> {
+        console::interrupt(tree)
     }
 }
 

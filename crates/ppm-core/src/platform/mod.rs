@@ -56,6 +56,14 @@ pub trait Platform: Send + Sync {
     /// Terminate (or kill, with `force`) one process. Must return an error,
     /// without signalling, when `target.started_at` no longer matches.
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()>;
+    /// Asks a whole tree to exit the way its terminal would, for a platform
+    /// whose terminate isn't graceful (Ctrl+C on a Windows console). `tree`
+    /// is every process being stopped. Returns the ones it reached: the
+    /// engine terminates only the rest, and kills what is left after its
+    /// grace period.
+    fn interrupt(&self, _tree: &[ProcRef]) -> Vec<ProcRef> {
+        Vec::new()
+    }
     /// Established inbound TCP connections, counted by local port, or `None`
     /// when unknown. The engine uses them to tell an idle server from one in
     /// use, and never calls a server idle while they are unknown.
@@ -107,6 +115,13 @@ pub fn native() -> Box<dyn Platform> {
     return Box::new(linux::Linux::new());
     #[cfg(windows)]
     return Box::new(windows::Windows::new());
+}
+
+/// Runs this process as a platform helper, and exits, when ppm started it as
+/// one. A binary that stops servers through `native()` calls it first in `main`.
+pub fn run_helper() {
+    #[cfg(windows)]
+    windows::run_helper();
 }
 
 #[cfg(test)]

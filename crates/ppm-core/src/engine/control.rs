@@ -136,10 +136,15 @@ impl Engine {
         Ok(Table::new(processes))
     }
 
-    /// Signals each target. One that exited or was replaced meanwhile is
-    /// skipped; a refusal (another user's process) is an error.
+    /// Signals each target the platform didn't interrupt. One that exited or
+    /// was replaced meanwhile is skipped; a refusal (another user's process)
+    /// is an error.
     fn signal(&self, targets: &[ProcRef], force: bool) -> Result<(), String> {
-        for target in targets {
+        let interrupted = match force {
+            true => Vec::new(),
+            false => self.platform.interrupt(targets),
+        };
+        for target in targets.iter().filter(|t| !interrupted.contains(t)) {
             match self.platform.signal(*target, force) {
                 Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
                     return Err(format!("not allowed to stop pid {}: {e}", target.pid));
@@ -204,11 +209,12 @@ fn shell(command: &str) -> Command {
 #[cfg(windows)]
 fn shell(command: &str) -> Command {
     use std::os::windows::process::CommandExt;
-    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+    // Its own hidden console, so Ctrl+C meant for ppm doesn't reach it, and
+    // a stop can send it one.
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     let mut shell = Command::new("cmd");
     shell
         .raw_arg(format!("/d /s /c \"{command}\""))
-        .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+        .creation_flags(CREATE_NO_WINDOW);
     shell
 }

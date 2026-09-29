@@ -210,7 +210,7 @@ Scan now and send a fresh snapshot, even if nothing changed.
 
 ### stop
 
-Stop a server's process tree, deepest processes first. `ppm` asks each process to quit, and kills whatever is left after 3 s. With `force: true`, it kills at once. On macOS and Linux, asking is SIGTERM and killing is SIGKILL. On Windows, asking closes the process's windows, and killing terminates it. `port` is the server's port, and `root` must be the server's `root` from the snapshot. `ppm` checks every process's start time first, so it never signals a process whose pid was reused.
+Stop a server's process tree, deepest processes first. `ppm` asks each process to quit, and kills whatever is left after 3 s. With `force: true`, it kills at once. On macOS and Linux, asking is SIGTERM and killing is SIGKILL. On Windows, asking sends Ctrl+C to the server's console when only the server and the shells that launched it are on that console. Otherwise it closes the process's windows, or terminates a process that has none. Killing terminates it. `port` is the server's port, and `root` must be the server's `root` from the snapshot. `ppm` checks every process's start time first, so it never signals a process whose pid was reused.
 
 ```json
 { "id": 2, "method": "stop", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "force": false } }
