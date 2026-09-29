@@ -52,27 +52,35 @@ fn utf16le(bytes: &[u8]) -> String {
     String::from_utf16_lossy(&units)
 }
 
-/// Removes the servers from a Windows snapshot that WSL relays for a distro,
+/// Removes the ports from a Windows snapshot that WSL relays for a distro,
 /// so each shows once, under its distro with its Linux process tree.
 ///
-/// A Windows server goes when a distro reports its port and its owner is a
-/// WSL process, or `svchost`, which can own the port in mirrored networking.
+/// A Windows port goes when a distro reports it and its owner is a WSL
+/// process, or `svchost`, which can own the port in mirrored networking.
 /// A Windows program that shares a port with a distro stays.
 pub fn dedupe(windows: &mut Snapshot, distros: &[&Snapshot]) {
-    windows.servers.retain(|server| {
-        let name = server.process_name.to_ascii_lowercase();
-        let relayed =
-            is_wsl_owner(&name) || name.strip_suffix(".exe").unwrap_or(&name) == "svchost";
-        !relayed
-            || !distros
+    let relayed = |name: &str, port: u16| {
+        let name = name.to_ascii_lowercase();
+        (is_wsl_owner(&name) || name.strip_suffix(".exe").unwrap_or(&name) == "svchost")
+            && distros
                 .iter()
-                .any(|d| d.servers.iter().any(|s| s.port == server.port))
+                .any(|d| d.servers.iter().any(|s| s.port == port))
+    };
+    windows
+        .servers
+        .retain(|server| !relayed(&server.process_name, server.port));
+    windows.other_ports.retain(|other| {
+        !other
+            .process_name
+            .as_deref()
+            .is_some_and(|name| relayed(name, other.port))
     });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ppm_core::protocol::OtherPort;
 
     fn fixture() -> Snapshot {
         serde_json::from_str(include_str!(
@@ -98,7 +106,15 @@ mod tests {
         // Windows sees Ubuntu's :3000 through wslrelay.exe and :5173 through
         // svchost (mirrored networking). Its own node.exe on :3001 shares a
         // port with Ubuntu, and :6006 is relayed for no connected distro.
+        // Mirrored networking's svchost can also run as a service account,
+        // so :5173 can come as another user's port too.
         let mut windows = fixture();
+        windows.other_ports.push(OtherPort {
+            port: 5173,
+            addresses: vec!["0.0.0.0".into()],
+            owner: Some("SYSTEM".into()),
+            process_name: Some("svchost.exe".into()),
+        });
         for (port, owner) in [
             (3000, "wslrelay.exe"),
             (3001, "node.exe"),
@@ -124,5 +140,7 @@ mod tests {
         dedupe(&mut windows, &[&empty, &ubuntu]);
         let left: Vec<u16> = windows.servers.iter().map(|s| s.port).collect();
         assert_eq!(left, [3001, 6006, 8000]);
+        let others: Vec<u16> = windows.other_ports.iter().map(|o| o.port).collect();
+        assert_eq!(others, [631, 5432]);
     }
 }
