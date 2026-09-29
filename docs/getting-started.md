@@ -8,10 +8,10 @@ To install both with one command:
 
 ```bash
 curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh          # macOS and Linux
-irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex               # Windows PowerShell
+irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex               # Windows (PowerShell)
 ```
 
-Or pick one:
+Or install each one separately:
 
 | | Desktop app | CLI |
 |---|---|---|
