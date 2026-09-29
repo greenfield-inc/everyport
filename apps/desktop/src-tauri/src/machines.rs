@@ -505,7 +505,9 @@ impl Machines {
     }
 
     /// This computer's snapshot, without the ports WSL relays for a distro
-    /// that shows them itself.
+    /// that shows them itself, or the app's own forwards to other machines,
+    /// which belong to the remote server (and stopping one would stop the
+    /// app or its ssh tunnel).
     fn show_local(&mut self) {
         let distros: Vec<&Snapshot> = self
             .entries
@@ -518,6 +520,12 @@ impl Machines {
             .and_then(|e| e.raw.clone())
             .map(|mut raw| {
                 ppm_client::wsl::dedupe(&mut raw, &distros);
+                raw.servers.retain(|server| {
+                    !self
+                        .forwards
+                        .iter()
+                        .any(|((id, _), f)| id != LOCAL && f.local_port == server.port)
+                });
                 raw
             });
         if let Some(entry) = self.entries.iter_mut().find(|e| e.machine.id == LOCAL) {
@@ -643,7 +651,11 @@ pub async fn url(app: &AppHandle, machine_id: &str, port: u16) -> Result<String,
         .map_err(|e| format!("{e:#}"))?;
     let url = forward.url.clone();
     eprintln!("machine {machine_id}: :{port} opens at {url}");
-    machines(app).forwards.insert(key, forward);
+    let mut all = machines(app);
+    all.forwards.insert(key, forward);
+    all.show_local();
+    drop(all);
+    changed(app);
     Ok(url)
 }
 
