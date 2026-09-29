@@ -5,6 +5,7 @@
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
 use std::io;
+use std::net::IpAddr;
 
 /// A TCP socket in LISTEN state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +114,27 @@ pub fn is_wsl_owner(process_name: &str) -> bool {
         name.strip_suffix(".exe").unwrap_or(&name),
         "wslrelay" | "wslhost" | "wslservice"
     )
+}
+
+/// Counts established TCP sockets by local port, keeping the ones a listener
+/// accepted: on its port, at its address or under an unspecified one. An
+/// outgoing connection on another address can use the same port number.
+fn inbound_connections(
+    listening: &[(IpAddr, u16)],
+    established: impl IntoIterator<Item = (IpAddr, u16)>,
+) -> HashMap<u16, u32> {
+    let mut counts = HashMap::new();
+    for (address, port) in established {
+        let address = address.to_canonical();
+        let accepted = listening.iter().any(|&(listener, listening_port)| {
+            listening_port == port
+                && (listener.is_unspecified() || listener.to_canonical() == address)
+        });
+        if accepted {
+            *counts.entry(port).or_default() += 1;
+        }
+    }
+    counts
 }
 
 #[cfg(target_os = "linux")]

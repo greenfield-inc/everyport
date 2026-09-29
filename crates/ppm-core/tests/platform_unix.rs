@@ -155,17 +155,21 @@ fn another_users_listener_shows_port_and_owner() {
     assert!(listed.iter().all(|l| l.port != port), "{listed:?}");
 }
 
+/// An outgoing connection on another address can share the listener's port
+/// number, as the CI runner's own connections did. It is not an inbound one.
 #[test]
 fn connections_count_accepted_sockets_by_local_port() {
-    let server = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = server.local_addr().unwrap().port();
+    let elsewhere = TcpListener::bind("[::1]:0").unwrap();
+    let outgoing = TcpStream::connect(elsewhere.local_addr().unwrap()).unwrap();
+    let port = outgoing.local_addr().unwrap().port();
+    let server = TcpListener::bind(("127.0.0.1", port)).unwrap();
     let clients: Vec<TcpStream> = (0..2)
         .map(|_| TcpStream::connect(("127.0.0.1", port)).unwrap())
         .collect();
     let accepted: Vec<TcpStream> = (0..2).map(|_| server.accept().unwrap().0).collect();
 
     let counts = native().connections().expect("connections are known");
-    drop((clients, accepted));
+    drop((clients, accepted, outgoing, elsewhere));
 
     assert_eq!(counts.get(&port), Some(&2));
 }

@@ -8,13 +8,16 @@ mod console;
 
 pub use console::run_helper;
 
-use super::{Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage};
+use super::{
+    inbound_connections, Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo,
+    ProcUsage,
+};
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::io;
 use std::mem::{offset_of, MaybeUninit};
-use std::net::{Ipv4Addr, Ipv6Addr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use windows::core::{Owned, BOOL, PCWSTR, PWSTR};
@@ -28,8 +31,8 @@ use windows::Win32::Foundation::{
 };
 use windows::Win32::NetworkManagement::IpHelper::{
     GetExtendedTcpTable, MIB_TCP6ROW_OWNER_PID, MIB_TCP6TABLE_OWNER_PID, MIB_TCPROW_OWNER_PID,
-    MIB_TCPTABLE_OWNER_PID, MIB_TCP_STATE_ESTAB, TCP_TABLE_CLASS, TCP_TABLE_OWNER_PID_CONNECTIONS,
-    TCP_TABLE_OWNER_PID_LISTENER,
+    MIB_TCPTABLE_OWNER_PID, MIB_TCP_STATE_ESTAB, MIB_TCP_STATE_LISTEN, TCP_TABLE_CLASS,
+    TCP_TABLE_OWNER_PID_ALL, TCP_TABLE_OWNER_PID_LISTENER,
 };
 use windows::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6};
 use windows::Win32::Security::{
@@ -169,19 +172,29 @@ impl Platform for Windows {
     }
 
     fn connections(&self) -> Option<HashMap<u16, u32>> {
-        let class = TCP_TABLE_OWNER_PID_CONNECTIONS;
+        let class = TCP_TABLE_OWNER_PID_ALL;
         let v4 = tcp_table::<MIB_TCPROW_OWNER_PID>(AF_INET, class).ok()?;
         let v6 = tcp_table::<MIB_TCP6ROW_OWNER_PID>(AF_INET6, class).ok()?;
-        let established = v4
+        let sockets = v4
             .into_iter()
-            .map(|row| (row.dwState, row.dwLocalPort))
-            .chain(v6.into_iter().map(|row| (row.dwState, row.dwLocalPort)))
-            .filter(|&(state, _)| state == MIB_TCP_STATE_ESTAB.0 as u32);
-        let mut counts = HashMap::new();
-        for (_, local_port) in established {
-            *counts.entry(port(local_port)).or_default() += 1;
+            .map(|row| {
+                let address = Ipv4Addr::from(row.dwLocalAddr.to_ne_bytes()).into();
+                (row.dwState, address, row.dwLocalPort)
+            })
+            .chain(v6.into_iter().map(|row| {
+                let address = Ipv6Addr::from(row.ucLocalAddr).into();
+                (row.dwState, address, row.dwLocalPort)
+            }));
+        let (mut listening, mut established) = (Vec::new(), Vec::new());
+        for (state, address, local_port) in sockets {
+            let socket: (IpAddr, u16) = (address, port(local_port));
+            if state == MIB_TCP_STATE_LISTEN.0 as u32 {
+                listening.push(socket);
+            } else if state == MIB_TCP_STATE_ESTAB.0 as u32 {
+                established.push(socket);
+            }
         }
-        Some(counts)
+        Some(inbound_connections(&listening, established))
     }
 
     fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {
