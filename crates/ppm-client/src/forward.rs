@@ -49,7 +49,7 @@ pub async fn forward(connection: &Connection, port: u16) -> anyhow::Result<Forwa
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     #[cfg(windows)]
-    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    command.creation_flags(remote::CREATE_NO_WINDOW);
     let mut child = command
         .spawn()
         .with_context(|| format!("Couldn't run {}", argv[0]))?;

@@ -50,7 +50,7 @@ pub(crate) fn command(prefix: &[String], os: Os, args: &[&str]) -> Command {
 
 /// Keeps a console window from flashing up for each child of the desktop app.
 #[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn quote(arg: &str, os: Os) -> String {
     let plain = |c: char| c.is_ascii_alphanumeric() || "_-./:=@%+,".contains(c);
