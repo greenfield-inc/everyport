@@ -96,3 +96,15 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.build == 'true') }}
     uses: ./.github/workflows/build.yml
+
+  # The one required check. Skipped jobs pass, so docs-only PRs don't wait on
+  # jobs that never run.
+  result:
+    name: CI result
+    needs: [changes, check, rust, crates, build]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
