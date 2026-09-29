@@ -120,7 +120,7 @@ pub struct Server {
     pub clean_up: Option<CleanUpReason>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct ProcRef {
     pub pid: u32,
