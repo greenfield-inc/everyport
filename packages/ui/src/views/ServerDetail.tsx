@@ -28,26 +28,34 @@ export function ServerDetail({ ctx, server, onBack }: Props) {
 
 function DetailHeader({ ctx, server, onBack }: Props) {
   const up = uptime(server, ctx.now);
-  const restarting = ctx.pending.get(server.port) === "restarting";
+  const pending = ctx.pending.get(server.port);
+  const restarting = pending === "restarting";
+  const error = typeof pending === "object" ? pending.error : null;
   const canRestart = server.command !== null && server.cwd_exists;
   return (
-    <div className="flex flex-col gap-2.5 px-4 pt-3 pb-4">
+    <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
       <Header title={server.project.name} onBack={onBack} />
-      <div className="flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-1.5">
+      <div className="ppm:flex ppm:items-center ppm:justify-between ppm:gap-1.5">
+        <div className="ppm:flex ppm:items-center ppm:gap-1.5">
           <Colon status={server.status} color={ctx.colorOf(server.port)} large />
-          <span className="selectable font-mono text-28 font-medium text-fg">{server.port}</span>
+          <span className="selectable ppm:font-mono ppm:text-28 ppm:font-medium ppm:text-fg">{server.port}</span>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="font-mono text-13 text-fg3">{restarting ? "restarting…" : up === null ? "" : `up ${duration(up)}`}</span>
-          <div className="flex gap-1.5">
+        <div className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-2.5">
+          {error ? (
+            <span className="ppm:clamp-1 ppm:text-11 ppm:text-danger" title={error}>
+              {error}
+            </span>
+          ) : (
+            <span className="ppm:font-mono ppm:text-13 ppm:text-fg3">{restarting ? "restarting…" : up === null ? "" : `up ${duration(up)}`}</span>
+          )}
+          <div className="ppm:flex ppm:gap-1.5">
             <button
               type="button"
               aria-label="Restart"
               title={server.agent ? `Restart. It runs outside the ${agentName[server.agent.kind]} session.` : "Restart with the same command"}
               disabled={!canRestart || restarting}
               onClick={() => ctx.restart(server)}
-              className="flex size-[26px] shrink-0 items-center justify-center rounded-[7px] bg-accent text-fg disabled:opacity-40"
+              className="ppm:flex ppm:size-[26px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:bg-accent ppm:text-fg ppm:disabled:opacity-40"
             >
               <RestartIcon className={restarting ? "ppm-spin" : undefined} />
             </button>
@@ -59,7 +67,7 @@ function DetailHeader({ ctx, server, onBack }: Props) {
                 ctx.stop(server);
                 onBack();
               }}
-              className="flex size-[26px] shrink-0 items-center justify-center rounded-[7px] bg-danger/14 text-danger"
+              className="ppm:flex ppm:size-[26px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:bg-danger/14 ppm:text-danger"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
                 <rect x="2" y="2" width="8" height="8" rx="1.8" fill="currentColor" />
@@ -76,15 +84,15 @@ type Row = { label: string; value: ReactNode; title?: string };
 
 function InfoRow({ label, value, title }: Row) {
   return (
-    <div className="flex h-[30px] shrink-0 items-center gap-3" title={title}>
-      <span className="w-16 shrink-0 text-11 text-fg3">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">{value}</div>
+    <div className="ppm:flex ppm:h-[30px] ppm:shrink-0 ppm:items-center ppm:gap-3" title={title}>
+      <span className="ppm:w-16 ppm:shrink-0 ppm:text-11 ppm:text-fg3">{label}</span>
+      <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:items-center ppm:gap-1.5">{value}</div>
     </div>
   );
 }
 
 const Value = ({ children, mono = false, strong = false }: { children: ReactNode; mono?: boolean; strong?: boolean }) => (
-  <span className={`selectable clamp-1 text-13 ${mono ? "font-mono" : ""} ${strong ? "text-fg" : "text-fg2"}`}>{children}</span>
+  <span className={`selectable clamp-1 text-13 ${mono ? "ppm:font-mono" : ""} ${strong ? "ppm:text-fg" : "ppm:text-fg2"}`}>{children}</span>
 );
 
 function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
@@ -105,13 +113,13 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
           aria-haspopup="menu"
           aria-expanded={sessionMenu}
           onClick={() => setSessionMenu(true)}
-          className="flex min-w-0 flex-1 items-center gap-1.5"
+          className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:items-center ppm:gap-1.5"
         >
-          <AgentIcon kind={agent.kind} className="text-fg2" />
-          <span className="clamp-1 text-13 text-fg">{agent.title ?? agentName[agent.kind]}</span>
-          <span className="shrink-0 whitespace-pre font-mono text-13 text-fg3">{agent.id.slice(0, 8)}</span>
-          <span className="flex-1" />
-          <OpenIcon className="text-fg2" />
+          <AgentIcon kind={agent.kind} className="ppm:text-fg2" />
+          <span className="ppm:clamp-1 ppm:text-13 ppm:text-fg">{agent.title ?? agentName[agent.kind]}</span>
+          <span className="ppm:shrink-0 ppm:whitespace-pre ppm:font-mono ppm:text-13 ppm:text-fg3">{agent.id.slice(0, 8)}</span>
+          <span className="ppm:flex-1" />
+          <OpenIcon className="ppm:text-fg2" />
         </button>
       ),
     });
@@ -127,17 +135,17 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
       label: "Workspace",
       title: text,
       value: openable ? (
-        <button type="button" onClick={() => client.openWorkspace?.(machineId, server.port)} className="flex min-w-0 flex-1 items-center gap-1.5">
+        <button type="button" onClick={() => ctx.act(server, () => client.openWorkspace?.(machineId, server.port))} className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:items-center ppm:gap-1.5">
           <Value>{text}</Value>
-          <span className="flex-1" />
-          <OpenIcon className="text-fg2" />
+          <span className="ppm:flex-1" />
+          <OpenIcon className="ppm:text-fg2" />
         </button>
       ) : (
         <Value>{text}</Value>
       ),
     });
   }
-  if ((agent || project.branch) && folder) secondary.push({ label: "Folder", title: server.cwd ?? undefined, value: <Value mono>{folder}</Value> });
+  if (folder && !primary.some((row) => row.label === "Folder")) secondary.push({ label: "Folder", title: server.cwd ?? undefined, value: <Value mono>{folder}</Value> });
   if (project.framework) secondary.push({ label: "Framework", value: <Value>{project.framework}</Value> });
   if (server.command) secondary.push({ label: "Command", title: server.command, value: <Value mono>{server.command}</Value> });
   if (server.started_at !== null) secondary.push({ label: "Started", value: <Value mono>{started(server.started_at, ctx.now)}</Value> });
@@ -147,28 +155,28 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
   const menu: MenuItem[] = [];
   if (agent) {
     if (workspace?.open_url && client.openWorkspace) {
-      menu.push({ label: `Open in ${workspaceApp[workspace.kind]}`, hint: workspace.name, onSelect: () => client.openWorkspace?.(machineId, server.port) });
+      menu.push({ label: `Open in ${workspaceApp[workspace.kind]}`, hint: workspace.name, onSelect: () => ctx.act(server, () => client.openWorkspace?.(machineId, server.port)) });
     } else if (workspace && workspaceFolder && client.revealFolder) {
-      menu.push({ label: `Reveal ${workspace.name} workspace`, onSelect: () => client.revealFolder?.(machineId, workspaceFolder) });
+      menu.push({ label: `Reveal ${workspace.name} workspace`, onSelect: () => ctx.act(server, () => client.revealFolder?.(machineId, workspaceFolder)) });
     }
     if (client.resumeSession) {
-      menu.push({ label: "Resume in Terminal", hint: commandHint(agent.resume_command), onSelect: () => client.resumeSession?.(machineId, agent) });
+      menu.push({ label: "Resume in Terminal", hint: commandHint(agent.resume_command), onSelect: () => ctx.act(server, () => client.resumeSession?.(machineId, agent)) });
     }
     const transcript = agent.transcript_path;
-    if (transcript && client.revealFolder) menu.push({ label: "Show transcript", onSelect: () => client.revealFolder?.(machineId, transcript) });
+    if (transcript && client.revealFolder) menu.push({ label: "Show transcript", onSelect: () => ctx.act(server, () => client.revealFolder?.(machineId, transcript)) });
     if (menu.length) menu.push("divider");
     menu.push({ label: "Copy session ID", hint: agent.id.slice(0, 8), onSelect: () => copy(agent.id) });
   }
 
   return (
-    <div className="hairline-t relative flex flex-col px-4 py-1.5">
+    <div className="ppm:hairline-t ppm:relative ppm:flex ppm:flex-col ppm:px-4 ppm:py-1.5">
       {primary.map((row) => (
         <InfoRow key={row.label} {...row} />
       ))}
       {secondary.length > 0 && (
         <>
           <div className="ppm-grow" data-closed={!expanded || undefined} inert={!expanded}>
-            <div className="flex flex-col">
+            <div className="ppm:flex ppm:flex-col">
               {secondary.map((row) => (
                 <InfoRow key={row.label} {...row} />
               ))}
@@ -177,9 +185,9 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
           <InfoRow
             label=""
             value={
-              <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="flex items-center gap-1 text-11 text-fg3">
+              <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="ppm:flex ppm:items-center ppm:gap-1 ppm:text-11 ppm:text-fg3">
                 {expanded ? "Less" : `${secondary.length} more`}
-                <Chevron direction={expanded ? "up" : "down"} className="text-fg3" />
+                <Chevron direction={expanded ? "up" : "down"} className="ppm:text-fg3" />
               </button>
             }
           />
@@ -187,11 +195,11 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
       )}
       {agent && sessionMenu && (
         <Menu
-          className="top-[42px] left-[84px] w-[300px]"
+          className="ppm:top-[42px] ppm:left-[84px] ppm:w-[300px]"
           onClose={() => setSessionMenu(false)}
           title={
             <>
-              <AgentIcon kind={agent.kind} className="text-fg2" />
+              <AgentIcon kind={agent.kind} className="ppm:text-fg2" />
               {agentName[agent.kind]}
               {agent.started_at !== null && ` · started ${clock(agent.started_at)}`}
             </>
@@ -209,15 +217,15 @@ function Charts({ ctx, server, hover, onHover }: { ctx: ViewContext; server: Ser
   const time = hovered ? clockSeconds(hovered.at) : null;
   return (
     <>
-      <div className="hairline-t flex flex-col gap-3.5 px-4 pt-3 pb-4">
-        <ChartHead title="Memory" value={memory(hovered?.memory ?? server.memory)} note={<span className="font-mono">{time ?? "10 min"}</span>} />
+      <div className="ppm:hairline-t ppm:flex ppm:flex-col ppm:gap-3.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
+        <ChartHead title="Memory" value={memory(hovered?.memory ?? server.memory)} note={<span className="ppm:font-mono">{time ?? "10 min"}</span>} />
         <MemoryChart history={server.history} now={ctx.now} hover={hover} onHover={onHover} threshold={ctx.alertMemory} />
       </div>
-      <div className="flex flex-col gap-3.5 px-4 pb-4">
+      <div className="ppm:flex ppm:flex-col ppm:gap-3.5 ppm:px-4 ppm:pb-4">
         <ChartHead
           title="CPU"
           value={percent(hovered?.cpu_percent ?? server.cpu_percent)}
-          note={time ? <span className="font-mono">{time}</span> : server.history.length ? `peak ${percent(peak)}` : null}
+          note={time ? <span className="ppm:font-mono">{time}</span> : server.history.length ? `peak ${percent(peak)}` : null}
         />
         <CpuChart history={server.history} now={ctx.now} hover={hover} onHover={onHover} />
       </div>
@@ -227,12 +235,12 @@ function Charts({ ctx, server, hover, onHover }: { ctx: ViewContext; server: Ser
 
 function ChartHead({ title, value, note }: { title: string; value: string; note: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between">
-      <div className="flex items-baseline gap-2">
-        <span className="text-13 font-medium text-fg2">{title}</span>
-        <span className="font-mono text-13 font-medium text-fg">{value}</span>
+    <div className="ppm:flex ppm:items-baseline ppm:justify-between">
+      <div className="ppm:flex ppm:items-baseline ppm:gap-2">
+        <span className="ppm:text-13 ppm:font-medium ppm:text-fg2">{title}</span>
+        <span className="ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{value}</span>
       </div>
-      <span className="text-11 text-fg3">{note}</span>
+      <span className="ppm:text-11 ppm:text-fg3">{note}</span>
     </div>
   );
 }
@@ -241,36 +249,36 @@ function Processes({ server }: { server: Server }) {
   const [open, setOpen] = useState(false);
   const largest = Math.max(1, ...server.processes.map((process) => process.memory));
   return (
-    <div className={`hairline-t flex flex-col gap-2 px-4 ${open ? "pt-3 pb-4" : "py-3.5"}`}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex h-4 shrink-0 items-center justify-between">
-        <span className="flex items-center gap-1">
-          <span className="text-13 text-fg2">Processes</span>
-          <Chevron direction={open ? "down" : "right"} className="text-fg3" />
+    <div className={`ppm:hairline-t ppm:flex ppm:flex-col ppm:gap-2 ppm:px-4 ${open ? "ppm:pt-3 ppm:pb-4" : "ppm:py-3.5"}`}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="ppm:flex ppm:h-4 ppm:shrink-0 ppm:items-center ppm:justify-between">
+        <span className="ppm:flex ppm:items-center ppm:gap-1">
+          <span className="ppm:text-13 ppm:text-fg2">Processes</span>
+          <Chevron direction={open ? "down" : "right"} className="ppm:text-fg3" />
         </span>
-        <span className="flex items-center gap-2 font-mono text-13">
-          <span className="text-fg3">{server.processes.length} ·</span>
-          <span className="text-fg2">{memory(server.memory)}</span>
+        <span className="ppm:flex ppm:items-center ppm:gap-2 ppm:font-mono ppm:text-13">
+          <span className="ppm:text-fg3">{server.processes.length} ·</span>
+          <span className="ppm:text-fg2">{memory(server.memory)}</span>
         </span>
       </button>
       {open && (
-        <div className="flex flex-col gap-[5px]">
+        <div className="ppm:flex ppm:flex-col ppm:gap-[5px]">
           {server.processes.map((process) => {
             const main = process.proc.pid === server.pid;
             const indent = process.depth > 0 ? `${"  ".repeat(process.depth - 1)}└ ` : "";
             return (
-              <div key={process.proc.pid} className="flex items-center" title={process.name}>
-                <span className={`selectable clamp-1 flex-1 whitespace-pre font-mono text-13 ${main ? "text-fg" : "text-fg/80"}`}>
+              <div key={process.proc.pid} className="ppm:flex ppm:items-center" title={process.name}>
+                <span className={`selectable clamp-1 flex-1 whitespace-pre font-mono text-13 ${main ? "ppm:text-fg" : "ppm:text-fg/80"}`}>
                   {indent}
                   {process.name}
                 </span>
-                <span className="selectable w-16 shrink-0 font-mono text-11 text-fg3">{process.proc.pid}</span>
-                <span className="flex h-1 w-16 shrink-0 rounded-sm bg-accent">
+                <span className="selectable ppm:w-16 ppm:shrink-0 ppm:font-mono ppm:text-11 ppm:text-fg3">{process.proc.pid}</span>
+                <span className="ppm:flex ppm:h-1 ppm:w-16 ppm:shrink-0 ppm:rounded-sm ppm:bg-accent">
                   <span
-                    className={`h-1 rounded-sm ${main ? "bg-fg/75" : "bg-fg/45"}`}
+                    className={`ppm:h-1 ppm:rounded-sm ${main ? "ppm:bg-fg/75" : "ppm:bg-fg/45"}`}
                     style={{ width: Math.max(3, (64 * process.memory) / largest) }}
                   />
                 </span>
-                <span className={`w-16 shrink-0 text-right font-mono text-13 ${main ? "text-fg/90" : "text-fg/70"}`}>{memory(process.memory)}</span>
+                <span className={`ppm:w-16 ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${main ? "ppm:text-fg/90" : "ppm:text-fg/70"}`}>{memory(process.memory)}</span>
               </div>
             );
           })}
@@ -289,17 +297,17 @@ function Footer({ ctx, server }: { ctx: ViewContext; server: Server }) {
   if (server.command) items.push({ label: "Copy command", onSelect: () => copy(server.command ?? "") });
   if (folder && server.cwd_exists && (client.openInEditor || client.revealFolder)) {
     items.push("divider");
-    if (client.openInEditor) items.push({ label: "Open in editor", onSelect: () => client.openInEditor?.(machineId, folder) });
-    if (client.revealFolder) items.push({ label: "Reveal folder", onSelect: () => client.revealFolder?.(machineId, folder) });
+    if (client.openInEditor) items.push({ label: "Open in editor", onSelect: () => ctx.act(server, () => client.openInEditor?.(machineId, folder)) });
+    if (client.revealFolder) items.push({ label: "Reveal folder", onSelect: () => ctx.act(server, () => client.revealFolder?.(machineId, folder)) });
   }
   items.push("divider", { label: "Force stop", danger: true, onSelect: () => ctx.stop(server, true) });
 
   return (
-    <div className="hairline-t relative flex items-center gap-2 p-3">
+    <div className="ppm:hairline-t ppm:relative ppm:flex ppm:items-center ppm:gap-2 ppm:p-3">
       <button
         type="button"
         onClick={() => ctx.open(server)}
-        className="flex flex-1 items-center justify-center rounded-lg bg-primary px-3 py-[7px] text-13 font-medium text-on-primary hover:opacity-90"
+        className="ppm:flex ppm:flex-1 ppm:items-center ppm:justify-center ppm:rounded-lg ppm:bg-primary ppm:px-3 ppm:py-[7px] ppm:text-13 ppm:font-medium ppm:text-on-primary ppm:hover:opacity-90"
       >
         Open localhost:{server.port}
       </button>
@@ -307,10 +315,10 @@ function Footer({ ctx, server }: { ctx: ViewContext; server: Server }) {
         <button
           type="button"
           title={preview}
-          onClick={() => client.openExternal?.(preview)}
-          className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-[7px] text-13 text-fg"
+          onClick={() => ctx.act(server, () => client.openExternal?.(preview))}
+          className="ppm:flex ppm:items-center ppm:gap-1.5 ppm:rounded-lg ppm:bg-accent ppm:px-3 ppm:py-[7px] ppm:text-13 ppm:text-fg"
         >
-          <VercelIcon className="text-fg2" />
+          <VercelIcon className="ppm:text-fg2" />
           Preview
         </button>
       )}
@@ -320,13 +328,13 @@ function Footer({ ctx, server }: { ctx: ViewContext; server: Server }) {
         aria-haspopup="menu"
         aria-expanded={more}
         onClick={() => setMore(true)}
-        className="flex size-[30px] shrink-0 items-center justify-center gap-[3px] rounded-lg bg-accent"
+        className="ppm:flex ppm:size-[30px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:gap-[3px] ppm:rounded-lg ppm:bg-accent"
       >
-        <span className="size-[3px] rounded-full bg-fg" />
-        <span className="size-[3px] rounded-full bg-fg" />
-        <span className="size-[3px] rounded-full bg-fg" />
+        <span className="ppm:size-[3px] ppm:rounded-full ppm:bg-fg" />
+        <span className="ppm:size-[3px] ppm:rounded-full ppm:bg-fg" />
+        <span className="ppm:size-[3px] ppm:rounded-full ppm:bg-fg" />
       </button>
-      {more && <Menu className="right-3 bottom-[50px] w-[200px]" onClose={() => setMore(false)} items={items} />}
+      {more && <Menu className="ppm:right-3 ppm:bottom-[50px] ppm:w-[200px]" onClose={() => setMore(false)} items={items} />}
     </div>
   );
 }

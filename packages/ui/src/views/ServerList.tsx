@@ -30,36 +30,36 @@ export function ServerList({ ctx, selected, onOpen, onCleanUp }: Props) {
   return (
     <>
       <Summary ctx={ctx} segment={segment} highlighted={hoveredRow} onSegment={setSegment} onOpen={onOpen} />
-      <div className="hairline-t">
+      <div className="ppm:hairline-t">
         {servers.length ? (
           <Rows ctx={ctx} selected={selected} segment={segment} onHover={setHoveredRow} onOpen={onOpen} />
         ) : (
-          <div className="flex flex-col items-center gap-3 py-7 text-center">
-            <span className="text-fg3">
+          <div className="ppm:flex ppm:flex-col ppm:items-center ppm:gap-3 ppm:py-7 ppm:text-center">
+            <span className="ppm:text-fg3">
               <DotGrid size={48} />
             </span>
-            <span className="text-13 text-fg2">Nothing listening</span>
-            <span className="text-11 text-fg3">Dev servers show up here when they start.</span>
+            <span className="ppm:text-13 ppm:text-fg2">Nothing listening</span>
+            <span className="ppm:text-11 ppm:text-fg3">Dev servers show up here when they start.</span>
           </div>
         )}
       </div>
-      <div className="hairline-t flex items-center justify-between p-3">
+      <div className="ppm:hairline-t ppm:flex ppm:items-center ppm:justify-between ppm:p-3">
         <button
           type="button"
           onClick={onCleanUp}
           disabled={!servers.length}
-          className="flex items-center gap-[7px] rounded-[7px] bg-accent py-[5px] pr-2.5 pl-2 shadow-[inset_0_0.5px_0_color-mix(in_oklab,var(--foreground)_12%,transparent)] disabled:opacity-50"
+          className="ppm:flex ppm:items-center ppm:gap-[7px] ppm:rounded-[7px] ppm:bg-accent ppm:py-[5px] ppm:pr-2.5 ppm:pl-2 ppm:shadow-[inset_0_0.5px_0_color-mix(in_oklab,var(--foreground)_12%,transparent)] ppm:disabled:opacity-50"
         >
-          <BroomIcon className="text-fg" />
-          <span className="text-13 font-medium text-fg">Clean up</span>
-          {suggested > 0 && <span className="font-mono text-11 font-medium text-fg2">{suggested}</span>}
+          <BroomIcon className="ppm:text-fg" />
+          <span className="ppm:text-13 ppm:font-medium ppm:text-fg">Clean up</span>
+          {suggested > 0 && <span className="ppm:font-mono ppm:text-11 ppm:font-medium ppm:text-fg2">{suggested}</span>}
         </button>
         {client.openSettings && (
           <button
             type="button"
             aria-label="Settings"
             onClick={() => client.openSettings?.()}
-            className="-m-[5px] flex size-[26px] items-center justify-center rounded-[7px] text-fg2 hover:bg-accent"
+            className="ppm:-m-[5px] ppm:flex ppm:size-[26px] ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:text-fg2 ppm:hover:bg-accent"
           >
             <GearIcon />
           </button>
@@ -88,22 +88,22 @@ function Summary(props: {
       ? `${total(system.memory_other_apps)} other apps · ${total(system.memory_total - system.memory_used)} free`
       : `CPU ${percent(system.cpu_percent)}`;
   return (
-    <div className="flex flex-col gap-2.5 px-4 pt-3 pb-4">
+    <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
       <Header title={focused ? `${focused.project.name} :${focused.port}` : "Servers"} />
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center gap-1.5">
+      <div className="ppm:flex ppm:flex-col ppm:gap-1.5">
+        <div className="ppm:flex ppm:items-center ppm:gap-1.5">
           <div
-            className="flex items-center gap-1.5"
+            className="ppm:flex ppm:items-center ppm:gap-1.5"
             onPointerEnter={() => setShowMemory(true)}
             onPointerLeave={() => setShowMemory(false)}
           >
-            <span className="font-mono text-28 font-medium text-fg">{amount}</span>
-            <span className="self-end pb-1 font-mono text-13 text-fg3">{unit}</span>
+            <span className="ppm:font-mono ppm:text-28 ppm:font-medium ppm:text-fg">{amount}</span>
+            <span className="ppm:self-end ppm:pb-1 ppm:font-mono ppm:text-13 ppm:text-fg3">{unit}</span>
           </div>
-          <span className="ml-auto grow text-right font-mono text-13 text-fg3">{detail}</span>
+          <span className="ppm:ml-auto ppm:grow ppm:text-right ppm:font-mono ppm:text-13 ppm:text-fg3">{detail}</span>
         </div>
-        <div className="flex h-4 shrink-0 items-center" onPointerLeave={() => props.onSegment(null)}>
-          <div className="flex h-2 w-full items-center gap-0.5" aria-label="Memory by server" role="group">
+        <div className="ppm:flex ppm:h-4 ppm:shrink-0 ppm:items-center" onPointerLeave={() => props.onSegment(null)}>
+          <div className="ppm:flex ppm:h-2 ppm:w-full ppm:items-center ppm:gap-0.5" aria-label="Memory by server" role="group">
             {servers.map((server, index) => (
               <button
                 key={server.port}
@@ -112,11 +112,11 @@ function Summary(props: {
                 aria-label={`${server.project.name} :${server.port} · ${memory(server.memory)}`}
                 onPointerEnter={() => props.onSegment(server.port)}
                 onClick={() => props.onOpen(server)}
-                className="h-full min-w-0.5 transition-[opacity] duration-100"
+                className="ppm:h-full ppm:min-w-0.5 ppm:transition-[opacity] ppm:duration-100"
                 style={{ flex: `${server.memory} 0 0`, opacity: lit !== null && lit !== server.port ? 0.35 : 1 }}
               >
                 <span
-                  className="block w-full transition-[height] duration-100"
+                  className="ppm:block ppm:w-full ppm:transition-[height] ppm:duration-100"
                   style={{
                     height: lit === server.port ? 8 : 6,
                     background: server.status === "attention" ? "var(--ppm-warn)" : props.ctx.colorOf(server.port),
@@ -159,9 +159,10 @@ function Rows({
       ref={list}
       role="listbox"
       aria-label="Servers"
+      tabIndex={0}
       aria-activedescendant={selected === null ? undefined : `ppm-server-${selected}`}
       data-live={live || undefined}
-      className="ppm-scroll p-1.5"
+      className="ppm-scroll ppm:p-1.5"
       style={{ maxHeight: VISIBLE_ROWS * ROW_HEIGHT + 12 }}
       onPointerLeave={() => {
         setHovered(null);
@@ -229,47 +230,50 @@ function Row({
       aria-label={`Port ${server.port}, ${server.project.name}, ${memory(server.memory)}`}
       onPointerEnter={onHover}
       onClick={onOpen}
-      className={`flex items-center rounded-[9px] px-2.5 py-[9px] transition-opacity duration-100 ${active ? "bg-accent" : ""}`}
+      className={`ppm:flex ppm:items-center ppm:rounded-[9px] ppm:px-2.5 ppm:py-[9px] ppm:transition-opacity ppm:duration-100 ${active ? "ppm:bg-accent" : ""}`}
       style={{ opacity }}
     >
       <Colon status={server.status} color={ctx.colorOf(server.port)} />
-      <span className="w-[46px] shrink-0 font-mono text-13 font-medium text-fg">{server.port}</span>
-      <div className="flex min-w-0 flex-1 flex-col gap-px pr-2.5">
-        <div className="flex min-w-0 items-center gap-1.5 overflow-clip">
-          <span className="shrink-0 whitespace-pre text-13 font-medium text-fg">{server.project.name}</span>
+      <span className="ppm:w-[46px] ppm:shrink-0 ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{server.port}</span>
+      <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px ppm:pr-2.5">
+        <div className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1.5 ppm:overflow-clip">
+          <span className="ppm:shrink-0 ppm:whitespace-pre ppm:text-13 ppm:font-medium ppm:text-fg">{server.project.name}</span>
           {server.project.branch && (
-            <span className="flex min-w-0 items-center gap-1 text-fg2">
+            <span className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1 ppm:text-fg2">
               <BranchIcon />
-              <span className="clamp-1 text-13">{server.project.branch}</span>
+              <span className="ppm:clamp-1 ppm:text-13">{server.project.branch}</span>
             </span>
           )}
         </div>
-        <div className={`flex min-w-0 items-center gap-[5px] text-11 ${warn ? "text-warn" : "text-fg2"}`}>
+        <div className={`ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-[5px] ppm:text-11 ${warn ? "ppm:text-warn" : "ppm:text-fg2"}`}>
           {!note && !warn && icon}
-          <span className="clamp-1">{note ?? context.text}</span>
+          <span className="ppm:clamp-1">{note ?? context.text}</span>
         </div>
       </div>
       {active ? (
-        <span className="flex shrink-0 items-center gap-0.5">
+        // Pointer shortcuts; the keyboard has ⌘O and ⌘⌫, so they stay out of the listbox's tab order.
+        <span className="ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-0.5" aria-hidden>
           <button
             type="button"
+            tabIndex={-1}
             aria-label="Open in browser"
             onClick={(event) => {
               event.stopPropagation();
               ctx.open(server);
             }}
-            className="flex size-[22px] items-center justify-center rounded-md bg-accent text-fg hover:bg-[color-mix(in_oklab,var(--accent),var(--foreground)_8%)]"
+            className="ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:bg-accent ppm:text-fg ppm:hover:bg-[color-mix(in_oklab,var(--accent),var(--foreground)_8%)]"
           >
             <OpenIcon />
           </button>
           <button
             type="button"
+            tabIndex={-1}
             aria-label="Stop"
             onClick={(event) => {
               event.stopPropagation();
               ctx.stop(server);
             }}
-            className="flex size-[22px] items-center justify-center rounded-md text-fg/80 hover:bg-accent"
+            className="ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:text-fg/80 ppm:hover:bg-accent"
           >
             <StopIcon />
           </button>
@@ -277,7 +281,7 @@ function Row({
       ) : (
         <Sparkline history={server.history} warn={attention} />
       )}
-      <span className={`w-[58px] shrink-0 text-right font-mono text-13 ${attention ? "text-warn" : "text-fg/85"}`}>
+      <span className={`ppm:w-[58px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${attention ? "ppm:text-warn" : "ppm:text-fg/85"}`}>
         {memory(server.memory)}
       </span>
     </div>

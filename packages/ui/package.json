@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "themes": "node scripts/compact-themes.mjs",
     "screenshots": "node scripts/screenshots.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "contrast": "node scripts/contrast.mjs"
   },
   "dependencies": {
     "@ppm/protocol": "workspace:*"
@@ -27,6 +28,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "jsdom": "^30.1.1",
     "playwright-core": "^1.63.0",
     "react": "^19.1.0",
     "react-dom": "^19.3.0",

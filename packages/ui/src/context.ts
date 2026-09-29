@@ -19,6 +19,8 @@ export type ViewContext = {
   open: (server: Server) => void;
   stop: (server: Server, force?: boolean) => void;
   restart: (server: Server) => void;
+  /** Runs a host action for a server, such as revealing its folder, and shows its error on the server. */
+  act: (server: Server, action: () => Promise<void> | void) => void;
 };
 
 const CHART_COLORS = 5;
@@ -69,7 +71,15 @@ export function useViewContext(client: PpmClient, machine: Machine & { snapshot:
     });
   }, [snapshot]);
 
-  const fail = useCallback((port: number) => (error: unknown) => settle(port, { error: String(error instanceof Error ? error.message : error) }), [settle]);
+  // An error shows on its server for a few seconds.
+  const fail = useCallback(
+    (port: number) => (error: unknown) => {
+      const shown = { error: String(error instanceof Error ? error.message : error) };
+      settle(port, shown);
+      setTimeout(() => setPending((current) => (current.get(port) === shown ? new Map([...current].filter(([key]) => key !== port)) : current)), 6000);
+    },
+    [settle],
+  );
 
   return useMemo(
     () => ({
@@ -81,6 +91,9 @@ export function useViewContext(client: PpmClient, machine: Machine & { snapshot:
       colorOf,
       pending,
       open: (server) => void client.openUrl(machineId, server.port).catch(fail(server.port)),
+      act: (server, action) => {
+        new Promise<void>((resolve) => resolve(action())).catch(fail(server.port));
+      },
       stop: (server, force = false) => {
         settle(server.port, "stopping");
         client.call(machineId, { method: "stop", params: { port: server.port, root: server.root, force } }).catch(fail(server.port));

@@ -18,17 +18,17 @@ export function MachineSwitcher({
   onSelect: (id: string) => void;
 }) {
   return (
-    <div role="tablist" aria-label="Machines" className="ppm-scroll flex gap-1 overflow-x-auto px-3 pt-3">
+    <div role="tablist" aria-label="Machines" className="ppm-scroll ppm:flex ppm:gap-1 ppm:overflow-x-auto ppm:px-3 ppm:pt-3">
       {machines.map((machine) => {
         const count = machine.snapshot?.servers.length;
         const dot =
           machine.state === "error"
-            ? "bg-danger"
+            ? "ppm:bg-danger"
             : machine.state === "connected"
               ? machine.snapshot?.servers.some((server) => server.status === "attention")
-                ? "bg-warn"
-                : "bg-fg2"
-              : "bg-fg3 animate-pulse";
+                ? "ppm:bg-warn"
+                : "ppm:bg-fg2"
+              : "ppm:bg-fg3 ppm:animate-pulse";
         return (
           <button
             key={machine.id}
@@ -37,13 +37,13 @@ export function MachineSwitcher({
             aria-selected={machine.id === current}
             title={machine.error ?? `${machine.label} · ${stateLabel[machine.state]}`}
             onClick={() => onSelect(machine.id)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-11 ${
-              machine.id === current ? "bg-accent text-fg" : "text-fg2 hover:bg-accent"
+            className={`ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-1.5 ppm:rounded-md ppm:px-2 ppm:py-1 ppm:text-11 ${
+              machine.id === current ? "ppm:bg-accent ppm:text-fg" : "ppm:text-fg2 ppm:hover:bg-accent"
             }`}
           >
-            <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
-            <span className="font-medium">{machine.label}</span>
-            {count !== undefined && <span className="font-mono text-fg3">{count}</span>}
+            <span className={`ppm:size-1.5 ppm:rounded-full ${dot}`} aria-hidden />
+            <span className="ppm:font-medium">{machine.label}</span>
+            {count !== undefined && <span className="ppm:font-mono ppm:text-fg3">{count}</span>}
           </button>
         );
       })}
@@ -59,5 +59,5 @@ export function MachineStatus({ machine }: { machine: Machine }) {
       : machine.state === "installing"
         ? `Installing ppm on ${machine.label}…`
         : `Connecting to ${machine.label}…`;
-  return <p className={`px-4 py-7 text-center text-13 ${machine.state === "error" ? "text-danger" : "text-fg2"}`}>{text}</p>;
+  return <p className={`ppm:px-4 ppm:py-7 ppm:text-center ppm:text-13 ${machine.state === "error" ? "ppm:text-danger" : "ppm:text-fg2"}`}>{text}</p>;
 }

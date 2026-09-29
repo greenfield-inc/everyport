@@ -1,7 +1,8 @@
 /*
  * @ppm/ui styles. Import once from the host app, which runs Tailwind 4
- * (`@tailwindcss/vite`). There is no preflight, so the host page keeps its own
- * base styles; everything here is scoped to `.ppm-root`.
+ * (`@tailwindcss/vite`). Utilities and theme variables carry the `ppm:`
+ * prefix and there is no preflight, so a Tailwind host keeps its own classes,
+ * theme and base styles. Everything else is scoped to `.ppm-root`.
  *
  * Host hooks:
  *   html[data-vibrancy]   native blur sits behind the page: tint the panel
@@ -10,7 +11,7 @@
  *                         native window, where the OS draws the shadow
  */
 @layer theme, base, components, utilities;
-@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/theme" layer(theme) prefix(ppm);
 @import "tailwindcss/utilities" layer(utilities);
 @source "./";
 
@@ -48,8 +49,9 @@
   --color-accent: var(--accent);
   --color-line: var(--border);
   --color-warn: var(--ppm-warn);
-  --color-danger: var(--destructive);
-  --color-on-danger: var(--destructive-foreground);
+  --color-danger: var(--ppm-danger);
+  --color-danger-fill: var(--ppm-danger-fill);
+  --color-on-danger: #fff;
   --color-primary: var(--primary);
   --color-on-primary: var(--primary-foreground);
   --font-sans: var(--ppm-sans);
@@ -82,9 +84,15 @@
   min-width: 0;
 }
 
+/*
+ * Semantic colors never come from chart slots. Themed sets them from the
+ * theme, moved in lightness until they read on the panel: `--ppm-warn`
+ * (attention, leaks, the alert threshold; the theme's `warning` or a fixed
+ * amber), `--ppm-danger` (the theme's `destructive`) and `--ppm-danger-fill`
+ * (a destructive fill that takes white text).
+ */
 .ppm-root {
   --ppm-tint: 100%;
-  --ppm-warn: var(--warning, var(--chart-4));
   color-scheme: light;
   font-family: var(--ppm-sans);
   font-size: 13px;
@@ -130,6 +138,12 @@ html[data-vibrancy] .ppm-root[data-appearance="dark"] {
   }
 
   .ppm-root :focus {
+    outline: none;
+  }
+
+  /* The panel and listboxes show focus through their selected row. */
+  .ppm-root .ppm-panel:focus-visible,
+  .ppm-root [role="listbox"]:focus-visible {
     outline: none;
   }
 

@@ -14,7 +14,7 @@ export function Sparkline({ history, warn }: SparkProps) {
   const height = 18;
   if (history.length < 2) {
     return (
-      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="shrink-0 text-fg/50" aria-hidden>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="ppm:shrink-0 ppm:text-fg/50" aria-hidden>
         <path d="M0 12 L44 12" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeDasharray="2 3" />
       </svg>
     );
@@ -35,7 +35,7 @@ export function Sparkline({ history, warn }: SparkProps) {
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`shrink-0 ${warn ? "text-warn" : "text-fg/70"}`}
+      className={`ppm:shrink-0 ${warn ? "ppm:text-warn" : "ppm:text-fg/70"}`}
       aria-hidden
     >
       <path d={d} fill="none" stroke="currentColor" strokeWidth={warn ? 1.5 : 1.25} strokeLinecap="round" strokeLinejoin="round" />
@@ -83,12 +83,12 @@ export function MemoryChart({ history, now, hover, onHover, threshold }: PlotPro
   const line = history.map((sample, index) => `${index ? "L" : "M"}${xOf(sample.at, now).toFixed(1)} ${yOf(sample.memory).toFixed(1)}`).join(" ");
   const thresholdY = yOf(threshold);
   return (
-    <div className="flex gap-2">
-      <div className="relative w-8 shrink-0 font-mono text-11 text-fg3" style={{ height }} aria-hidden>
-        <span className="absolute right-0 text-warn/85" style={{ top: thresholdY - 7 }}>
+    <div className="ppm:flex ppm:gap-2">
+      <div className="ppm:relative ppm:w-8 ppm:shrink-0 ppm:font-mono ppm:text-11 ppm:text-fg3" style={{ height }} aria-hidden>
+        <span className="ppm:absolute ppm:right-0 ppm:text-warn/85" style={{ top: thresholdY - 7 }}>
           {totalParts(threshold).join(" ")}
         </span>
-        <span className="absolute right-0" style={{ top: height - 8 }}>
+        <span className="ppm:absolute ppm:right-0" style={{ top: height - 8 }}>
           0
         </span>
       </div>
@@ -96,16 +96,16 @@ export function MemoryChart({ history, now, hover, onHover, threshold }: PlotPro
         width={PLOT_WIDTH}
         height={height}
         viewBox={`0 0 ${PLOT_WIDTH} ${height}`}
-        className="shrink-0 overflow-visible"
+        className="ppm:shrink-0 ppm:overflow-visible"
         role="img"
         aria-label="Memory over the last 10 minutes"
         {...hoverHandlers(now, onHover)}
       >
-        <path d={`M0.5 0 V${height} M0 ${height - 0.5} H${PLOT_WIDTH}`} fill="none" stroke="currentColor" className="text-fg/14" />
-        <path d={`M0 ${thresholdY} H${PLOT_WIDTH}`} fill="none" stroke="currentColor" strokeDasharray="3 3" className="text-warn/55" />
-        <path d={line} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-fg/90" />
-        {hovered && <path d={`M${xOf(hovered.at, now)} 0 V${height}`} stroke="currentColor" className="text-fg/25" />}
-        {dot && <circle cx={Math.min(xOf(dot.at, now), PLOT_WIDTH - 1)} cy={yOf(dot.memory)} r="3" className="fill-fg" />}
+        <path d={`M0.5 0 V${height} M0 ${height - 0.5} H${PLOT_WIDTH}`} fill="none" stroke="currentColor" className="ppm:text-fg/14" />
+        <path d={`M0 ${thresholdY} H${PLOT_WIDTH}`} fill="none" stroke="currentColor" strokeDasharray="3 3" className="ppm:text-warn/55" />
+        <path d={line} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="ppm:text-fg/90" />
+        {hovered && <path d={`M${xOf(hovered.at, now)} 0 V${height}`} stroke="currentColor" className="ppm:text-fg/25" />}
+        {dot && <circle cx={Math.min(xOf(dot.at, now), PLOT_WIDTH - 1)} cy={yOf(dot.memory)} r="3" className="ppm:fill-fg" />}
       </svg>
     </div>
   );
@@ -117,21 +117,21 @@ export function CpuChart({ history, now, hover, onHover }: PlotProps) {
   const hovered = sampleNear(history, hover);
   const highlight = hovered ?? history[history.length - 1];
   return (
-    <div className="flex gap-2">
-      <div className="flex w-8 shrink-0 flex-col items-end justify-between font-mono text-11 text-fg3" style={{ height }} aria-hidden>
-        <span className="-mt-1.5">100%</span>
-        <span className="-mb-1.5">0</span>
+    <div className="ppm:flex ppm:gap-2">
+      <div className="ppm:flex ppm:w-8 ppm:shrink-0 ppm:flex-col ppm:items-end ppm:justify-between ppm:font-mono ppm:text-11 ppm:text-fg3" style={{ height }} aria-hidden>
+        <span className="ppm:-mt-1.5">100%</span>
+        <span className="ppm:-mb-1.5">0</span>
       </div>
       <svg
         width={PLOT_WIDTH}
         height={height}
         viewBox={`0 0 ${PLOT_WIDTH} ${height}`}
-        className="shrink-0"
+        className="ppm:shrink-0"
         role="img"
         aria-label="CPU over the last 10 minutes"
         {...hoverHandlers(now, onHover)}
       >
-        <path d={`M0.5 0 V${height}`} fill="none" stroke="currentColor" className="text-fg/14" />
+        <path d={`M0.5 0 V${height}`} fill="none" stroke="currentColor" className="ppm:text-fg/14" />
         {history.map((sample) => {
           const barHeight = Math.max(0.9, (Math.min(sample.cpu_percent, 100) / 100) * height);
           return (
@@ -142,11 +142,11 @@ export function CpuChart({ history, now, hover, onHover }: PlotProps) {
               width="4"
               height={barHeight}
               rx="1"
-              className={sample === highlight ? "fill-fg/80" : "fill-fg/32"}
+              className={sample === highlight ? "ppm:fill-fg/80" : "ppm:fill-fg/32"}
             />
           );
         })}
-        {hovered && <path d={`M${xOf(hovered.at, now)} 0 V${height}`} stroke="currentColor" className="text-fg/25" />}
+        {hovered && <path d={`M${xOf(hovered.at, now)} 0 V${height}`} stroke="currentColor" className="ppm:text-fg/25" />}
       </svg>
     </div>
   );

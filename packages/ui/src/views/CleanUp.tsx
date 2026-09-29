@@ -32,19 +32,25 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
 
   return (
     <>
-      <div className="flex flex-col gap-2.5 px-4 pt-3 pb-4">
+      <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
         <Header title="Clean up" onBack={onBack} />
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5">
-            <span className="font-mono text-28 font-medium text-fg">{chosen.length ? `~${amount}` : "0"}</span>
-            <span className="self-end pb-1 font-mono text-13 text-fg3">{unit}</span>
+        <div className="ppm:flex ppm:flex-col ppm:gap-1.5">
+          <div className="ppm:flex ppm:items-center ppm:gap-1.5">
+            <span className="ppm:font-mono ppm:text-28 ppm:font-medium ppm:text-fg">{chosen.length ? `~${amount}` : "0"}</span>
+            <span className="ppm:self-end ppm:pb-1 ppm:font-mono ppm:text-13 ppm:text-fg3">{unit}</span>
           </div>
-          <span className="text-13 text-fg2">{chosen.length ? `can be freed by stopping ${count}` : "Pick servers to stop"}</span>
+          <span className="ppm:text-13 ppm:text-fg2">{chosen.length ? `can be freed by stopping ${count}` : "Pick servers to stop"}</span>
         </div>
       </div>
-      <div className="hairline-t">
+      <div className="ppm:hairline-t">
         {candidates.length ? (
-          <div role="listbox" aria-label="Servers to stop" aria-multiselectable className="ppm-scroll flex flex-col p-1.5" style={{ maxHeight: 7 * 52 + 12 }}>
+          <div
+            role="listbox"
+            aria-label="Servers to stop"
+            aria-multiselectable
+            tabIndex={0}
+            aria-activedescendant={selected === null ? undefined : `ppm-server-${selected}`}
+            className="ppm-scroll ppm:flex ppm:flex-col ppm:p-1.5" style={{ maxHeight: 7 * 52 + 12 }}>
             {candidates.map((server) => (
               <Row
                 key={server.port}
@@ -57,18 +63,18 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
             ))}
           </div>
         ) : (
-          <p className="px-4 py-7 text-center text-13 text-fg2">Nothing to clean up</p>
+          <p className="ppm:px-4 ppm:py-7 ppm:text-center ppm:text-13 ppm:text-fg2">Nothing to clean up</p>
         )}
       </div>
-      <div className="hairline-t flex flex-col gap-3 p-3">
+      <div className="ppm:hairline-t ppm:flex ppm:flex-col ppm:gap-3 ppm:p-3">
         {note && (
-          <div className="flex items-center gap-1.5 px-1 text-11 text-fg3">
+          <div className="ppm:flex ppm:items-center ppm:gap-1.5 ppm:px-1 ppm:text-11 ppm:text-fg3">
             <LockIcon />
             {note}
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={onBack} className="rounded-lg bg-accent px-3.5 py-[7px] text-13 font-medium text-fg">
+        <div className="ppm:flex ppm:items-center ppm:gap-2">
+          <button type="button" onClick={onBack} className="ppm:rounded-lg ppm:bg-accent ppm:px-3.5 ppm:py-[7px] ppm:text-13 ppm:font-medium ppm:text-fg">
             Cancel
           </button>
           <button
@@ -78,7 +84,7 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
               for (const server of chosen) ctx.stop(server);
               onBack();
             }}
-            className="flex flex-1 items-center justify-center rounded-lg bg-danger py-[7px] pr-2.5 pl-3 text-13 font-medium text-on-danger disabled:opacity-50"
+            className="ppm:flex ppm:flex-1 ppm:items-center ppm:justify-center ppm:rounded-lg ppm:bg-danger-fill ppm:py-[7px] ppm:pr-2.5 ppm:pl-3 ppm:text-13 ppm:font-medium ppm:text-on-danger ppm:disabled:opacity-50"
           >
             {chosen.length ? `Stop ${count} · free ${memory(freed)}` : "Stop servers"}
           </button>
@@ -112,28 +118,28 @@ function Row({
       aria-selected={checked}
       aria-label={`Port ${server.port}, ${server.project.name}, ${memory(server.memory)}`}
       onClick={onToggle}
-      className={`flex items-center gap-3 rounded-[9px] px-2.5 py-[9px] hover:bg-accent ${selected ? "bg-accent" : ""}`}
+      className={`ppm:flex ppm:items-center ppm:gap-3 ppm:rounded-[9px] ppm:px-2.5 ppm:py-[9px] ppm:hover:bg-accent ${selected ? "ppm:bg-accent" : ""}`}
     >
       <span
-        className={`flex size-4 shrink-0 items-center justify-center rounded-[5px] ${
-          checked ? "bg-primary text-on-primary" : "bg-accent shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--muted-foreground)_50%,transparent)]"
+        className={`ppm:flex ppm:size-4 ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[5px] ${
+          checked ? "ppm:bg-primary ppm:text-on-primary" : "ppm:bg-accent ppm:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--muted-foreground)_50%,transparent)]"
         }`}
         aria-hidden
       >
         {checked && <CheckIcon />}
       </span>
-      <span className="flex w-[52px] shrink-0 items-center">
+      <span className="ppm:flex ppm:w-[52px] ppm:shrink-0 ppm:items-center">
         <Colon status={server.status} color={ctx.colorOf(server.port)} />
-        <span className="font-mono text-13 font-medium text-fg">{server.port}</span>
+        <span className="ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{server.port}</span>
       </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="clamp-1 text-13 font-medium text-fg">{server.project.name}</span>
-        <span className={`flex min-w-0 items-center gap-[5px] text-11 ${leaking ? "text-warn" : "text-fg2"}`}>
+      <span className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-0.5">
+        <span className="ppm:clamp-1 ppm:text-13 ppm:font-medium ppm:text-fg">{server.project.name}</span>
+        <span className={`ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-[5px] ppm:text-11 ${leaking ? "ppm:text-warn" : "ppm:text-fg2"}`}>
           <ReasonIcon kind={reason.kind} />
-          <span className="clamp-1">{reasonText(reason, server, ctx.now)}</span>
+          <span className="ppm:clamp-1">{reasonText(reason, server, ctx.now)}</span>
         </span>
       </span>
-      <span className={`w-[60px] shrink-0 text-right font-mono text-13 ${leaking ? "text-warn" : "text-fg/85"}`}>{memory(server.memory)}</span>
+      <span className={`ppm:w-[60px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${leaking ? "ppm:text-warn" : "ppm:text-fg/85"}`}>{memory(server.memory)}</span>
     </div>
   );
 }

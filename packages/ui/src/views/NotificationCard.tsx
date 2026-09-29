@@ -36,37 +36,37 @@ export function alertText(server: Server, alert: Alert, alertMemory = DEFAULT_AL
  */
 export function NotificationCard({ server, alert, alertMemory, onDetails, onStop, onSnooze, theme, appearance }: Props) {
   const { title, body } = alertText(server, alert, alertMemory);
-  const action = "flex flex-1 justify-center rounded-lg bg-accent py-[5px] text-13 font-medium";
+  const action = "ppm:flex ppm:flex-1 ppm:justify-center ppm:rounded-lg ppm:bg-accent ppm:py-[5px] ppm:text-13 ppm:font-medium";
   return (
     <Themed theme={theme} appearance={appearance}>
       <div
         role="alert"
-        className="flex w-[356px] flex-col gap-2.5 rounded-[22px] py-3 pr-3.5 pl-3"
+        className="ppm:flex ppm:w-[356px] ppm:flex-col ppm:gap-2.5 ppm:rounded-[22px] ppm:py-3 ppm:pr-3.5 ppm:pl-3"
         style={{
           background: "color-mix(in oklab, var(--popover) var(--ppm-tint), transparent)",
           boxShadow: "inset 0 0 0 0.5px var(--border), var(--ppm-shadow, 0 12px 40px rgb(0 0 0 / 0.45))",
         }}
       >
-        <div className="flex items-start gap-2.5">
-          <span className="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] bg-[#15171D] text-white shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
+        <div className="ppm:flex ppm:items-start ppm:gap-2.5">
+          <span className="ppm:flex ppm:size-[34px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[9px] ppm:bg-[#15171D] ppm:text-white ppm:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
             <DotGrid size={24} />
           </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-px">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="clamp-1 text-13 font-medium text-fg">{title}</span>
-              <span className="shrink-0 text-11 text-fg3">now</span>
+          <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px">
+            <div className="ppm:flex ppm:items-baseline ppm:justify-between ppm:gap-2">
+              <span className="ppm:clamp-1 ppm:text-13 ppm:font-medium ppm:text-fg">{title}</span>
+              <span className="ppm:shrink-0 ppm:text-11 ppm:text-fg3">now</span>
             </div>
-            <p className="text-13 leading-[18px] text-fg2">{body}</p>
+            <p className="ppm:text-13 ppm:leading-[18px] ppm:text-fg2">{body}</p>
           </div>
         </div>
-        <div className="flex gap-1.5 pl-11">
-          <button type="button" onClick={onDetails} className={`${action} text-fg`}>
+        <div className="ppm:flex ppm:gap-1.5 ppm:pl-11">
+          <button type="button" onClick={onDetails} className={`${action} ppm:text-fg`}>
             Details
           </button>
-          <button type="button" onClick={onStop} className={`${action} text-danger`}>
+          <button type="button" onClick={onStop} className={`${action} ppm:text-danger`}>
             Stop
           </button>
-          <button type="button" onClick={onSnooze} className={`${action} text-fg`}>
+          <button type="button" onClick={onSnooze} className={`${action} ppm:text-fg`}>
             Snooze 1h
           </button>
         </div>

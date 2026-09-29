@@ -8,5 +8,5 @@ export { ServerDetail } from "./views/ServerDetail.tsx";
 export { CleanUp, cleanUpCandidates } from "./views/CleanUp.tsx";
 export { MachineSwitcher, MachineStatus } from "./views/MachineSwitcher.tsx";
 export { useViewContext, type ViewContext, type Pending } from "./context.ts";
-export { Themed, themeList, DEFAULT_THEME, type Appearance, type ThemeProps } from "./theme.tsx";
+export { Themed, themeList, warningColor, DEFAULT_THEME, type Appearance, type ThemeProps } from "./theme.tsx";
 export { DotGrid } from "./icons.tsx";

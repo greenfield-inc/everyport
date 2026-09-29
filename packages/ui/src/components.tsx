@@ -5,14 +5,14 @@ import { BackIcon } from "./icons.tsx";
 /** Centred page title with an optional back button. */
 export function Header({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
-    <div className="relative flex h-5 shrink-0 items-center justify-center">
-      <h1 className="clamp-1 px-7 text-13 font-medium text-fg">{title}</h1>
+    <div className="ppm:relative ppm:flex ppm:h-5 ppm:shrink-0 ppm:items-center ppm:justify-center">
+      <h1 className="ppm:clamp-1 ppm:px-7 ppm:text-13 ppm:font-medium ppm:text-fg">{title}</h1>
       {onBack && (
         <button
           type="button"
           aria-label="Back"
           onClick={onBack}
-          className="absolute -left-1 top-0 flex size-5 items-center justify-center rounded-md text-fg2 hover:bg-accent"
+          className="ppm:absolute ppm:-left-1 ppm:top-0 ppm:flex ppm:size-5 ppm:items-center ppm:justify-center ppm:rounded-md ppm:text-fg2 ppm:hover:bg-accent"
         >
           <BackIcon />
         </button>
@@ -35,9 +35,9 @@ export function Colon({ status, color, large = false }: { status: ServerStatus; 
           boxShadow: status === "attention" ? `0 0 5px ${dotColor}` : undefined,
         };
   return (
-    <span className={`flex shrink-0 flex-col justify-center ${large ? "gap-1.5" : "w-[9px] gap-[3px]"}`} aria-hidden>
-      <span className="rounded-full" style={style} />
-      <span className="rounded-full" style={style} />
+    <span className={`ppm:flex ppm:shrink-0 ppm:flex-col ppm:justify-center ${large ? "ppm:gap-1.5" : "ppm:w-[9px] ppm:gap-[3px]"}`} aria-hidden>
+      <span className="ppm:rounded-full" style={style} />
+      <span className="ppm:rounded-full" style={style} />
     </span>
   );
 }
@@ -64,8 +64,11 @@ export function Menu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
+  // Take focus, and give it back to the trigger on close.
   useLayoutEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null;
     ref.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    return () => trigger?.focus({ preventScroll: true });
   }, []);
 
   useEffect(() => {
@@ -93,12 +96,12 @@ export function Menu({
       ref={ref}
       role="menu"
       onKeyDown={onKeyDown}
-      className={`absolute z-10 flex flex-col rounded-[10px] bg-[color-mix(in_oklab,var(--popover),var(--foreground)_7%)] p-[5px] shadow-[inset_0_0_0_0.5px_var(--border),0_12px_32px_rgb(0_0_0/0.5)] ${className ?? ""}`}
+      className={`ppm:absolute ppm:z-10 ppm:flex ppm:flex-col ppm:rounded-[10px] ppm:bg-[color-mix(in_oklab,var(--popover),var(--foreground)_7%)] ppm:p-[5px] ppm:shadow-[inset_0_0_0_0.5px_var(--border),0_12px_32px_rgb(0_0_0/0.5)] ${className ?? ""}`}
     >
-      {title && <div className="flex items-center gap-1.5 px-2.5 pt-1.5 pb-2 text-11 text-fg2">{title}</div>}
+      {title && <div className="ppm:flex ppm:items-center ppm:gap-1.5 ppm:px-2.5 ppm:pt-1.5 ppm:pb-2 ppm:text-11 ppm:text-fg2">{title}</div>}
       {items.map((item, index) =>
         item === "divider" ? (
-          <div key={index} className="mx-1.5 my-1 h-[0.5px] shrink-0 bg-line" />
+          <div key={index} className="ppm:mx-1.5 ppm:my-1 ppm:h-[0.5px] ppm:shrink-0 ppm:bg-line" />
         ) : (
           <button
             key={item.label}
@@ -108,10 +111,10 @@ export function Menu({
               onClose();
               item.onSelect();
             }}
-            className={`flex items-center justify-between gap-4 rounded-md px-2.5 py-[5px] text-13 hover:bg-accent focus:bg-accent ${item.danger ? "text-danger" : "text-fg"}`}
+            className={`ppm:flex ppm:items-center ppm:justify-between ppm:gap-4 ppm:rounded-md ppm:px-2.5 ppm:py-[5px] ppm:text-13 ppm:hover:bg-accent ppm:focus:bg-accent ${item.danger ? "ppm:text-danger" : "ppm:text-fg"}`}
           >
-            <span className="clamp-1">{item.label}</span>
-            {item.hint && <span className="shrink-0 font-mono text-11 text-fg3">{item.hint}</span>}
+            <span className="ppm:clamp-1">{item.label}</span>
+            {item.hint && <span className="ppm:shrink-0 ppm:font-mono ppm:text-11 ppm:text-fg3">{item.hint}</span>}
           </button>
         ),
       )}
