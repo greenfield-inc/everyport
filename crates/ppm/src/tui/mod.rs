@@ -151,10 +151,6 @@ impl App {
             .unwrap_or(0)
     }
 
-    fn now(&self) -> u64 {
-        ppm_core::now_ms()
-    }
-
     fn show(&mut self, text: impl Into<String>, error: bool) {
         self.toast = Some(Toast {
             text: text.into(),
@@ -273,7 +269,7 @@ impl App {
                     });
                 }
                 self.set_cleaning(false);
-                let count = crate::commands::plural(picks.len(), "server", "servers");
+                let count = format::plural(picks.len(), "server", "servers");
                 self.show(
                     format!("Stopping {count} · freeing {}", format::bytes(memory)),
                     false,

@@ -60,6 +60,11 @@ pub fn percent(value: f32) -> String {
     }
 }
 
+/// "1 server", "3 servers".
+pub fn plural(count: usize, one: &str, many: &str) -> String {
+    format!("{count} {}", if count == 1 { one } else { many })
+}
+
 pub fn reason(reason: &CleanUpReason) -> String {
     match reason {
         CleanUpReason::WorktreeDeleted => "Worktree deleted".into(),

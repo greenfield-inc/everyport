@@ -121,13 +121,14 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
     sync_selection(app);
     let area = frame.area();
     let width = (area.width as usize).min(100);
+    let now = ppm_core::now_ms();
     let view = View {
         app,
         s: Styles::new(app),
         width,
         inner: width.saturating_sub(4).max(10),
-        now: app.now(),
-        taken_at: app.snapshot.as_ref().map_or(app.now(), |s| s.taken_at),
+        now,
+        taken_at: app.snapshot.as_ref().map_or(now, |s| s.taken_at),
     };
 
     let (top, body, footer) = match app.page {
@@ -634,7 +635,7 @@ impl View<'_> {
                 let memory = picked.iter().map(|s| s.memory).sum();
                 format!(
                     "Stop {} · free {}",
-                    crate::commands::plural(picked.len(), "server", "servers"),
+                    format::plural(picked.len(), "server", "servers"),
                     format::bytes(memory)
                 )
             };
@@ -1040,7 +1041,7 @@ impl View<'_> {
                 span(
                     format!(
                         " and its {}?",
-                        crate::commands::plural(server.processes.len(), "process", "processes")
+                        format::plural(server.processes.len(), "process", "processes")
                     ),
                     self.s.text1,
                 ),

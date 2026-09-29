@@ -5,7 +5,7 @@ use crate::hub::Hub;
 use crate::palette::Palette;
 use ppm_core::engine::Engine;
 use ppm_core::platform;
-use ppm_core::protocol::{Call, Config, Event, Server, ServerStatus, Snapshot};
+use ppm_core::protocol::{Call, Config, Event, Os, Server, ServerStatus, Snapshot};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::ExitCode;
 use std::sync::mpsc;
@@ -210,7 +210,7 @@ pub fn clean(yes: bool) -> io::Result<ExitCode> {
         );
     }
     let memory: u64 = picks.iter().map(|s| s.memory).sum();
-    let count = plural(picks.len(), "server", "servers");
+    let count = format::plural(picks.len(), "server", "servers");
     if !yes {
         if !io::stdin().is_terminal() {
             eprintln!("ppm: run `ppm clean --yes` to stop these without asking");
@@ -244,17 +244,17 @@ pub fn clean(yes: bool) -> io::Result<ExitCode> {
     })
 }
 
-pub fn plural(count: usize, one: &str, many: &str) -> String {
-    format!("{count} {}", if count == 1 { one } else { many })
-}
-
 pub fn doctor(config_dir: Option<std::path::PathBuf>) -> ExitCode {
     let host = ppm_core::host::info();
+    let os = match host.os {
+        Os::Macos => "macOS",
+        Os::Linux => "Linux",
+        Os::Windows => "Windows",
+    };
     println!(
-        "ppm {} · protocol {} · {:?} {} · {} cores",
+        "ppm {} · protocol {} · {os} {} · {} cores",
         env!("CARGO_PKG_VERSION"),
         ppm_core::protocol::PROTOCOL_VERSION,
-        host.os,
         host.arch,
         host.cores
     );
@@ -275,7 +275,7 @@ pub fn doctor(config_dir: Option<std::path::PathBuf>) -> ExitCode {
             if hidden > 0 {
                 println!(
                     "  {} belong to other users or the system; ppm shows their port and process name only",
-                    plural(hidden, "port", "ports")
+                    format::plural(hidden, "port", "ports")
                 );
             }
         }
