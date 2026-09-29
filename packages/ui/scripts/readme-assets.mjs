@@ -12,17 +12,8 @@ mkdirSync(`${assets}screens`, { recursive: true });
 
 const img = (name) => `data:image/png;base64,${readFileSync(`${shots}${name}.png`).toString("base64")}`;
 
-// The tray icon: a 5x5 dot grid with the colon lit.
-const grid = (size, dot, on, off) => {
-  const gap = size / 5;
-  const cells = [];
-  for (let r = 0; r < 5; r++)
-    for (let c = 0; c < 5; c++) {
-      const lit = c === 2 && (r === 1 || r === 3);
-      cells.push(`<circle cx="${c * gap + gap / 2}" cy="${r * gap + gap / 2}" r="${dot}" fill="${lit ? on : off}"/>`);
-    }
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">${cells.join("")}</svg>`;
-};
+// The app icon and the monochrome tray mark, from brand/.
+const svg = (name) => `data:image/svg+xml;base64,${readFileSync(`${repo}brand/${name}.svg`).toString("base64")}`;
 
 const base = `
   * { box-sizing: border-box; margin: 0; }
@@ -39,11 +30,11 @@ const pages = {
       .ports b { color: #7fd89d; font-weight: 500; } .ports i { color: #ffb224; font-style: normal; }
       h1 { font-size: 64px; font-weight: 700; letter-spacing: -1.5px; }
       p { margin-top: 14px; font-size: 25px; color: #b9c2b8; }
-      .logo { flex: none; position: relative; }
+      .logo { flex: none; margin: 0 -20px; }
     </style>
     <div class="dots"></div>
     <div class="ports">:3000 <b>next dev</b><br>:5173 <b>vite</b><br>:6006 <i>storybook</i><br>:8000 uvicorn<br>:5432 postgres</div>
-    <div class="logo">${grid(150, 11, "#7fd89d", "#ffffff33")}</div>
+    <img class="logo" src="${svg("socket-app")}" width="190" height="190">
     <div><h1>Port Process Manager</h1><p>Every dev server on every machine, one click from your menu bar.</p></div>`,
   },
   hero: {
@@ -59,7 +50,7 @@ const pages = {
       .stack { display: flex; flex-direction: column; gap: 22px; margin-top: 30px; }
       .note { width: 420px; margin-left: 10px; border-radius: 18px; box-shadow: 0 24px 60px #0009; }
     </style>
-    <div class="bar"><span class="pill">${grid(16, 1.3, "#fff", "#ffffff66")} 5</span><span>Tue 9:41 AM</span></div>
+    <div class="bar"><span class="pill"><img src="${svg("socket-template")}" width="17" height="17" style="filter: invert(1)"> 5</span><span>Tue 9:41 AM</span></div>
     <div class="row">
       <div class="crop"><img src="${img("02b-detail-expanded-dark")}"></div>
       <img class="panel" src="${img("01-servers-dark")}">
@@ -68,9 +59,8 @@ const pages = {
   },
   logo: {
     size: [240, 240],
-    html: `<style>${base} body { width: 240px; height: 240px; display: grid; place-items: center; background: transparent; }
-      .tile { width: 216px; height: 216px; border-radius: 48px; background: linear-gradient(160deg, #1f2b23, #0d100e); display: grid; place-items: center; box-shadow: inset 0 0 0 1px #ffffff1a; }</style>
-      <div class="tile">${grid(130, 10, "#7fd89d", "#ffffff38")}</div>`,
+    html: `<style>${base} body { width: 240px; height: 240px; display: grid; place-items: center; overflow: hidden; background: transparent; }</style>
+      <img src="${svg("socket-app")}" width="268" height="268">`,
     transparent: true,
   },
 };
