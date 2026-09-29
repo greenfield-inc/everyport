@@ -171,7 +171,7 @@ jobs:
       - run: scripts/dist.sh artifacts
       - name: Check the npm and PyPI packages
         run: |
-          npm publish --dry-run dist/packages/everyport-*.tgz
+          npm publish --dry-run ./dist/packages/everyport-*.tgz
           uvx twine check --strict dist/packages/everyport-*.whl dist/packages/everyport-*.tar.gz
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with: { name: release, path: dist/release, if-no-files-found: error }
