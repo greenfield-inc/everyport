@@ -64,9 +64,20 @@ param([switch]$Cli, [switch]$NoOpen)
       $path
     }
 
+    # The OS architecture, also from 32-bit PowerShell on 64-bit Windows. Windows PowerShell 5.1
+    # can't be trusted with RuntimeInformation.OSArchitecture, which can come back empty.
+    function Get-WindowsArch {
+      $cpu = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+      switch ($cpu) {
+        'AMD64' { 'x86_64' }
+        'ARM64' { 'aarch64' }
+        default { throw "Everyport install: unsupported CPU: '$cpu'" }
+      }
+    }
+
     $setup = $null
     if (-not $Cli) {
-      $arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq 'Arm64') { 'aarch64' } else { 'x86_64' }
+      $arch = Get-WindowsArch
       $installers = @($sums.Keys | Where-Object { $_ -like 'everyport-*-setup.exe' })
       $name = $installers | Where-Object { $_ -like "*-$arch-setup.exe" } | Select-Object -First 1
       if (-not $name -and $arch -eq 'aarch64') {
