@@ -11,3 +11,4 @@ worktrees/
 .agent-farm/
 apps/desktop/src-tauri/binaries/
 qa-visual.noindex/
+*.tsbuildinfo
