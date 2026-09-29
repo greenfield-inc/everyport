@@ -61,6 +61,19 @@ describe("server list (Paper 01)", () => {
   });
 });
 
+describe("other ports", () => {
+  it("adds a collapsed row with the count, listing each port's process and owner", () => {
+    const list = text(<Popover client={clientFor([machine(fixtureSnapshot)])} />);
+    expect(list).toContain("Other ports · 2");
+    expect(list).toContain("631 root 5432 docker-proxy root");
+  });
+
+  it("leaves the row out when every port is the user's", () => {
+    const list = text(<Popover client={clientFor([machine({ ...fixtureSnapshot, other_ports: [] })])} />);
+    expect(list).not.toContain("Other ports");
+  });
+});
+
 describe("server detail (Paper 02)", () => {
   const detail = text(<Popover client={clientFor([machine(fixtureSnapshot)])} initialServer={{ machineId: "local", port: 3000 }} />);
 
