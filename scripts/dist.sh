@@ -6,8 +6,8 @@
 # The artifacts dir holds the ppm binaries (ppm-<target>) and any desktop
 # bundles. Writes:
 #   dist/release   files for the GitHub release, with SHA256SUMS
-#   dist/packages  npm tarball, Python wheel and sdist, Homebrew formula and
-#                  cask, winget manifests, all for this version
+#   dist/packages  npm tarball, Python wheel and sdist (both carrying
+#                  SHA256SUMS), Homebrew formula and cask, winget manifests
 #
 # On a tag build (GITHUB_REF_TYPE=tag) the tag must match the version and every
 # packaging file must render.
@@ -58,7 +58,14 @@ for template in "$root"/packaging/homebrew/*.rb "$root"/packaging/winget/*.yaml;
   render "$template"
 done
 
-npm pack --silent "$root/packaging/npm" --pack-destination "$packages" > /dev/null
-uv build --quiet "$root/packaging/pypi" --out-dir "$packages"
+# The npm and PyPI packages carry SHA256SUMS, so they verify the binary
+# without trusting a checksum from the same server.
+stage="$(mktemp -d)"
+trap 'rm -rf "$stage"' EXIT
+cp -R "$root/packaging/npm" "$root/packaging/pypi" "$stage/"
+cp "$release/SHA256SUMS" "$stage/npm/"
+cp "$release/SHA256SUMS" "$stage/pypi/src/port_process_manager/"
+npm pack --silent "$stage/npm" --pack-destination "$packages" > /dev/null
+uv build --quiet "$stage/pypi" --out-dir "$packages"
 echo "== dist/packages"
 ls -1 "$packages"

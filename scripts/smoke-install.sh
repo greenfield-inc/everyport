@@ -5,8 +5,8 @@
 #
 # Serves dist/release over HTTP, then runs install.sh (or install.ps1 on
 # Windows), the npm package and the PyPI package through uvx. Each must install
-# a ppm that prints the release version. Then it serves a copy whose SHA256SUMS
-# is wrong, and each one must refuse to install. Needs node, npm and uv.
+# a ppm that prints the release version. Then it serves a copy whose binaries
+# are altered, and each one must refuse to install. Needs node, npm and uv.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -31,8 +31,9 @@ serve() {
 }
 
 cp -R "$dist/release" "$work/tampered"
-sed -E 's/^[0-9a-f]{64}/0000000000000000000000000000000000000000000000000000000000000000/' \
-  "$dist/release/SHA256SUMS" > "$work/tampered/SHA256SUMS"
+for binary in "$work"/tampered/ppm-*; do
+  printf 'tampered' >> "$binary"
+done
 serve "$dist/release" 18765
 serve "$work/tampered" 18766
 good=http://127.0.0.1:18765
@@ -78,7 +79,7 @@ expect_mismatch() {
   local name="$1" output
   shift
   if output="$("$@" 2>&1)"; then
-    echo "FAIL  $name installed despite a wrong checksum:"; printf '%s\n' "$output"; failures=$((failures + 1))
+    echo "FAIL  $name installed an altered binary:"; printf '%s\n' "$output"; failures=$((failures + 1))
   elif grep -q 'checksum mismatch' <<< "$output"; then
     echo "ok    $name refused: $(grep 'checksum mismatch' <<< "$output" | head -n 1)"
   else

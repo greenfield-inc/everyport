@@ -17,7 +17,7 @@
     "ppm": "bin/ppm.js",
     "port-process-manager": "bin/ppm.js"
   },
-  "files": ["bin", "README.md"],
+  "files": ["bin", "SHA256SUMS", "README.md"],
   "engines": {
     "node": ">=18"
   },

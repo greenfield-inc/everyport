@@ -1,7 +1,7 @@
 """Runs the ppm release binary that matches this package's version.
 
 The first run downloads it from GitHub Releases, checks its SHA-256 against the
-release's SHA256SUMS, and caches it.
+SHA256SUMS packed into this package at release time, and caches it.
 """
 
 import hashlib
@@ -14,6 +14,7 @@ from importlib.metadata import version as package_version
 
 RELEASES = "https://github.com/greenfield-inc/port-process-manager/releases/download"
 VERSION = package_version("port-process-manager")
+SUMS = os.path.join(os.path.dirname(__file__), "SHA256SUMS")
 
 
 def fail(message):
@@ -62,15 +63,15 @@ def expected_hash(sums, asset):
 def install(binary):
     asset = asset_name()
     base = os.environ.get("PPM_DOWNLOAD_URL") or "{}/v{}".format(RELEASES, VERSION)
+    with open(SUMS) as sums:
+        expected = expected_hash(sums.read(), asset)
+    if not expected:
+        fail("SHA256SUMS has no entry for {}".format(asset))
     sys.stderr.write("ppm: downloading {} {}\n".format(asset, VERSION))
     try:
         data = download("{}/{}".format(base, asset))
-        sums = download("{}/SHA256SUMS".format(base)).decode("utf-8")
     except OSError as error:
         fail(str(error))
-    expected = expected_hash(sums, asset)
-    if not expected:
-        fail("SHA256SUMS has no entry for {}".format(asset))
     actual = hashlib.sha256(data).hexdigest()
     if actual != expected:
         fail("checksum mismatch for {}: expected {}, got {}".format(asset, expected, actual))

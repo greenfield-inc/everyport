@@ -29,3 +29,6 @@ port-process-manager = "port_process_manager:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+port_process_manager = ["SHA256SUMS"]

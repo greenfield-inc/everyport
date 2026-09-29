@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Runs the ppm release binary that matches this package's version. The first
 // run downloads it from GitHub Releases, checks its SHA-256 against the
-// release's SHA256SUMS, and caches it.
+// SHA256SUMS packed into this package at release time, and caches it.
 'use strict';
 
 const crypto = require('crypto');
@@ -11,6 +11,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const { version } = require('../package.json');
+const SUMS = path.join(__dirname, '..', 'SHA256SUMS');
 const RELEASES = 'https://github.com/greenfield-inc/port-process-manager/releases/download';
 
 function fail(message) {
@@ -57,12 +58,9 @@ async function install(binary) {
   const asset = assetName();
   const base = process.env.PPM_DOWNLOAD_URL || `${RELEASES}/v${version}`;
   console.error(`ppm: downloading ${asset} ${version}`);
-  const [data, sums] = await Promise.all([
-    download(`${base}/${asset}`),
-    download(`${base}/SHA256SUMS`),
-  ]);
-  const expected = expectedHash(sums.toString('utf8'), asset);
+  const expected = expectedHash(fs.readFileSync(SUMS, 'utf8'), asset);
   if (!expected) fail(`SHA256SUMS has no entry for ${asset}`);
+  const data = await download(`${base}/${asset}`);
   const actual = crypto.createHash('sha256').update(data).digest('hex');
   if (actual !== expected) fail(`checksum mismatch for ${asset}: expected ${expected}, got ${actual}`);
 
