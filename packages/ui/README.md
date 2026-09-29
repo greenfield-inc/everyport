@@ -11,7 +11,7 @@ import "@ppm/ui/styles.css"; // the host runs Tailwind 4 (@tailwindcss/vite)
 
 | Export | What it is |
 |---|---|
-| `Popover` | List, detail and Clean up for every machine `client` knows. Props: `client`, `theme`, `appearance`, `alertMemory`, `initialServer`, `onReady` |
+| `Popover` | List, detail and Clean up for every machine `client` knows. Props: `client`, `theme`, `appearance`, `alertMemory`, `initialServer`, `onReady`, `autoFocus` (false on a page that embeds it) |
 | `NotificationCard` | The memory alert with Details, Stop and Snooze 1h, for hosts that draw their own notification |
 | `ServerList`, `ServerDetail`, `CleanUp`, `MachineSwitcher` | The views, each taking a `ViewContext` from `useViewContext(client, machine)` |
 | `themeList`, `Themed` | The 40 Doozy themes, and the root that applies one |
