@@ -1,13 +1,14 @@
 //! Windows implementation of [`Platform`]: IP Helper for listeners, a Toolhelp
 //! snapshot for the process table, and a process handle for times, memory,
-//! command line, cwd and environment. A process we can't open (elevated or
-//! protected) still shows with its port and name.
+//! command line, cwd and environment. Ports of processes that run as another
+//! user, or that we can't open (protected, or elevated when we aren't), are
+//! other listeners, shown with their port, process name and user.
 
 mod console;
 
 pub use console::run_helper;
 
-use super::{Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
+use super::{Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage};
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
 use std::ffi::c_void;
@@ -15,7 +16,7 @@ use std::io;
 use std::mem::{offset_of, MaybeUninit};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
-use windows::core::{Owned, BOOL, PCWSTR};
+use windows::core::{Owned, BOOL, PCWSTR, PWSTR};
 use windows::Wdk::System::Threading::{
     NtQueryInformationProcess, ProcessBasicInformation, ProcessCommandLineInformation,
     PROCESSINFOCLASS,
@@ -29,6 +30,10 @@ use windows::Win32::NetworkManagement::IpHelper::{
     MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_LISTENER,
 };
 use windows::Win32::Networking::WinSock::{ADDRESS_FAMILY, AF_INET, AF_INET6};
+use windows::Win32::Security::{
+    GetLengthSid, GetTokenInformation, LookupAccountSidW, TokenUser, PSID, SID_NAME_USE,
+    TOKEN_QUERY, TOKEN_USER,
+};
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
@@ -38,9 +43,9 @@ use windows::Win32::System::ProcessStatus::{
 };
 use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 use windows::Win32::System::Threading::{
-    GetProcessTimes, GetSystemTimes, OpenProcess, TerminateProcess, PEB, PROCESS_ACCESS_RIGHTS,
-    PROCESS_BASIC_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
-    PROCESS_VM_READ,
+    GetCurrentProcess, GetProcessTimes, GetSystemTimes, OpenProcess, OpenProcessToken,
+    TerminateProcess, PEB, PROCESS_ACCESS_RIGHTS, PROCESS_BASIC_INFORMATION,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE, PROCESS_VM_READ,
 };
 use windows::Win32::UI::Shell::CommandLineToArgvW;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -63,36 +68,75 @@ const UNIX_EPOCH_TICKS: u64 = 116_444_736_000_000_000;
 pub struct Windows {
     /// Idle and total system time at the previous `cpu_percent` call.
     last_cpu: Mutex<Option<(u64, u64)>>,
+    /// The SID of the user we run as.
+    user: Option<Sid>,
+    /// Account names by SID, since a lookup can ask a domain controller.
+    names: Mutex<HashMap<Sid, Option<String>>>,
 }
+
+/// A security identifier's bytes. Equal SIDs have equal bytes.
+type Sid = Vec<u8>;
 
 impl Windows {
     pub fn new() -> Self {
         Self {
             last_cpu: Mutex::new(None),
+            user: token_user(unsafe { GetCurrentProcess() }),
+            names: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Every listening socket, with the user its process runs as when we may
+    /// read it, and whether that user is us.
+    fn owned_listeners(&self) -> io::Result<Vec<(Listener, Option<Sid>, bool)>> {
+        let mut users = HashMap::new();
+        Ok(all_listeners()?
+            .into_iter()
+            .map(|l| {
+                let user: Option<Sid> = users
+                    .entry(l.pid)
+                    .or_insert_with(|| {
+                        let process = Process::open(l.pid, PROCESS_QUERY_LIMITED_INFORMATION);
+                        process.ok().and_then(|p| token_user(*p.0))
+                    })
+                    .clone();
+                // Without our own SID, every port counts as ours.
+                let ours = self.user.is_none() || user == self.user;
+                (l, user, ours)
+            })
+            .collect())
+    }
+
+    fn account_name(&self, sid: &Sid) -> Option<String> {
+        let mut names = self.names.lock().unwrap_or_else(|e| e.into_inner());
+        names
+            .entry(sid.clone())
+            .or_insert_with(|| account_name(sid))
+            .clone()
     }
 }
 
 impl Platform for Windows {
     fn listeners(&self) -> io::Result<Vec<Listener>> {
-        let v4 = tcp_listeners::<MIB_TCPROW_OWNER_PID>(AF_INET)?
+        Ok(self
+            .owned_listeners()?
             .into_iter()
-            .map(|row| Listener {
-                port: port(row.dwLocalPort),
-                pid: row.dwOwningPid,
-                address: Ipv4Addr::from(row.dwLocalAddr.to_ne_bytes()).to_string(),
-            });
-        let v6 = tcp_listeners::<MIB_TCP6ROW_OWNER_PID>(AF_INET6)?
+            .filter_map(|(l, _, ours)| ours.then_some(l))
+            .collect())
+    }
+
+    fn other_listeners(&self) -> io::Result<Vec<OtherListener>> {
+        Ok(self
+            .owned_listeners()?
             .into_iter()
-            .map(|row| Listener {
-                port: port(row.dwLocalPort),
-                pid: row.dwOwningPid,
-                address: match (Ipv6Addr::from(row.ucLocalAddr), row.dwLocalScopeId) {
-                    (ip, 0) => ip.to_string(),
-                    (ip, scope) => format!("{ip}%{scope}"),
-                },
-            });
-        Ok(v4.chain(v6).collect())
+            .filter(|(_, _, ours)| !ours)
+            .map(|(l, user, _)| OtherListener {
+                port: l.port,
+                address: l.address,
+                owner: user.and_then(|sid| self.account_name(&sid)),
+                pid: Some(l.pid),
+            })
+            .collect())
     }
 
     fn processes(&self) -> io::Result<Vec<ProcInfo>> {
@@ -239,6 +283,73 @@ impl Platform for Windows {
     fn interrupt(&self, tree: &[ProcRef]) -> Vec<ProcRef> {
         console::interrupt(tree)
     }
+}
+
+/// Every listening TCP socket, of every user.
+fn all_listeners() -> io::Result<Vec<Listener>> {
+    let v4 = tcp_listeners::<MIB_TCPROW_OWNER_PID>(AF_INET)?
+        .into_iter()
+        .map(|row| Listener {
+            port: port(row.dwLocalPort),
+            pid: row.dwOwningPid,
+            address: Ipv4Addr::from(row.dwLocalAddr.to_ne_bytes()).to_string(),
+        });
+    let v6 = tcp_listeners::<MIB_TCP6ROW_OWNER_PID>(AF_INET6)?
+        .into_iter()
+        .map(|row| Listener {
+            port: port(row.dwLocalPort),
+            pid: row.dwOwningPid,
+            address: match (Ipv6Addr::from(row.ucLocalAddr), row.dwLocalScopeId) {
+                (ip, 0) => ip.to_string(),
+                (ip, scope) => format!("{ip}%{scope}"),
+            },
+        });
+    Ok(v4.chain(v6).collect())
+}
+
+/// The SID of the user a process runs as.
+fn token_user(process: HANDLE) -> Option<Sid> {
+    let mut token = HANDLE::default();
+    unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) }.ok()?;
+    let token = unsafe { Owned::new(token) };
+    let mut size = 0;
+    // The first call fails and reports the size it needs.
+    let _ = unsafe { GetTokenInformation(*token, TokenUser, None, 0, &mut size) };
+    let mut buf = vec![0u64; (size as usize).div_ceil(8)];
+    unsafe {
+        GetTokenInformation(
+            *token,
+            TokenUser,
+            Some(buf.as_mut_ptr().cast()),
+            size,
+            &mut size,
+        )
+    }
+    .ok()?;
+    let sid = unsafe { &*buf.as_ptr().cast::<TOKEN_USER>() }.User.Sid;
+    let len = unsafe { GetLengthSid(sid) } as usize;
+    Some(unsafe { std::slice::from_raw_parts(sid.0.cast::<u8>(), len) }.to_vec())
+}
+
+/// The account name for a SID, such as `SYSTEM` or `NETWORK SERVICE`.
+fn account_name(sid: &Sid) -> Option<String> {
+    let sid = PSID(sid.as_ptr().cast_mut().cast());
+    let (mut name, mut domain) = ([0u16; 256], [0u16; 256]);
+    let (mut name_len, mut domain_len) = (name.len() as u32, domain.len() as u32);
+    let mut kind = SID_NAME_USE::default();
+    unsafe {
+        LookupAccountSidW(
+            PCWSTR::null(),
+            sid,
+            Some(PWSTR(name.as_mut_ptr())),
+            &mut name_len,
+            Some(PWSTR(domain.as_mut_ptr())),
+            &mut domain_len,
+            &mut kind,
+        )
+    }
+    .ok()?;
+    Some(wide(&name))
 }
 
 fn port(network_order: u32) -> u16 {

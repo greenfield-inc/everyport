@@ -1,8 +1,10 @@
 //! Linux implementation of [`Platform`], on `/proc`. Without root, other
 //! users' processes show name, parent, start time and resident memory only,
-//! and their sockets are not visible.
+//! and their sockets show port and owner, but not which process holds them.
 
-use super::{unix, Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
+use super::{
+    unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage,
+};
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
 use std::fs;
@@ -22,6 +24,8 @@ pub struct Linux {
     /// Processes that held listening sockets at the previous scan. They are
     /// searched first, so a steady scan reads only their descriptors.
     socket_owners: Mutex<Vec<u32>>,
+    /// User names by uid, from `/etc/passwd`.
+    users: Mutex<HashMap<u32, String>>,
     cpu: unix::CpuSampler,
 }
 
@@ -38,6 +42,7 @@ impl Linux {
             boot_ms: btime.unwrap_or(0) * 1000,
             uid: unsafe { libc::geteuid() },
             socket_owners: Mutex::new(Vec::new()),
+            users: Mutex::new(HashMap::new()),
             cpu: unix::CpuSampler::default(),
         }
     }
@@ -53,6 +58,28 @@ impl Linux {
             name: stat.name,
         })
     }
+
+    /// Root can find the process behind any socket; others only their own.
+    fn can_inspect(&self, row: &TcpRow) -> bool {
+        self.uid == 0 || row.uid == self.uid
+    }
+
+    /// The user name for `uid`, or the number when `/etc/passwd` has none,
+    /// as `ls -l` shows it. The file is read again only for a new uid.
+    fn user_name(&self, uid: u32) -> String {
+        let mut users = self.users.lock().unwrap();
+        if !users.contains_key(&uid) {
+            let passwd = fs::read_to_string("/etc/passwd").unwrap_or_default();
+            users.extend(passwd.lines().filter_map(|line| {
+                let mut fields = line.split(':');
+                let name = fields.next()?;
+                let uid = fields.nth(1)?.parse().ok()?;
+                Some((uid, name.to_string()))
+            }));
+            users.entry(uid).or_insert_with(|| uid.to_string());
+        }
+        users[&uid].clone()
+    }
 }
 
 impl Platform for Linux {
@@ -62,7 +89,7 @@ impl Platform for Linux {
     fn listeners(&self) -> io::Result<Vec<Listener>> {
         let mut unowned: HashMap<u64, (u16, IpAddr)> = tcp_rows()
             .into_iter()
-            .filter(|row| row.state == TCP_LISTEN && (self.uid == 0 || row.uid == self.uid))
+            .filter(|row| row.state == TCP_LISTEN && self.can_inspect(row))
             .map(|row| (row.inode, (row.port, row.address)))
             .collect();
         let mut owners = self.socket_owners.lock().unwrap();
@@ -91,6 +118,21 @@ impl Platform for Linux {
         *owners = found.iter().map(|l| l.pid).collect();
         owners.dedup();
         Ok(found)
+    }
+
+    /// Another user's descriptors can't be read, so the owner is the socket's
+    /// uid and the process is unknown.
+    fn other_listeners(&self) -> io::Result<Vec<OtherListener>> {
+        Ok(tcp_rows()
+            .into_iter()
+            .filter(|row| row.state == TCP_LISTEN && !self.can_inspect(row))
+            .map(|row| OtherListener {
+                port: row.port,
+                address: row.address.to_string(),
+                owner: Some(self.user_name(row.uid)),
+                pid: None,
+            })
+            .collect())
     }
 
     /// Every user's connections are counted: the table needs no pid.
