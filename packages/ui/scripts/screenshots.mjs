@@ -1,7 +1,7 @@
 // Screenshots every view at 2x in dark and light mode, next to its Paper frame.
 //   pnpm --filter @ppm/ui screenshots [theme]
-// Writes packages/ui/screenshots/*.png and docs/assets/popover.png (the README
-// hero). Needs Google Chrome; Paper's HTML loads its fonts from Google Fonts.
+// Writes packages/ui/screenshots/*.png and, for the default theme,
+// docs/assets/popover.png (the README hero). Other themes go in screenshots/<theme>/. Needs Google Chrome; Paper's HTML loads its fonts from Google Fonts.
 import { mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -9,8 +9,9 @@ import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const repo = fileURLToPath(new URL("../../..", import.meta.url));
-const out = `${root}screenshots`;
 const theme = process.argv[2] ?? "pastel-dreams-green";
+const hero = theme === "pastel-dreams-green";
+const out = hero ? `${root}screenshots` : `${root}screenshots/${theme}`;
 mkdirSync(out, { recursive: true });
 mkdirSync(`${repo}docs/assets`, { recursive: true });
 
@@ -98,9 +99,9 @@ for (const view of VIEWS.filter((view) => view.paper)) {
   await page.locator("#sheet").screenshot({ path: `${out}/compare-${view.name}.png` });
 }
 
-// The README hero: the list in dark mode with a little wallpaper around it.
-await shoot(`${base}?shot&theme=${theme}&mode=dark`, ".ppm-panel", `${repo}docs/assets/popover.png`, undefined, 24);
+// The README hero: the list in dark mode, default theme, with a little wallpaper around it.
+if (hero) await shoot(`${base}?shot&theme=${theme}&mode=dark`, ".ppm-panel", `${repo}docs/assets/popover.png`, undefined, 24);
 
 await browser.close();
 await server.close();
-console.log(`Wrote ${out} and docs/assets/popover.png`);
+console.log(`Wrote ${out}${hero ? " and docs/assets/popover.png" : ""}`);
