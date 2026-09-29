@@ -1,0 +1,23 @@
+{
+  "pins" : [
+    {
+      "identity" : "flicker-dot",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/laurieesc/flicker-dot",
+      "state" : {
+        "revision" : "f8430fb56eb3f797f8b7f98fa77c4530d8b4d4ca",
+        "version" : "0.2.0"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
+        "version" : "2.10.0"
+      }
+    }
+  ],
+  "version" : 2
+}

@@ -1,0 +1,466 @@
+import ServiceManagement
+import SwiftUI
+import UserNotifications
+
+/// A dot matrix whose dots animate individually between glyphs, staggered by
+/// column, so any glyph can morph into any other.
+struct DotMatrixView: View {
+    let glyph: DotGlyph
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var size: CGFloat = 110
+
+    var body: some View {
+        let pitch = size / 5
+        VStack(spacing: 0) {
+            ForEach(0..<5, id: \.self) { row in
+                HStack(spacing: 0) {
+                    ForEach(0..<5, id: \.self) { column in
+                        let dot = glyph.dot(row: row, column: column)
+                        Circle()
+                            .fill(dot == "a" ? Theme.amber : Theme.text1)
+                            .opacity(dot == "." ? 0.12 : 1)
+                            .frame(width: pitch * 0.64, height: pitch * 0.64)
+                            .frame(width: pitch, height: pitch)
+                            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28).delay(Double(column) * 0.04), value: glyph)
+                    }
+                }
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+enum OnboardingStep: Int, CaseIterable {
+    case welcome, leaks, tools, vercel, terminal, usage, done
+}
+
+struct OnboardingView: View {
+    @ObservedObject var monitor: ServerMonitor
+    @StateObject var status = OnboardingStatus()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openWindow) private var openWindow
+    @State var step: OnboardingStep = .welcome
+    /// Shows only the usage step, for people who onboarded before it existed.
+    var usageOnly = false
+    var close: () -> Void = {}
+
+    @AppStorage(Preferences.language) private var language = InterfaceLanguage.system.rawValue
+    @AppStorage(Preferences.onboarded) private var onboarded = false
+    @AppStorage(Preferences.vercelPreviews) private var previews = false
+    @AppStorage(Preferences.shareUsage) private var shareUsage = true
+    @AppStorage(Preferences.usageAsked) private var usageAsked = false
+    @AppStorage(Preferences.announcedTUI) private var announcedTUI = false
+    @AppStorage(Preferences.thresholdGB) private var thresholdGB = 2.0
+    @AppStorage(Preferences.cleanUpIdleHours) private var idleHours = 4
+    @State private var heroGlyph: DotGlyph = .colon
+    @State private var command = CommandLineTool.state
+    @State private var commandError: String?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: 20) {
+                    DotMatrixView(glyph: heroGlyph)
+                        .frame(height: 120)
+                    VStack(spacing: 8) {
+                        Text(title).font(Theme.displaySans).foregroundStyle(Theme.text1)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(message)
+                            .font(Theme.body)
+                            .foregroundStyle(OnboardingStyle.secondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(4)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    card
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(EdgeInsets(top: 36, leading: 32, bottom: 20, trailing: 32))
+            }
+            SectionDivider()
+            HStack {
+                if !usageOnly {
+                    HStack(spacing: 6) {
+                        ForEach(OnboardingStep.allCases, id: \.rawValue) { item in
+                            Circle().fill(Theme.text1.opacity(item == step ? 1 : 0.2)).frame(width: 6, height: 6)
+                        }
+                    }
+                }
+                Spacer()
+                HStack(spacing: 8) { actions }
+            }
+            .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
+        }
+        .frame(width: 480, height: 620)
+        .background(Theme.windowBackground)
+        .onAppear { updateHero(animated: false); loadStep() }
+        .onChange(of: step) { _, _ in updateHero(animated: !reduceMotion); loadStep() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if step == .leaks { Task { await status.refreshSetup(force: true) } }
+        }
+    }
+
+    // MARK: - Copy
+
+    private var title: String {
+        switch step {
+        case .welcome: return "WhatThePort"
+        case .leaks: return L10n.text("Stay ahead of leaks")
+        case .tools: return L10n.text("Your tools, at a glance.")
+        case .vercel: return L10n.text("Vercel previews")
+        case .terminal: return L10n.text("WTP TUI")
+        case .usage: return L10n.text("Help shape WhatThePort")
+        case .done: return L10n.text("You’re set")
+        }
+    }
+
+    private var message: String {
+        switch step {
+        case .welcome: return L10n.text("Every dev server on your Mac, in the menu bar. What it is, what branch it’s on, and what it’s costing you.")
+        case .leaks: return L10n.text("WhatThePort warns you when a server starts eating memory. Nothing about your servers leaves your Mac.")
+        case .tools: return L10n.text("WhatThePort reads local session files and process info to put your servers in context.")
+        case .vercel: return L10n.text("See the preview deployment for whatever branch each server is running. Optional.")
+        case .terminal: return L10n.text("Type wtp in any terminal to browse, open and stop your servers, with the same details and Clean up. Optional.")
+        case .usage: return L10n.text("Share which features you use, once a day. Nothing about your servers, projects or Mac is included.")
+        case .done: return L10n.text("The dots settle into the colon in your menu bar. Press ⌥⌘P any time to open it.")
+        }
+    }
+
+    // MARK: - Cards
+
+    @ViewBuilder private var card: some View {
+        switch step {
+        case .welcome:
+            OnboardingCard {
+                OnboardingRow(title: L10n.text("Language")) {
+                    Picker(L10n.text("Language"), selection: $language) {
+                        ForEach(InterfaceLanguage.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                    }
+                    .labelsHidden()
+                    .frame(maxWidth: 210)
+                }
+                LanguagePreview()
+                RowDivider()
+                OnboardingRow(title: monitor.servers.isEmpty ? L10n.text("No servers running right now") : L10n.format("Found %d %@ running", monitor.servers.count, L10n.counted("server", "servers", count: monitor.servers.count))) {
+                    Text(monitor.servers.prefix(3).map { ":\($0.port)" }.joined(separator: " ") + (monitor.servers.count > 3 ? " …" : ""))
+                        .font(Theme.mono).foregroundStyle(Theme.text2)
+                        .environment(\.layoutDirection, .leftToRight)
+                }
+            }
+        case .leaks:
+            VStack(spacing: 18) {
+                OnboardingCard {
+                    OnboardingSummary(title: status.setupSummary, detail: L10n.format("%d of 2 ready", status.readyCount))
+                    RowDivider()
+                    OnboardingRow(title: L10n.text("Notifications"), caption: status.notifications == .action("Not allowed", button: "Settings…") ? L10n.text("Allow in System Settings") : L10n.text("Memory and leak alerts")) {
+                        OnboardingConfirmation(state: status.notifications, action: notificationAction)
+                    }
+                    RowDivider()
+                    OnboardingRow(title: L10n.text("Launch at login"), caption: status.login == .action("Needs approval", button: "Settings…") ? L10n.text("Approve in System Settings") : L10n.text("Opens when you sign in")) {
+                        OnboardingConfirmation(state: status.login, action: loginAction)
+                    }
+                }
+                if let error = status.notificationError ?? status.loginError {
+                    Text(error).font(OnboardingStyle.label).foregroundStyle(Theme.amber)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
+                Button(L10n.text("You can change these in Settings.")) { openWindow(id: "settings") }
+                    .buttonStyle(.plain).font(OnboardingStyle.label).foregroundStyle(OnboardingStyle.secondary)
+            }
+        case .tools:
+            OnboardingCard {
+                OnboardingSummary(
+                    title: status.isScanning ? L10n.text("Checking this Mac…") : L10n.format("%d %@ detected", status.detectedCount, L10n.counted("tool", "tools", count: status.detectedCount)),
+                    detail: status.isScanning ? L10n.format("%d of 4 found", status.detectedCount) : L10n.text("Scan complete")
+                )
+                ForEach(OnboardingTool.allCases, id: \.self) { tool in
+                    RowDivider()
+                    OnboardingRow(title: tool.name, icon: AnyView(toolIcon(tool))) {
+                        OnboardingConfirmation(state: status.tools[tool] ?? .loading(L10n.text("Checking…")), monospaced: true)
+                    }
+                }
+            }
+        case .vercel:
+            OnboardingCard {
+                OnboardingRow(title: L10n.text("Show preview buttons"),
+                              caption: GitHubLookup.isAvailable ? L10n.text("Uses Vercel’s GitHub deployments through gh") : L10n.text("Needs the GitHub CLI (gh)")) {
+                    Toggle("", isOn: $previews).labelsHidden().toggleStyle(.switch)
+                }
+                .disabled(!GitHubLookup.isAvailable)
+            }
+        case .terminal:
+            VStack(spacing: 18) {
+                OnboardingCard {
+                    OnboardingRow(title: L10n.text("wtp command"), caption: commandCaption, icon: AnyView(ToolIcon(systemName: "terminal"))) {
+                        OnboardingConfirmation(state: commandState, monospaced: true) {
+                            commandError = CommandLineTool.install()
+                            command = CommandLineTool.state
+                        }
+                    }
+                }
+                if let commandError {
+                    Text(commandError).font(OnboardingStyle.label).foregroundStyle(Theme.amber)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
+                Button(L10n.text("You can remove it in Settings.")) { openWindow(id: "settings") }
+                    .buttonStyle(.plain).font(OnboardingStyle.label).foregroundStyle(OnboardingStyle.secondary)
+            }
+        case .usage:
+            VStack(spacing: 18) {
+                OnboardingCard {
+                    OnboardingRow(title: L10n.text("Share anonymous usage"), caption: L10n.text("Feature names only, like Clean up or Stop")) {
+                        Toggle("", isOn: Binding(get: { shareUsage }, set: Usage.setSharing)).labelsHidden().toggleStyle(.switch)
+                    }
+                }
+                Button(L10n.text("See exactly what’s sent. You can change this in Settings.")) {
+                    NSWorkspace.shared.open(URL(string: FeedbackLink.repository + "#privacy")!)
+                }
+                .buttonStyle(.plain).font(OnboardingStyle.label).foregroundStyle(OnboardingStyle.secondary)
+            }
+        case .done:
+            OnboardingCard {
+                OnboardingRow(title: L10n.text("Alert when a server uses more than")) {
+                    HStack(spacing: 6) {
+                        TextField("", value: $thresholdGB, format: .number.precision(.fractionLength(0...1)))
+                            .textFieldStyle(.roundedBorder).font(Theme.mono).multilineTextAlignment(.trailing).frame(width: 48)
+                        Text("GB").font(Theme.mono).foregroundStyle(Theme.text3)
+                    }
+                }
+                RowDivider()
+                OnboardingRow(title: L10n.text("Suggest cleaning up idle servers after")) {
+                    Picker("", selection: $idleHours) {
+                        ForEach([1, 2, 4, 8, 24], id: \.self) { Text(L10n.format("%dh", $0)).tag($0) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func toolIcon(_ tool: OnboardingTool) -> some View {
+        switch tool {
+        case .claude: ToolIcon(agent: .claudeCode)
+        case .codex: ToolIcon(agent: .codex)
+        case .conductor: ToolIcon(systemName: "square.grid.2x2")
+        case .github: ToolIcon(systemName: "arrow.triangle.branch")
+        }
+    }
+
+    private var commandState: OnboardingRowState {
+        switch command {
+        case .installed: return .success("Installed")
+        case .notInstalled: return .action("Not installed", button: "Install…")
+        case .other: return .action("Taken", button: "Replace…")
+        case .unavailable: return .unavailable("Unavailable")
+        }
+    }
+
+    private var commandCaption: String {
+        switch command {
+        case .installed: return L10n.text("Ready in new terminal windows")
+        case .notInstalled: return L10n.format("Adds %@", CommandLineTool.linkPath)
+        case .other: return L10n.format("%@ is already something else", CommandLineTool.linkPath)
+        case .unavailable: return L10n.text("Move WhatThePort to Applications first")
+        }
+    }
+
+    private func loadStep() {
+        // Keep in-flight work when moving between steps; returning shows cached
+        // results instead of replaying a scan. Reads never change preferences.
+        switch step {
+        case .leaks: Task { await status.refreshSetup() }
+        case .tools: Task { await status.scanTools() }
+        case .terminal: command = CommandLineTool.state
+        default: break
+        }
+    }
+
+    private func notificationAction() {
+        if case .action(_, "Settings…") = status.notifications {
+            if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension") { NSWorkspace.shared.open(url) }
+        } else {
+            Task { await status.allowNotifications() }
+        }
+    }
+
+    private func loginAction() {
+        if case .action(_, "Settings…") = status.login {
+            SMAppService.openSystemSettingsLoginItems()
+        } else {
+            Task { await status.addLoginItem() }
+        }
+    }
+
+    // MARK: - Actions
+
+    @ViewBuilder private var actions: some View {
+        switch step {
+        case .welcome:
+            Button(L10n.text("Get started")) { go(.leaks) }.buttonStyle(PillButtonStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+        case .vercel:
+            Button(L10n.text("Back")) { go(.tools) }.buttonStyle(PillButtonStyle())
+            Button(L10n.text("Skip")) { previews = false; go(.terminal) }.buttonStyle(PillButtonStyle())
+            Button(L10n.text("Continue")) { go(.terminal) }.buttonStyle(PillButtonStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+        case .usage where usageOnly:
+            Button(L10n.text("Done")) { finish() }.buttonStyle(PillButtonStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+        case .done:
+            Button(L10n.text("Open WhatThePort")) { finish() }.buttonStyle(PillButtonStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+        default:
+            Button(L10n.text("Back")) { go(OnboardingStep(rawValue: step.rawValue - 1) ?? .welcome) }.buttonStyle(PillButtonStyle())
+            Button(L10n.text("Continue")) { go(OnboardingStep(rawValue: step.rawValue + 1) ?? .done) }.buttonStyle(PillButtonStyle(kind: .primary)).keyboardShortcut(.defaultAction)
+        }
+    }
+
+    private func go(_ next: OnboardingStep) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { step = next }
+    }
+
+    private func finish() {
+        onboarded = true
+        usageAsked = true
+        // The WTP TUI step already introduced wtp, so skip the update notification.
+        if !usageOnly { announcedTUI = true }
+        close()
+        if !usageOnly { StatusItemOpener.open() }
+    }
+
+    private func updateHero(animated: Bool) {
+        switch step {
+        case .welcome: heroGlyph = .colon
+        case .leaks: heroGlyph = .leak
+        case .tools: heroGlyph = .prompt
+        case .vercel: heroGlyph = .triangle
+        case .terminal: heroGlyph = .cursor
+        case .usage: heroGlyph = .bars
+        case .done:
+            // The celebration: spark, burst, fade, then settle into the colon.
+            let frames: [DotGlyph] = [
+                DotGlyph(rows: [".....", ".....", "..#..", ".....", "....."]),
+                DotGlyph(rows: [".....", "..#..", ".###.", "..#..", "....."]),
+                .burst,
+                DotGlyph(rows: ["#...#", ".....", ".....", ".....", "#...#"]),
+                .colon,
+            ]
+            guard animated, !reduceMotion else { heroGlyph = .colon; return }
+            for (index, frame) in frames.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35 * Double(index)) { if step == .done { heroGlyph = frame } }
+            }
+        }
+    }
+
+}
+
+// MARK: - Pieces
+
+private struct OnboardingCard<Content: View>: View {
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(spacing: 0) { content }
+        .background(OnboardingStyle.surface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(OnboardingStyle.divider, lineWidth: 1))
+    }
+}
+
+private struct RowDivider: View {
+    var body: some View { Rectangle().fill(OnboardingStyle.divider).frame(height: 1) }
+}
+
+private struct OnboardingRow<Control: View>: View {
+    let title: String
+    var caption: String?
+    var icon: AnyView?
+    @ViewBuilder let control: Control
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if let icon { icon }
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(Theme.bodyMedium).foregroundStyle(Theme.text1)
+                if let caption { Text(caption).font(OnboardingStyle.label).foregroundStyle(OnboardingStyle.secondary) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            control
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, caption == nil ? 10 : 14)
+        .frame(minHeight: caption == nil ? 49 : 64)
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// Two sample Servers rows in the chosen language, laid out like ServerRow.
+/// Mock data only, the same servers as the website demo, and nothing is clickable.
+private struct LanguagePreview: View {
+    private static let megabyte: UInt64 = 1_048_576
+
+    var body: some View {
+        VStack(spacing: 0) {
+            row(port: 3000, status: .running, colorIndex: 0, name: "menubar port monitor", memory: 1240 * Self.megabyte,
+                spark: [5, 6, 5.5, 8, 7, 10, 9, 11, 10, 12, 11.5, 13]) {
+                HStack(spacing: 5) {
+                    AgentGlyph(kind: .claudeCode, size: 10)
+                    Text("what the port · " + L10n.format("up %@", L10n.duration(3 * 60 * 60, short: true))).lineLimit(1)
+                }
+                .foregroundStyle(Theme.text2)
+            }
+            row(port: 6006, status: .attention, colorIndex: 3, name: "tokens v2", memory: 2810 * Self.megabyte,
+                spark: [2, 2.5, 3.5, 4, 5.5, 6, 8, 9, 11, 12.5, 14, 16]) {
+                Text(L10n.format("+%@ in %@", Format.bytesString(1126 * Self.megabyte), L10n.duration(10 * 60)))
+                    .lineLimit(1)
+                    .foregroundStyle(Theme.amber)
+            }
+        }
+        .padding(4)
+        .background(Theme.popoverBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .padding(EdgeInsets(top: 0, leading: 8, bottom: 8, trailing: 8))
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func row<Context: View>(port: Int, status: ServerStatus, colorIndex: Int, name: String, memory: UInt64,
+                                    spark: [Double], @ViewBuilder context: () -> Context) -> some View {
+        let attention = status == .attention
+        return HStack(spacing: 0) {
+            PortLabel(port: port, status: status, color: Theme.portColor(at: colorIndex))
+                .frame(width: 58, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(name).font(Theme.bodyMedium).foregroundStyle(Theme.text1).lineLimit(1)
+                context().font(Theme.caption)
+            }
+            .padding(.trailing, 10)
+            Spacer(minLength: 0)
+            Sparkline(values: spark, color: attention ? Theme.amber : Theme.text1.opacity(0.7), lineWidth: attention ? 1.5 : 1.25)
+                .frame(width: 40, height: 18)
+            Text(Format.bytesString(memory))
+                .font(Theme.mono)
+                .foregroundStyle(attention ? Theme.amber : Theme.text1.opacity(0.85))
+                .frame(width: 64, alignment: .trailing)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
+    }
+}
+
+private struct ToolIcon: View {
+    var agent: AgentKind?
+    var systemName: String?
+
+    init(agent: AgentKind) { self.agent = agent }
+    init(systemName: String) { self.systemName = systemName }
+
+    var body: some View {
+        Group {
+            if let agent {
+                AgentGlyph(kind: agent, size: 14, color: Theme.text1)
+            } else if let systemName {
+                Image(systemName: systemName).font(.system(size: 12)).foregroundStyle(Theme.text1)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .background(Theme.fill, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+}
