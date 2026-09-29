@@ -71,7 +71,7 @@ pub fn list(mut machine: Machine, json: bool) -> io::Result<ExitCode> {
     if json {
         serde_json::to_writer_pretty(&mut out, &snapshot)?;
         writeln!(out)?;
-    } else if snapshot.servers.is_empty() {
+    } else if snapshot.servers.is_empty() && snapshot.other_ports.is_empty() {
         let config = Config::default();
         writeln!(
             out,
@@ -79,7 +79,18 @@ pub fn list(mut machine: Machine, json: bool) -> io::Result<ExitCode> {
             config.min_port, config.max_port
         )?;
     } else {
-        write_table(&mut out, &snapshot)?;
+        if !snapshot.servers.is_empty() {
+            write_table(&mut out, &snapshot)?;
+        }
+        if !snapshot.other_ports.is_empty() {
+            if !snapshot.servers.is_empty() {
+                writeln!(out)?;
+            }
+            writeln!(out, "Other ports")?;
+            for port in &snapshot.other_ports {
+                writeln!(out, "{}", format::other_port(port))?;
+            }
+        }
     }
     Ok(ExitCode::SUCCESS)
 }

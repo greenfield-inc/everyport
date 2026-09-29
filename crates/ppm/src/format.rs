@@ -1,6 +1,18 @@
 //! Human formats shared by the list, clean up and the TUI, following the popover.
 
-use ppm_core::protocol::{AgentKind, CleanUpReason, Server};
+use ppm_core::protocol::{AgentKind, CleanUpReason, OtherPort, Server};
+
+/// Read-only listener details when the owning process cannot be inspected.
+pub fn other_port(port: &OtherPort) -> String {
+    let mut fields = vec![format!(":{}", port.port), port.addresses.join(", ")];
+    if let Some(owner) = &port.owner {
+        fields.push(owner.clone());
+    }
+    if let Some(name) = &port.process_name {
+        fields.push(name.clone());
+    }
+    fields.join("  ")
+}
 
 const MB: f64 = 1_048_576.0;
 

@@ -186,6 +186,9 @@ pub fn draw(app: &mut App, frame: &mut Frame) {
 
 /// When the selected server goes away, selects the one that took its place.
 fn sync_selection(app: &mut App) {
+    if app.list_scrolling {
+        return;
+    }
     let ports: Vec<u16> = app.visible().iter().map(|s| s.port).collect();
     match ports.iter().position(|&p| Some(p) == app.selected) {
         Some(index) => app.selected_index = index,
@@ -205,7 +208,11 @@ fn list_offset(app: &mut App, lines: usize, available: usize) -> usize {
         return 0;
     }
     let ports: Vec<u16> = app.visible().iter().map(|s| s.port).collect();
-    if let Some(index) = ports.iter().position(|&p| Some(p) == app.selected) {
+    if let Some(index) = ports
+        .iter()
+        .position(|&p| Some(p) == app.selected)
+        .filter(|_| !app.list_scrolling)
+    {
         let top = 1 + index * 3;
         if top < app.list_offset {
             app.list_offset = top - usize::from(index == 0);
@@ -416,14 +423,20 @@ impl View<'_> {
         let app = self.app;
         let mut block = Block::new();
         let servers = app.visible();
-        if servers.is_empty() {
+        let others = app
+            .snapshot
+            .as_ref()
+            .map_or(&[][..], |s| s.other_ports.as_slice());
+        if servers.is_empty() && (others.is_empty() || app.cleaning) {
             let config = Config::default();
             block.blank();
             for _ in 0..5 {
                 block.add(self.centered(vec![span("● ● ● ● ●", self.s.faint)]));
             }
             block.blank();
-            let (title, error) = if app.snapshot.is_some() {
+            let (title, error) = if app.cleaning {
+                ("No servers to clean up".to_string(), false)
+            } else if app.snapshot.is_some() {
                 ("Nothing listening".to_string(), false)
             } else {
                 app.waiting()
@@ -450,6 +463,13 @@ impl View<'_> {
             }
             for line in self.server_row(server, Some(server.port) == app.selected) {
                 block.add(line);
+            }
+        }
+        if !others.is_empty() && !app.cleaning {
+            block.blank();
+            block.add(self.padded(vec![span("Other ports", self.bold())]));
+            for port in others {
+                block.add(self.padded(vec![span(format::other_port(port), self.s.text2)]));
             }
         }
         block.blank();
@@ -659,7 +679,13 @@ impl View<'_> {
             &[]
         };
         if app.servers().is_empty() {
-            return self.hints(&[machine, &[("?", "Keys"), ("q", "Quit")]].concat());
+            return self.hints(
+                &[
+                    machine,
+                    &[("pgup pgdn", "Scroll"), ("?", "Keys"), ("q", "Quit")],
+                ]
+                .concat(),
+            );
         }
         let count = app
             .servers()
@@ -1154,6 +1180,7 @@ impl View<'_> {
                 "Servers",
                 &[
                     ("↑ ↓  j k", "Select"),
+                    ("pgup pgdn", "Scroll list"),
                     ("⏎", "Details"),
                     ("c", "Clean up"),
                     ("t", "CPU for servers or the whole machine"),

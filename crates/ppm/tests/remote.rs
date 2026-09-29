@@ -106,3 +106,139 @@ fn on_runs_the_command_on_the_named_machine() {
         "ppm: --on works with list, watch, stop, restart, open, clean and the terminal UI\n"
     );
 }
+
+/// A protocol fixture makes cross-user listeners reproducible without needing
+/// privileges or relying on the processes that happen to run on the test host.
+fn list_snapshot(snapshot: ppm_core::protocol::Snapshot, case: &str) -> String {
+    use base64::Engine as _;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let server = std::thread::spawn(move || {
+        let (mut events, _) = listener.accept().unwrap();
+        events
+            .set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let mut reader = BufReader::new(&events);
+        let mut line = String::new();
+        reader.read_line(&mut line).unwrap();
+        assert!(line.starts_with("GET /events "));
+        loop {
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+        }
+        write!(
+            events,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap();
+        writeln!(events, "data: {{\"type\":\"hello\",\"protocol\":1,\"ppm_version\":\"0.1.0\",\"host\":{{\"hostname\":\"fixture\",\"os\":\"linux\",\"arch\":\"aarch64\",\"cores\":2}}}}\n").unwrap();
+        let mut snapshot = snapshot;
+        snapshot.taken_at = 1;
+        writeln!(
+            events,
+            "data: {}\n",
+            serde_json::to_string(&ppm_core::protocol::Event::Snapshot(snapshot.clone())).unwrap()
+        )
+        .unwrap();
+        let (mut call, _) = listener.accept().unwrap();
+        call.set_read_timeout(Some(Duration::from_secs(10)))
+            .unwrap();
+        let mut reader = BufReader::new(&call);
+        let mut length = 0;
+        loop {
+            line.clear();
+            reader.read_line(&mut line).unwrap();
+            if line == "\r\n" {
+                break;
+            }
+            if let Some((key, value)) = line.split_once(':') {
+                if key.eq_ignore_ascii_case("content-length") {
+                    length = value.trim().parse::<usize>().unwrap();
+                }
+            }
+        }
+        let mut body = vec![0; length];
+        reader.read_exact(&mut body).unwrap();
+        let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(request["method"], "refresh");
+        let reply =
+            serde_json::json!({"type":"result", "id":request["id"], "error":null}).to_string();
+        write!(
+            call,
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{reply}",
+            reply.len()
+        )
+        .unwrap();
+        snapshot.taken_at = 2;
+        writeln!(
+            events,
+            "data: {}\n",
+            serde_json::to_string(&ppm_core::protocol::Event::Snapshot(snapshot)).unwrap()
+        )
+        .unwrap();
+    });
+    let home = Home::new(case);
+    let code = format!(
+        "ppm://{}",
+        base64::engine::general_purpose::URL_SAFE_NO_PAD
+            .encode(serde_json::json!({"url":url,"token":"fixture-token"}).to_string())
+    );
+    assert!(home
+        .ppm(&["remote", "add", "fixture", "--code", &code])
+        .status
+        .success());
+    let output = home.ppm(&["--on", "fixture", "list"]);
+    server.join().unwrap();
+    assert!(output.status.success(), "{}", stderr(&output));
+    stdout(&output)
+}
+
+#[test]
+fn plain_list_includes_other_ports_and_only_calls_a_truly_empty_snapshot_empty() {
+    use ppm_core::protocol::{OtherPort, Snapshot};
+    let mut snapshot: Snapshot = serde_json::from_str(include_str!(
+        "../../../packages/protocol/fixtures/snapshot.json"
+    ))
+    .unwrap();
+    snapshot.other_ports = vec![
+        OtherPort {
+            port: 39301,
+            addresses: vec!["127.0.0.1".into(), "::1".into()],
+            owner: Some("postgres".into()),
+            process_name: Some("postgresql".into()),
+        },
+        OtherPort {
+            port: 39302,
+            addresses: vec!["0.0.0.0".into()],
+            owner: Some("root".into()),
+            process_name: None,
+        },
+    ];
+    let mixed = list_snapshot(snapshot.clone(), "list-mixed");
+    assert!(mixed.find("Other ports").unwrap() > mixed.find("MEMORY").unwrap());
+    snapshot.servers.clear();
+    let only_other = list_snapshot(snapshot.clone(), "list-other");
+    for output in [mixed, only_other] {
+        assert!(output.contains("Other ports"));
+        assert!(!output.contains("Nothing listening"));
+        assert!(output
+            .lines()
+            .any(|line| line.split_whitespace().collect::<Vec<_>>()
+                == [":39301", "127.0.0.1,", "::1", "postgres", "postgresql"]));
+        assert!(output.lines().any(
+            |line| line.split_whitespace().collect::<Vec<_>>() == [":39302", "0.0.0.0", "root"]
+        ));
+    }
+    snapshot.other_ports.clear();
+    assert_eq!(
+        list_snapshot(snapshot, "list-empty"),
+        "Nothing listening on ports 3000-65535.\n"
+    );
+}
