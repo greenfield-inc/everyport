@@ -10,14 +10,14 @@ pub use console::run_helper;
 
 use super::{
     inbound_connections, Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo,
-    ProcUsage,
+    ProcUsage, Socket,
 };
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::io;
 use std::mem::{offset_of, MaybeUninit};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use windows::core::{Owned, BOOL, PCWSTR, PWSTR};
@@ -180,22 +180,44 @@ impl Platform for Windows {
             .into_iter()
             .map(|row| {
                 let address = Ipv4Addr::from(row.dwLocalAddr.to_ne_bytes()).into();
-                (row.dwState, address, row.dwLocalPort)
+                (row.dwState, address, row.dwLocalPort, row.dwOwningPid)
             })
             .chain(v6.into_iter().map(|row| {
                 let address = Ipv6Addr::from(row.ucLocalAddr).into();
-                (row.dwState, address, row.dwLocalPort)
+                (row.dwState, address, row.dwLocalPort, row.dwOwningPid)
             }));
         let (mut listening, mut established) = (Vec::new(), Vec::new());
-        for (state, address, local_port) in sockets {
-            let socket: (IpAddr, u16) = (address, port(local_port));
+        for (state, address, local_port, pid) in sockets {
+            let socket = Socket {
+                address,
+                port: port(local_port),
+                holders: Some(vec![pid]),
+            };
             if state == MIB_TCP_STATE_LISTEN.0 as u32 {
                 listening.push(socket);
             } else if state == MIB_TCP_STATE_ESTAB.0 as u32 {
                 established.push(socket);
             }
         }
-        Some(inbound_connections(&listening, established))
+        // Most connections belong to the listener itself, so the process
+        // table is read only for the rest. Without it, which process a
+        // connection belongs to is unknown.
+        let mut parents: Option<io::Result<HashMap<u32, Option<u32>>>> = None;
+        let parent = |pid| {
+            let parents = parents.get_or_insert_with(|| {
+                let processes = self.processes()?;
+                Ok(processes
+                    .into_iter()
+                    .map(|p| (p.proc.pid, p.parent))
+                    .collect())
+            });
+            parents.as_ref().ok()?.get(&pid).copied().flatten()
+        };
+        let counts = inbound_connections(&listening, established, parent);
+        match parents {
+            Some(Err(_)) => None,
+            _ => Some(counts),
+        }
     }
 
     fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {

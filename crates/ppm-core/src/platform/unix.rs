@@ -3,6 +3,11 @@
 use crate::protocol::ProcRef;
 use std::io;
 use std::sync::Mutex;
+use std::time::Duration;
+
+/// A scan asks for connections and listeners back to back, so one socket
+/// search younger than this serves both.
+pub(super) const SOCKETS_MAX_AGE: Duration = Duration::from_millis(500);
 
 /// Whole-machine CPU use from cumulative busy and total tick counters.
 #[derive(Default)]
