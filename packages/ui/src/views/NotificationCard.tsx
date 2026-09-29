@@ -1,4 +1,4 @@
-import type { Alert, Server } from "@ppm/protocol";
+import type { Alert, Server } from "@everyport/protocol";
 import { total } from "../format.ts";
 import { Socket } from "../icons.tsx";
 import { DEFAULT_ALERT_MEMORY, growth, historySpan, reasonText } from "../model.ts";
@@ -42,37 +42,37 @@ export function alertText(server: Server, alert: Alert, alertMemory = DEFAULT_AL
  */
 export function NotificationCard({ server, alert, alertMemory, onDetails, onStop, onSnooze, theme, appearance }: Props) {
   const { title, body } = alertText(server, alert, alertMemory);
-  const action = "ppm:flex ppm:flex-1 ppm:justify-center ppm:rounded-lg ppm:bg-accent ppm:py-[5px] ppm:text-13 ppm:font-medium";
+  const action = "everyport:flex everyport:flex-1 everyport:justify-center everyport:rounded-lg everyport:bg-accent everyport:py-[5px] everyport:text-13 everyport:font-medium";
   return (
     <Themed theme={theme} appearance={appearance}>
       <div
         role="alert"
-        className="ppm:flex ppm:w-[356px] ppm:flex-col ppm:gap-2.5 ppm:rounded-[22px] ppm:py-3 ppm:pr-3.5 ppm:pl-3"
+        className="everyport:flex everyport:w-[356px] everyport:flex-col everyport:gap-2.5 everyport:rounded-[22px] everyport:py-3 everyport:pr-3.5 everyport:pl-3"
         style={{
-          background: "color-mix(in oklab, var(--popover) var(--ppm-tint), transparent)",
-          boxShadow: "inset 0 0 0 0.5px var(--border), var(--ppm-shadow, 0 12px 40px rgb(0 0 0 / 0.45))",
+          background: "color-mix(in oklab, var(--popover) var(--everyport-tint), transparent)",
+          boxShadow: "inset 0 0 0 0.5px var(--border), var(--everyport-shadow, 0 12px 40px rgb(0 0 0 / 0.45))",
         }}
       >
-        <div className="ppm:flex ppm:items-start ppm:gap-2.5">
-          <span className="ppm:flex ppm:size-[34px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[9px] ppm:bg-[#15171D] ppm:text-white ppm:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
+        <div className="everyport:flex everyport:items-start everyport:gap-2.5">
+          <span className="everyport:flex everyport:size-[34px] everyport:shrink-0 everyport:items-center everyport:justify-center everyport:rounded-[9px] everyport:bg-[#15171D] everyport:text-white everyport:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
             <Socket size={24} state="running" />
           </span>
-          <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px">
-            <div className="ppm:flex ppm:items-baseline ppm:justify-between ppm:gap-2">
-              <span className="ppm:clamp-1 ppm:text-13 ppm:font-medium ppm:text-fg">{title}</span>
-              <span className="ppm:shrink-0 ppm:text-11 ppm:text-fg3">now</span>
+          <div className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:flex-col everyport:gap-px">
+            <div className="everyport:flex everyport:items-baseline everyport:justify-between everyport:gap-2">
+              <span className="everyport:clamp-1 everyport:text-13 everyport:font-medium everyport:text-fg">{title}</span>
+              <span className="everyport:shrink-0 everyport:text-11 everyport:text-fg3">now</span>
             </div>
-            <p className="ppm:text-13 ppm:leading-[18px] ppm:text-fg2">{body}</p>
+            <p className="everyport:text-13 everyport:leading-[18px] everyport:text-fg2">{body}</p>
           </div>
         </div>
-        <div className="ppm:flex ppm:gap-1.5 ppm:pl-11">
-          <button type="button" onClick={onDetails} className={`${action} ppm:text-fg`}>
+        <div className="everyport:flex everyport:gap-1.5 everyport:pl-11">
+          <button type="button" onClick={onDetails} className={`${action} everyport:text-fg`}>
             Details
           </button>
-          <button type="button" onClick={onStop} className={`${action} ppm:text-danger`}>
+          <button type="button" onClick={onStop} className={`${action} everyport:text-danger`}>
             Stop
           </button>
-          <button type="button" onClick={onSnooze} className={`${action} ppm:text-fg`}>
+          <button type="button" onClick={onSnooze} className={`${action} everyport:text-fg`}>
             Snooze 1h
           </button>
         </div>

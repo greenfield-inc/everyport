@@ -42,7 +42,7 @@ Colors and the body font come from the active Doozy theme. The 40 themes are in 
 | Memory-bar segments and port colors | `--chart-1` to `--chart-5`; servers in attention use the warning color |
 | Primary button (white "Open localhost") | `--primary` / `--primary-foreground` |
 
-Semantic colors (warning, destructive) never come from chart slots. `@ppm/ui` moves their lightness, keeping the hue, until they read on the panel at 4.5:1 in every theme and mode. The tray's attention icon uses the same warning color (`warningColor` in `@ppm/ui`).
+Semantic colors (warning, destructive) never come from chart slots. `@everyport/ui` moves their lightness, keeping the hue, until they read on the panel at 4.5:1 in every theme and mode. The tray's attention icon uses the same warning color (`warningColor` in `@everyport/ui`).
 
 Use the theme's `font-sans` for text. Doozy's app font is Sora. Numbers use the theme's `font-mono` and fall back to Geist Mono. Themes never change radii or spacing: ignore the theme's `radius`.
 
@@ -52,4 +52,4 @@ Motion (intent brief, item 13), the app icon, and the tray icon colors (the sock
 
 ## Verifying a view
 
-Render it from `fixtureSnapshot` (`@ppm/protocol`) at 2x. Put it next to the Paper PNG at the same size and check layout, spacing and type. Colors will differ by design. Include the side-by-side in the PR.
+Render it from `fixtureSnapshot` (`@everyport/protocol`) at 2x. Put it next to the Paper PNG at the same size and check layout, spacing and type. Colors will differ by design. Include the side-by-side in the PR.

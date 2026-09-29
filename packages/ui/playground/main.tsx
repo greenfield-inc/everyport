@@ -5,7 +5,7 @@
 //   port      open this server's detail
 //   theme     a theme name;  mode  light | dark | system
 //   live      advance snapshots every 2 s;  shot  hide the toolbar
-import { fixtureSnapshot } from "@ppm/protocol";
+import { fixtureSnapshot } from "@everyport/protocol";
 import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
 import { type Appearance, DEFAULT_THEME, NotificationCard, Popover, themeList } from "../src/index.ts";
@@ -30,7 +30,7 @@ function Playground() {
   const port = params.get("port");
   const shot = params.has("shot");
   const client = useMemo(() => fixtureClient((scenarios[scenario] ?? scenarios.paper)(), params.has("live") ? 2000 : null), [scenario]);
-  (window as unknown as { ppm: typeof client }).ppm = client;
+  (window as unknown as { everyport: typeof client }).everyport = client;
 
   const dark = mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
   const leaking = fixtureSnapshot.servers.find((server) => server.status === "attention")!;
@@ -86,9 +86,9 @@ function Playground() {
           appearance={mode}
           server={leaking}
           alert={{ port: leaking.port, kind: "leaking", memory: leaking.memory }}
-          onDetails={() => console.info("[ppm] details")}
-          onStop={() => console.info("[ppm] stop")}
-          onSnooze={() => console.info("[ppm] snooze")}
+          onDetails={() => console.info("[everyport] details")}
+          onStop={() => console.info("[everyport] stop")}
+          onSnooze={() => console.info("[everyport] snooze")}
         />
       ) : (
         <Popover

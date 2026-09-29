@@ -1,4 +1,4 @@
-import type { Server } from "@ppm/protocol";
+import type { Server } from "@everyport/protocol";
 import { Colon, Header, useTween } from "../components.tsx";
 import type { ViewContext } from "../context.ts";
 import { memory, totalParts } from "../format.ts";
@@ -32,25 +32,25 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
 
   return (
     <>
-      <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
+      <div className="everyport:flex everyport:flex-col everyport:gap-2.5 everyport:px-4 everyport:pt-3 everyport:pb-4">
         <Header title="Clean up" onBack={onBack} />
-        <div className="ppm:flex ppm:flex-col ppm:gap-1.5">
-          <div className="ppm:flex ppm:items-center ppm:gap-1.5">
-            <span className="ppm:font-mono ppm:text-28 ppm:font-medium ppm:text-fg">{chosen.length ? `~${amount}` : "0"}</span>
-            <span className="ppm:self-end ppm:pb-1 ppm:font-mono ppm:text-13 ppm:text-fg3">{unit}</span>
+        <div className="everyport:flex everyport:flex-col everyport:gap-1.5">
+          <div className="everyport:flex everyport:items-center everyport:gap-1.5">
+            <span className="everyport:font-mono everyport:text-28 everyport:font-medium everyport:text-fg">{chosen.length ? `~${amount}` : "0"}</span>
+            <span className="everyport:self-end everyport:pb-1 everyport:font-mono everyport:text-13 everyport:text-fg3">{unit}</span>
           </div>
-          <span className="ppm:text-13 ppm:text-fg2">{chosen.length ? `can be freed by stopping ${count}` : "Pick servers to stop"}</span>
+          <span className="everyport:text-13 everyport:text-fg2">{chosen.length ? `can be freed by stopping ${count}` : "Pick servers to stop"}</span>
         </div>
       </div>
-      <div className="ppm:hairline-t">
+      <div className="everyport:hairline-t">
         {candidates.length ? (
           <div
             role="listbox"
             aria-label="Servers to stop"
             aria-multiselectable
             tabIndex={0}
-            aria-activedescendant={selected === null ? undefined : `ppm-server-${selected}`}
-            className="ppm-scroll ppm:flex ppm:flex-col ppm:p-1.5" style={{ maxHeight: 7 * 52 + 12 }}>
+            aria-activedescendant={selected === null ? undefined : `everyport-server-${selected}`}
+            className="everyport-scroll everyport:flex everyport:flex-col everyport:p-1.5" style={{ maxHeight: 7 * 52 + 12 }}>
             {candidates.map((server) => (
               <Row
                 key={server.port}
@@ -63,18 +63,18 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
             ))}
           </div>
         ) : (
-          <p className="ppm:px-4 ppm:py-7 ppm:text-center ppm:text-13 ppm:text-fg2">Nothing to clean up</p>
+          <p className="everyport:px-4 everyport:py-7 everyport:text-center everyport:text-13 everyport:text-fg2">Nothing to clean up</p>
         )}
       </div>
-      <div className="ppm:hairline-t ppm:flex ppm:flex-col ppm:gap-3 ppm:p-3">
+      <div className="everyport:hairline-t everyport:flex everyport:flex-col everyport:gap-3 everyport:p-3">
         {note && (
-          <div className="ppm:flex ppm:items-center ppm:gap-1.5 ppm:px-1 ppm:text-11 ppm:text-fg3">
+          <div className="everyport:flex everyport:items-center everyport:gap-1.5 everyport:px-1 everyport:text-11 everyport:text-fg3">
             <LockIcon />
             {note}
           </div>
         )}
-        <div className="ppm:flex ppm:items-center ppm:gap-2">
-          <button type="button" onClick={onBack} className="ppm:rounded-lg ppm:bg-accent ppm:px-3.5 ppm:py-[7px] ppm:text-13 ppm:font-medium ppm:text-fg">
+        <div className="everyport:flex everyport:items-center everyport:gap-2">
+          <button type="button" onClick={onBack} className="everyport:rounded-lg everyport:bg-accent everyport:px-3.5 everyport:py-[7px] everyport:text-13 everyport:font-medium everyport:text-fg">
             Cancel
           </button>
           <button
@@ -84,7 +84,7 @@ export function CleanUp({ ctx, checked, selected, onToggle, onBack }: Props) {
               for (const server of chosen) ctx.stop(server);
               onBack();
             }}
-            className="ppm:flex ppm:flex-1 ppm:items-center ppm:justify-center ppm:rounded-lg ppm:bg-danger-fill ppm:py-[7px] ppm:pr-2.5 ppm:pl-3 ppm:text-13 ppm:font-medium ppm:text-on-danger ppm:disabled:opacity-50"
+            className="everyport:flex everyport:flex-1 everyport:items-center everyport:justify-center everyport:rounded-lg everyport:bg-danger-fill everyport:py-[7px] everyport:pr-2.5 everyport:pl-3 everyport:text-13 everyport:font-medium everyport:text-on-danger everyport:disabled:opacity-50"
           >
             {chosen.length ? `Stop ${count} · free ${memory(freed)}` : "Stop servers"}
           </button>
@@ -112,34 +112,34 @@ function Row({
   const leaking = reason.kind === "leaking";
   return (
     <div
-      id={`ppm-server-${server.port}`}
+      id={`everyport-server-${server.port}`}
       data-port={server.port}
       role="option"
       aria-selected={checked}
       aria-label={`Port ${server.port}, ${server.project.name}, ${memory(server.memory)}`}
       onClick={onToggle}
-      className={`ppm:flex ppm:items-center ppm:gap-3 ppm:rounded-[9px] ppm:px-2.5 ppm:py-[9px] ppm:hover:bg-accent ${selected ? "ppm:bg-accent" : ""}`}
+      className={`everyport:flex everyport:items-center everyport:gap-3 everyport:rounded-[9px] everyport:px-2.5 everyport:py-[9px] everyport:hover:bg-accent ${selected ? "everyport:bg-accent" : ""}`}
     >
       <span
-        className={`ppm:flex ppm:size-4 ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[5px] ${
-          checked ? "ppm:bg-primary ppm:text-on-primary" : "ppm:bg-accent ppm:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--muted-foreground)_50%,transparent)]"
+        className={`everyport:flex everyport:size-4 everyport:shrink-0 everyport:items-center everyport:justify-center everyport:rounded-[5px] ${
+          checked ? "everyport:bg-primary everyport:text-on-primary" : "everyport:bg-accent everyport:shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--muted-foreground)_50%,transparent)]"
         }`}
         aria-hidden
       >
         {checked && <CheckIcon />}
       </span>
-      <span className="ppm:flex ppm:w-[52px] ppm:shrink-0 ppm:items-center">
+      <span className="everyport:flex everyport:w-[52px] everyport:shrink-0 everyport:items-center">
         <Colon status={server.status} color={ctx.colorOf(server.port)} />
-        <span className="ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{server.port}</span>
+        <span className="everyport:font-mono everyport:text-13 everyport:font-medium everyport:text-fg">{server.port}</span>
       </span>
-      <span className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-0.5">
-        <span className="ppm:clamp-1 ppm:text-13 ppm:font-medium ppm:text-fg">{server.project.name}</span>
-        <span className={`ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-[5px] ppm:text-11 ${leaking ? "ppm:text-warn" : "ppm:text-fg2"}`}>
+      <span className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:flex-col everyport:gap-0.5">
+        <span className="everyport:clamp-1 everyport:text-13 everyport:font-medium everyport:text-fg">{server.project.name}</span>
+        <span className={`everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-[5px] everyport:text-11 ${leaking ? "everyport:text-warn" : "everyport:text-fg2"}`}>
           <ReasonIcon kind={reason.kind} />
-          <span className="ppm:clamp-1">{reasonText(reason, server, ctx.now)}</span>
+          <span className="everyport:clamp-1">{reasonText(reason, server, ctx.now)}</span>
         </span>
       </span>
-      <span className={`ppm:w-[60px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${leaking ? "ppm:text-warn" : "ppm:text-fg/85"}`}>{memory(server.memory)}</span>
+      <span className={`everyport:w-[60px] everyport:shrink-0 everyport:text-right everyport:font-mono everyport:text-13 ${leaking ? "everyport:text-warn" : "everyport:text-fg/85"}`}>{memory(server.memory)}</span>
     </div>
   );
 }

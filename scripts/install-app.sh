@@ -1,33 +1,33 @@
 #!/bin/sh
-# Installs the Port Process Manager desktop app and the ppm CLI from GitHub Releases.
+# Installs the Everyport desktop app and the everyport CLI from GitHub Releases.
 #
-#   curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh
-#   curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh -s -- --no-open
+#   curl -fsSL https://everyport.dev/install.sh | sh
+#   curl -fsSL https://everyport.dev/install.sh | sh -s -- --no-open
 #
 # macOS: the .app goes into /Applications, or ~/Applications when /Applications
 # isn't writable. curl sets no quarantine flag, so the app opens without a
-# Gatekeeper prompt. Linux: the AppImage goes into ~/.local/share/port-process-manager
+# Gatekeeper prompt. Linux: the AppImage goes into ~/.local/share/everyport
 # with a menu entry, or use --deb for the .deb on Debian and Ubuntu.
-# Both: ppm goes into ~/.local/bin.
+# Both: everyport goes into ~/.local/bin.
 #
 # Options:
-#   --cli       install only the ppm CLI
+#   --cli       install only the everyport CLI
 #   --deb       Linux: install the .deb with apt (asks for your password)
 #   --no-open   don't open the app afterwards
 #
 # Environment:
-#   PPM_VERSION       release to install, such as 0.2.0 (default: latest)
-#   PPM_APP_DIR       where the app goes (macOS: the folder for the .app; Linux: the folder for the AppImage)
-#   PPM_INSTALL_DIR   where ppm goes (default: ~/.local/bin)
-#   PPM_DOWNLOAD_URL  folder that holds the release files, for mirrors and testing (default: the GitHub release)
-#   PPM_ALLOW_INSECURE set to 1 to allow a PPM_DOWNLOAD_URL that is not https://, for testing
+#   EVERYPORT_VERSION       release to install, such as 0.2.0 (default: latest)
+#   EVERYPORT_APP_DIR       where the app goes (macOS: the folder for the .app; Linux: the folder for the AppImage)
+#   EVERYPORT_INSTALL_DIR   where everyport goes (default: ~/.local/bin)
+#   EVERYPORT_DOWNLOAD_URL  folder that holds the release files, for mirrors and testing (default: the GitHub release)
+#   EVERYPORT_ALLOW_INSECURE set to 1 to allow a EVERYPORT_DOWNLOAD_URL that is not https://, for testing
 set -eu
 
-repo="https://github.com/greenfield-inc/port-process-manager"
-app_name="Port Process Manager"
+repo="https://github.com/greenfield-inc/everyport"
+app_name="Everyport"
 
 fail() {
-  echo "Port Process Manager install: $*" >&2
+  echo "Everyport install: $*" >&2
   exit 1
 }
 
@@ -61,7 +61,7 @@ cleanup() {
 
 # Prints the release file whose name ends with the given suffix, if there is one.
 find_asset() {
-  awk -v suffix="$1" '{ name = $2; sub(/^\*/, "", name) } name ~ /^port-process-manager-/ && substr(name, length(name) - length(suffix) + 1) == suffix { print name; exit }' "$tmp/SHA256SUMS"
+  awk -v suffix="$1" '{ name = $2; sub(/^\*/, "", name) } name ~ /^everyport-/ && substr(name, length(name) - length(suffix) + 1) == suffix { print name; exit }' "$tmp/SHA256SUMS"
 }
 
 # Downloads a release file into $tmp and checks it against SHA256SUMS.
@@ -75,8 +75,8 @@ fetch() {
 }
 
 install_macos() {
-  app_dir="${PPM_APP_DIR:-/Applications}"
-  if [ -z "${PPM_APP_DIR:-}" ] && [ ! -w "$app_dir" ]; then
+  app_dir="${EVERYPORT_APP_DIR:-/Applications}"
+  if [ -z "${EVERYPORT_APP_DIR:-}" ] && [ ! -w "$app_dir" ]; then
     app_dir="$HOME/Applications"
   fi
   mkdir -p "$app_dir"
@@ -120,14 +120,14 @@ install_deb() {
   echo "Installing $bundle with apt"
   sudo apt install -y "$tmp/$bundle" || fail "apt could not install $bundle"
   if $open_app && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
-    nohup /usr/bin/ppm-desktop >/dev/null 2>&1 &
+    nohup /usr/bin/everyport-desktop >/dev/null 2>&1 &
   fi
 }
 
 install_appimage() {
   data="${XDG_DATA_HOME:-$HOME/.local/share}"
-  app_dir="${PPM_APP_DIR:-$data/port-process-manager}"
-  appimage="$app_dir/Port-Process-Manager.AppImage"
+  app_dir="${EVERYPORT_APP_DIR:-$data/everyport}"
+  appimage="$app_dir/Everyport.AppImage"
   mkdir -p "$app_dir" "$data/applications"
   chmod 755 "$tmp/$bundle"
 
@@ -138,7 +138,7 @@ install_appimage() {
   fi
 
   mv "$tmp/$bundle" "$appimage"
-  cat >"$data/applications/port-process-manager.desktop" <<EOF
+  cat >"$data/applications/everyport.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=$app_name
@@ -175,7 +175,7 @@ main() {
   case "$(uname -s)" in
     Darwin) os=macos ;;
     Linux) os=linux ;;
-    MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex" ;;
+    MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://everyport.dev/install.ps1 | iex" ;;
     *) fail "unsupported OS: $(uname -s)" ;;
   esac
 
@@ -190,10 +190,10 @@ main() {
     arch=aarch64
   fi
 
-  if [ -n "${PPM_DOWNLOAD_URL:-}" ]; then
-    base="$PPM_DOWNLOAD_URL"
-  elif [ -n "${PPM_VERSION:-}" ]; then
-    base="$repo/releases/download/v${PPM_VERSION#v}"
+  if [ -n "${EVERYPORT_DOWNLOAD_URL:-}" ]; then
+    base="$EVERYPORT_DOWNLOAD_URL"
+  elif [ -n "${EVERYPORT_VERSION:-}" ]; then
+    base="$repo/releases/download/v${EVERYPORT_VERSION#v}"
   else
     base="$repo/releases/latest/download"
   fi
@@ -201,7 +201,7 @@ main() {
   # SHA256SUMS comes from the same place as the files, so only https protects them.
   case "$base" in
     https://*) ;;
-    *) [ "${PPM_ALLOW_INSECURE:-}" = 1 ] || fail "$base is not an https:// URL. For testing, set PPM_ALLOW_INSECURE=1." ;;
+    *) [ "${EVERYPORT_ALLOW_INSECURE:-}" = 1 ] || fail "$base is not an https:// URL. For testing, set EVERYPORT_ALLOW_INSECURE=1." ;;
   esac
 
   tmp="$(mktemp -d)"
@@ -221,7 +221,7 @@ main() {
     else
       bundle="$(find_asset "-$arch.AppImage")"
       if [ -z "$bundle" ]; then
-        echo "There is no desktop app for Linux on $arch yet, so this installs only the ppm CLI."
+        echo "There is no desktop app for Linux on $arch yet, so this installs only the everyport CLI."
       fi
     fi
   fi
@@ -230,7 +230,7 @@ main() {
   if [ -n "$bundle" ]; then fetch "$bundle"; fi
   fetch install.sh
 
-  PPM_DOWNLOAD_URL="$base" sh "$tmp/install.sh" </dev/null
+  EVERYPORT_DOWNLOAD_URL="$base" sh "$tmp/install.sh" </dev/null
 
   [ -n "$bundle" ] || return 0
 

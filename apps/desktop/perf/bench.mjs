@@ -1,6 +1,6 @@
 // Times the popover's update path with 50 servers in Chrome, before and after
 // updates.rs: update size, JSON.parse, and React render with a forced layout.
-//   pnpm --filter @ppm/desktop bench [updates per run]   (default 60)
+//   pnpm --filter @everyport/desktop bench [updates per run]   (default 60)
 // Needs Google Chrome. The delta mode applies each update with MachineUpdates,
 // as the app does, and the React build is production.
 import tailwindcss from "@tailwindcss/vite";

@@ -1,5 +1,5 @@
 {
-  "name": "@ppm/ui",
+  "name": "@everyport/ui",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -18,7 +18,7 @@
     "readme-assets": "node scripts/readme-assets.mjs"
   },
   "dependencies": {
-    "@ppm/protocol": "workspace:*"
+    "@everyport/protocol": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19"

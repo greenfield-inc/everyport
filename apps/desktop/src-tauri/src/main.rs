@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    ppm_desktop_lib::run()
+    everyport_desktop_lib::run()
 }

@@ -11,28 +11,28 @@
 # Docker for the remote machine. It starts throwaway servers on ports
 # 39101-39106 here and 39301-39302 in a container it creates, and stops only
 # those, by PID or by removing the container. It never stops, restarts or
-# cleans anything through ppm. It switches the system between light and dark
+# cleans anything through everyport. It switches the system between light and dark
 # mode, and puts it back when it exits.
 #
 # The app runs with a scratch HOME, so its machines.toml (a Docker machine,
-# and an ssh host to discover) never touches yours. ppm for the container is
-# built in Docker and installed from PPM_BINARY_DIR, since no release has it.
+# and an ssh host to discover) never touches yours. everyport for the container is
+# built in Docker and installed from EVERYPORT_BINARY_DIR, since no release has it.
 #
 #   apps/desktop/scripts/qa-visual.sh [app binary] [output folder]
 #
 # The app binary defaults to the release bundle from
-# `pnpm --filter @ppm/desktop tauri build --bundles app`.
+# `pnpm --filter @everyport/desktop tauri build --bundles app`.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/../../.." && pwd)"
-app="${1:-$root/target.noindex/release/bundle/macos/Port Process Manager.app/Contents/MacOS/ppm-desktop}"
+app="${1:-$root/target.noindex/release/bundle/macos/Everyport.app/Contents/MacOS/everyport-desktop}"
 out="${2:-$root/qa-visual.noindex/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$out"
 tools="$out/.tools"
 mkdir -p "$tools"
 
 pids=()
-box=ppm-qa-box
+box=everyport-qa-box
 dark_before="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode')"
 cleanup() {
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
@@ -44,27 +44,27 @@ trap cleanup EXIT
 fail() { echo "qa-visual: $*" >&2; exit 1; }
 
 # ---------------------------------------------------------------- preflight
-[[ -x "$app" ]] || fail "no app at $app. Build it with: pnpm --filter @ppm/desktop tauri build --bundles app"
+[[ -x "$app" ]] || fail "no app at $app. Build it with: pnpm --filter @everyport/desktop tauri build --bundles app"
 screencapture -x "$tools/probe.png" 2>/dev/null || fail "Screen Recording is off for this terminal app (System Settings → Privacy & Security)."
 osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' >/dev/null 2>&1 \
   || fail "Accessibility is off for this terminal app (System Settings → Privacy & Security)."
 command -v ffmpeg >/dev/null || fail "the GIF needs ffmpeg: brew install ffmpeg"
 docker info >/dev/null 2>&1 || fail "the remote machine needs Docker running"
 
-# A container as a remote machine, with its own servers and no ppm yet.
+# A container as a remote machine, with its own servers and no everyport yet.
 docker rm -f "$box" >/dev/null 2>&1 || true
 docker run -d --name "$box" python:3.12-slim sleep infinity >/dev/null
 for port in 39301 39302; do docker exec -d -w /tmp "$box" python3 -m http.server "$port"; done
 arch="$(docker exec "$box" uname -m)"
-echo "qa-visual: building ppm for Linux $arch in Docker"
+echo "qa-visual: building everyport for Linux $arch in Docker"
 docker run --rm -v "$root":/src:ro -v "$out/.linux-target":/target -w /src -e CARGO_TARGET_DIR=/target \
-  rust:1-bookworm cargo build --release -q -p port-process-manager
+  rust:1-bookworm cargo build --release -q -p everyport
 mkdir -p "$tools/bin"
 # Named as the release file the app asks for. The glibc build runs in this Debian image.
-cp "$out/.linux-target/release/ppm" "$tools/bin/ppm-$arch-unknown-linux-musl"
+cp "$out/.linux-target/release/everyport" "$tools/bin/everyport-$arch-unknown-linux-musl"
 
 home="$tools/home"
-config="$home/Library/Application Support/port-process-manager"
+config="$home/Library/Application Support/everyport"
 mkdir -p "$config" "$home/.ssh"
 printf '[[machine]]\nname = "%s"\ncommand = ["docker", "exec", "-i", "%s"]\n' "$box" "$box" >"$config/machines.toml"
 # Discovered, never reachable: ssh reads the real config, where it doesn't exist.
@@ -131,7 +131,7 @@ shot_tray() {
 press_escape() { osascript -e 'tell application "System Events" to key code 53'; sleep 0.4; }
 
 # Clicks the control in the popover whose accessible name starts with $1,
-# such as a machine chip ("ppm-qa-box") or a button ("Install ppm").
+# such as a machine chip ("everyport-qa-box") or a button ("Install Everyport").
 click_named() {
   osascript - "$app_pid" "$1" <<'APPLESCRIPT' >/dev/null
 on run {pid, label}
@@ -155,7 +155,7 @@ APPLESCRIPT
 
 start_server() { # port [extra python]
   local dir
-  dir="$(mktemp -d "${TMPDIR:-/tmp}/ppm-qa-$1.XXXX")"
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/everyport-qa-$1.XXXX")"
   (cd "$dir" && exec python3 -c "${2:-}
 import http.server, socketserver
 socketserver.TCPServer(('127.0.0.1', $1), http.server.SimpleHTTPRequestHandler).serve_forever()") &
@@ -163,7 +163,7 @@ socketserver.TCPServer(('127.0.0.1', $1), http.server.SimpleHTTPRequestHandler).
 }
 
 # ---------------------------------------------------------------- run
-DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}" HOME="$home" PPM_BINARY_DIR="$tools/bin" "$app" 2>"$out/app.log" &
+DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.docker}" HOME="$home" EVERYPORT_BINARY_DIR="$tools/bin" "$app" 2>"$out/app.log" &
 app_pid=$!
 pids+=("$app_pid")
 for _ in $(seq 1 40); do tray_rect >/dev/null 2>&1 && break; sleep 0.25; done
@@ -186,7 +186,7 @@ for mode in dark light; do
 done
 
 # Other machines: the switcher, the install question, then the container's
-# servers once ppm is on it, and a discovered host that can't be reached.
+# servers once everyport is on it, and a discovered host that can't be reached.
 for mode in dark light; do
   set_dark "$([[ $mode == dark ]] && echo true || echo false)"
   click_tray
@@ -200,7 +200,7 @@ done
 set_dark true
 click_tray
 click_named "$box"
-click_named "Install ppm"
+click_named "Install Everyport"
 shot_popover "machine-installing-dark"
 for _ in $(seq 1 60); do grep -q "machine $box: connected" "$out/app.log" && break; sleep 1; done
 sleep 3

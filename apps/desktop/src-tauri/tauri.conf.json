@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Port Process Manager",
-  "identifier": "to.greenfield.portprocessmanager",
+  "productName": "Everyport",
+  "identifier": "dev.everyport.desktop",
   "build": {
     "beforeDevCommand": "node scripts/sidecar.mjs && pnpm dev:web",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "popover",
-        "title": "Port Process Manager",
+        "title": "Everyport",
         "width": 400,
         "height": 480,
         "decorations": false,
@@ -32,8 +32,9 @@
   },
   "bundle": {
     "active": true,
+    "copyright": "Copyright (c) 2026 Dcouple, Inc.",
     "targets": "all",
-    "externalBin": ["binaries/ppm-sidecar"],
+    "externalBin": ["binaries/everyport-sidecar"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

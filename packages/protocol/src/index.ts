@@ -1,5 +1,5 @@
-// The ppm wire protocol for TypeScript clients. Types in ./generated come from
-// crates/ppm-core/src/protocol.rs; run `pnpm --filter @ppm/protocol generate`
+// The everyport wire protocol for TypeScript clients. Types in ./generated come from
+// crates/everyport-core/src/protocol.rs; run `pnpm --filter @everyport/protocol generate`
 // after changing it.
 export * from "./generated/index.ts";
 export * from "./client.ts";

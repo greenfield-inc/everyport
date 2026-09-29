@@ -1,4 +1,4 @@
-import type { Server, ServerStatus } from "@ppm/protocol";
+import type { Server, ServerStatus } from "@everyport/protocol";
 import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ViewContext } from "./context.ts";
 import { BackIcon, LockIcon } from "./icons.tsx";
@@ -7,15 +7,15 @@ import { type Action, actionLabel, protectedNote } from "./model.ts";
 /** Centred page title with an optional mark before it and a back button. */
 export function Header({ title, mark, onBack }: { title: string; mark?: ReactNode; onBack?: () => void }) {
   return (
-    <div className="ppm:relative ppm:flex ppm:h-5 ppm:shrink-0 ppm:items-center ppm:justify-center ppm:gap-1.5 ppm:px-7">
+    <div className="everyport:relative everyport:flex everyport:h-5 everyport:shrink-0 everyport:items-center everyport:justify-center everyport:gap-1.5 everyport:px-7">
       {mark}
-      <h1 className="ppm:clamp-1 ppm:text-13 ppm:font-medium ppm:text-fg">{title}</h1>
+      <h1 className="everyport:clamp-1 everyport:text-13 everyport:font-medium everyport:text-fg">{title}</h1>
       {onBack && (
         <button
           type="button"
           aria-label="Back"
           onClick={onBack}
-          className="ppm:absolute ppm:-left-1 ppm:top-0 ppm:flex ppm:size-5 ppm:items-center ppm:justify-center ppm:rounded-md ppm:text-fg2 ppm:hover:bg-accent"
+          className="everyport:absolute everyport:-left-1 everyport:top-0 everyport:flex everyport:size-5 everyport:items-center everyport:justify-center everyport:rounded-md everyport:text-fg2 everyport:hover:bg-accent"
         >
           <BackIcon />
         </button>
@@ -27,7 +27,7 @@ export function Header({ title, mark, onBack }: { title: string; mark?: ReactNod
 /** The two status dots before every port: filled, glowing on attention, outlined when idle. */
 export function Colon({ status, color, large = false }: { status: ServerStatus; color: string; large?: boolean }) {
   const size = large ? 6 : 4;
-  const dotColor = status === "attention" ? "var(--ppm-warn)" : color;
+  const dotColor = status === "attention" ? "var(--everyport-warn)" : color;
   const style =
     status === "idle"
       ? { width: size, height: size, boxShadow: `inset 0 0 0 1.1px ${dotColor}` }
@@ -38,9 +38,9 @@ export function Colon({ status, color, large = false }: { status: ServerStatus; 
           boxShadow: status === "attention" ? `0 0 5px ${dotColor}` : undefined,
         };
   return (
-    <span className={`ppm:flex ppm:shrink-0 ppm:flex-col ppm:justify-center ${large ? "ppm:gap-1.5" : "ppm:w-[9px] ppm:gap-[3px]"}`} aria-hidden>
-      <span className="ppm:rounded-full" style={style} />
-      <span className="ppm:rounded-full" style={style} />
+    <span className={`everyport:flex everyport:shrink-0 everyport:flex-col everyport:justify-center ${large ? "everyport:gap-1.5" : "everyport:w-[9px] everyport:gap-[3px]"}`} aria-hidden>
+      <span className="everyport:rounded-full" style={style} />
+      <span className="everyport:rounded-full" style={style} />
     </span>
   );
 }
@@ -99,12 +99,12 @@ export function Menu({
       ref={ref}
       role="menu"
       onKeyDown={onKeyDown}
-      className={`ppm:absolute ppm:z-10 ppm:flex ppm:flex-col ppm:rounded-[10px] ppm:bg-[color-mix(in_oklab,var(--popover),var(--foreground)_7%)] ppm:p-[5px] ppm:shadow-[inset_0_0_0_0.5px_var(--border),0_12px_32px_rgb(0_0_0/0.5)] ${className ?? ""}`}
+      className={`everyport:absolute everyport:z-10 everyport:flex everyport:flex-col everyport:rounded-[10px] everyport:bg-[color-mix(in_oklab,var(--popover),var(--foreground)_7%)] everyport:p-[5px] everyport:shadow-[inset_0_0_0_0.5px_var(--border),0_12px_32px_rgb(0_0_0/0.5)] ${className ?? ""}`}
     >
-      {title && <div className="ppm:flex ppm:items-center ppm:gap-1.5 ppm:px-2.5 ppm:pt-1.5 ppm:pb-2 ppm:text-11 ppm:text-fg2">{title}</div>}
+      {title && <div className="everyport:flex everyport:items-center everyport:gap-1.5 everyport:px-2.5 everyport:pt-1.5 everyport:pb-2 everyport:text-11 everyport:text-fg2">{title}</div>}
       {items.map((item, index) =>
         item === "divider" ? (
-          <div key={index} className="ppm:mx-1.5 ppm:my-1 ppm:h-[0.5px] ppm:shrink-0 ppm:bg-line" />
+          <div key={index} className="everyport:mx-1.5 everyport:my-1 everyport:h-[0.5px] everyport:shrink-0 everyport:bg-line" />
         ) : (
           <button
             key={item.label}
@@ -114,10 +114,10 @@ export function Menu({
               onClose();
               item.onSelect();
             }}
-            className={`ppm:flex ppm:items-center ppm:justify-between ppm:gap-4 ppm:rounded-md ppm:px-2.5 ppm:py-[5px] ppm:text-13 ppm:hover:bg-accent ppm:focus:bg-accent ${item.danger ? "ppm:text-danger" : "ppm:text-fg"}`}
+            className={`everyport:flex everyport:items-center everyport:justify-between everyport:gap-4 everyport:rounded-md everyport:px-2.5 everyport:py-[5px] everyport:text-13 everyport:hover:bg-accent everyport:focus:bg-accent ${item.danger ? "everyport:text-danger" : "everyport:text-fg"}`}
           >
-            <span className="ppm:clamp-1">{item.label}</span>
-            {item.hint && <span className="ppm:shrink-0 ppm:font-mono ppm:text-11 ppm:text-fg3">{item.hint}</span>}
+            <span className="everyport:clamp-1">{item.label}</span>
+            {item.hint && <span className="everyport:shrink-0 everyport:font-mono everyport:text-11 everyport:text-fg3">{item.hint}</span>}
           </button>
         ),
       )}
@@ -176,7 +176,7 @@ export function useTween(value: number) {
 /** Wraps a row so its height animates in when added and out when `leaving`. */
 export function Grow({ leaving = false, children }: { leaving?: boolean; children: ReactNode }) {
   return (
-    <div className="ppm-grow" data-leave={leaving || undefined} aria-hidden={leaving || undefined}>
+    <div className="everyport-grow" data-leave={leaving || undefined} aria-hidden={leaving || undefined}>
       <div>{children}</div>
     </div>
   );
@@ -192,7 +192,7 @@ export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; se
   const act = (event: MouseEvent<HTMLElement>, run: () => void) => {
     event.stopPropagation();
     // The confirm unmounts; keep the keyboard on the list or panel.
-    event.currentTarget.closest<HTMLElement>("[role=listbox], .ppm-panel")?.focus();
+    event.currentTarget.closest<HTMLElement>("[role=listbox], .everyport-panel")?.focus();
     run();
   };
   return (
@@ -200,22 +200,22 @@ export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; se
       <div
         role="alert"
         aria-label={`${protectedNote([server])}. ${label} it anyway?`}
-        className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px ppm:pr-2.5"
+        className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:flex-col everyport:gap-px everyport:pr-2.5"
       >
-        <span className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1.5 ppm:text-13 ppm:font-medium ppm:text-fg">
-          <LockIcon className="ppm:text-warn" />
-          <span className="ppm:clamp-1">{server.process_name} is protected.</span>
+        <span className="everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-1.5 everyport:text-13 everyport:font-medium everyport:text-fg">
+          <LockIcon className="everyport:text-warn" />
+          <span className="everyport:clamp-1">{server.process_name} is protected.</span>
         </span>
-        <span className="ppm:clamp-1 ppm:text-11 ppm:text-warn">{label} it anyway?</span>
+        <span className="everyport:clamp-1 everyport:text-11 everyport:text-warn">{label} it anyway?</span>
       </div>
-      <span className="ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-1.5">
-        <button type="button" onClick={(event) => act(event, ctx.cancel)} className="ppm:rounded-md ppm:bg-accent ppm:px-2.5 ppm:py-1 ppm:text-11 ppm:font-medium ppm:text-fg">
+      <span className="everyport:flex everyport:shrink-0 everyport:items-center everyport:gap-1.5">
+        <button type="button" onClick={(event) => act(event, ctx.cancel)} className="everyport:rounded-md everyport:bg-accent everyport:px-2.5 everyport:py-1 everyport:text-11 everyport:font-medium everyport:text-fg">
           Cancel
         </button>
         <button
           type="button"
           onClick={(event) => act(event, () => ctx.confirm(server))}
-          className="ppm:rounded-md ppm:bg-danger-fill ppm:px-2.5 ppm:py-1 ppm:text-11 ppm:font-medium ppm:text-on-danger"
+          className="everyport:rounded-md everyport:bg-danger-fill everyport:px-2.5 everyport:py-1 everyport:text-11 everyport:font-medium everyport:text-on-danger"
         >
           {label}
         </button>
@@ -226,7 +226,7 @@ export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; se
 
 /** A lock on a Stop button: the server is protected, so Stop asks first. */
 export const ProtectedBadge = () => (
-  <span className="ppm:absolute ppm:-right-1 ppm:-bottom-1 ppm:flex ppm:rounded-full ppm:bg-panel ppm:p-px ppm:text-warn">
-    <LockIcon className="ppm:size-[9px]" />
+  <span className="everyport:absolute everyport:-right-1 everyport:-bottom-1 everyport:flex everyport:rounded-full everyport:bg-panel everyport:p-px everyport:text-warn">
+    <LockIcon className="everyport:size-[9px]" />
   </span>
 );

@@ -1,17 +1,17 @@
-// An in-page PpmClient over the demo machines. Stop and Clean up remove rows,
+// An in-page EveryportClient over the demo machines. Stop and Clean up remove rows,
 // restart waits like a real one, and the rest only says what the app would do.
-import type { Machine, PpmClient, Snapshot } from "@ppm/protocol";
+import type { Machine, EveryportClient, Snapshot } from "@everyport/protocol";
 
 type Listener = (machines: Machine[]) => void;
 
-export type DemoClient = PpmClient & {
+export type DemoClient = EveryportClient & {
   /** What the app would have done, such as "Opens localhost:3000", for the page to show. */
   onNotice(listener: (text: string) => void): () => void;
   /** Whether anything was stopped since the last reset. */
   changed(): boolean;
   reset(machines: Machine[]): void;
   /** A client that shows only one machine, so the page's own switcher picks it. */
-  only(machineId: string): PpmClient;
+  only(machineId: string): EveryportClient;
 };
 
 const TICK = 2000;

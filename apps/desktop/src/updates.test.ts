@@ -1,4 +1,4 @@
-import { fixtureSnapshot, type Machine, type Server } from "@ppm/protocol";
+import { fixtureSnapshot, type Machine, type Server } from "@everyport/protocol";
 import { describe, expect, it, vi } from "vitest";
 import { type Base, MachineUpdates, type Update } from "./updates";
 

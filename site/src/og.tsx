@@ -1,12 +1,13 @@
 // The social preview, rendered by scripts/og.mjs from the page's own parts:
-// the headline and one screen per OS.
-import type { Os } from "@ppm/protocol";
-import "@ppm/ui/styles.css";
+// the wordmark, the headline and one screen per OS.
+import type { Os } from "@everyport/protocol";
+import "@everyport/ui/styles.css";
 import { createRoot } from "react-dom/client";
 import { demoClient } from "./client.ts";
 import { demoMachines } from "./machines.ts";
 import { Screen } from "./Screen.tsx";
 import { OS_NAMES } from "./sections.ts";
+import { Socket } from "./Socket.tsx";
 import "./site.css";
 
 const SCREEN = { width: 480, height: 640 };
@@ -16,6 +17,10 @@ function Og() {
   return (
     <div className="og">
       <div className="og-head">
+        <div className="og-brand">
+          <Socket size={34} accent="var(--green)" />
+          Everyport
+        </div>
         <h1>
           Every dev server. <span className="accent">Every OS.</span>
         </h1>

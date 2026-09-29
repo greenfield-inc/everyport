@@ -1235,6 +1235,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "everyport"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.23.1",
+ "clap",
+ "dirs 7.0.0",
+ "everyport-client",
+ "everyport-core",
+ "getrandom 0.4.3",
+ "open",
+ "ratatui",
+ "serde",
+ "serde_json",
+ "terminal-colorsaurus",
+ "tokio",
+]
+
+[[package]]
+name = "everyport-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "dirs 6.0.0",
+ "everyport-core",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "everyport-core"
+version = "0.1.0"
+dependencies = [
+ "dirs 6.0.0",
+ "libc",
+ "notify",
+ "serde",
+ "serde_json",
+ "toml 0.9.12+spec-1.1.0",
+ "ts-rs",
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "everyport-desktop"
+version = "0.1.0"
+dependencies = [
+ "everyport-client",
+ "everyport-core",
+ "notify",
+ "serde",
+ "serde_json",
+ "shell-words",
+ "tauri",
+ "tauri-build",
+ "tauri-nspanel",
+ "tauri-plugin-autostart",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-opener",
+ "tauri-plugin-single-instance",
+ "tokio",
+ "toml 0.9.12+spec-1.1.0",
+ "webview2-com",
+ "window-vibrancy",
+ "windows 0.62.2",
+]
+
+[[package]]
 name = "fancy-regex"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3401,25 +3475,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "port-process-manager"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.23.1",
- "clap",
- "dirs 7.0.0",
- "getrandom 0.4.3",
- "open",
- "ppm-client",
- "ppm-core",
- "ratatui",
- "serde",
- "serde_json",
- "terminal-colorsaurus",
- "tokio",
-]
-
-[[package]]
 name = "portable-atomic"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3448,61 +3503,6 @@ name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439ee305def115ba05938db6eb1644ff94165c5ab5e9420d1c1bcedbba909391"
-
-[[package]]
-name = "ppm-client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.1",
- "dirs 6.0.0",
- "ppm-core",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "tokio",
- "toml 0.9.12+spec-1.1.0",
-]
-
-[[package]]
-name = "ppm-core"
-version = "0.1.0"
-dependencies = [
- "dirs 6.0.0",
- "libc",
- "notify",
- "serde",
- "serde_json",
- "toml 0.9.12+spec-1.1.0",
- "ts-rs",
- "windows 0.62.2",
-]
-
-[[package]]
-name = "ppm-desktop"
-version = "0.1.0"
-dependencies = [
- "notify",
- "ppm-client",
- "ppm-core",
- "serde",
- "serde_json",
- "shell-words",
- "tauri",
- "tauri-build",
- "tauri-nspanel",
- "tauri-plugin-autostart",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-opener",
- "tauri-plugin-single-instance",
- "tokio",
- "toml 0.9.12+spec-1.1.0",
- "webview2-com",
- "window-vibrancy",
- "windows 0.62.2",
-]
 
 [[package]]
 name = "precomputed-hash"

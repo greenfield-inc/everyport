@@ -65,7 +65,7 @@ export function tilde(path: string): string {
   return path.replace(/^(\/Users\/[^/]+|\/home\/[^/]+|\/root|[A-Za-z]:\\Users\\[^\\]+)(?=[/\\]|$)/, "~");
 }
 
-/** Keeps the first and last two folders: "~/…/port-process-manager/providence". */
+/** Keeps the first and last two folders: "~/…/everyport/providence". */
 export function shortPath(path: string): string {
   const short = tilde(path);
   const separator = short.includes("\\") && !short.includes("/") ? "\\" : "/";

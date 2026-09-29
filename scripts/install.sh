@@ -1,19 +1,19 @@
 #!/bin/sh
-# Installs the ppm CLI from GitHub Releases into ~/.local/bin.
+# Installs the everyport CLI from GitHub Releases into ~/.local/bin.
 #
-#   curl -fsSL https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.sh | sh
+#   curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh | sh
 #
 # Environment:
-#   PPM_VERSION       release to install, such as 0.2.0 (default: latest)
-#   PPM_INSTALL_DIR   where to put ppm (default: ~/.local/bin)
-#   PPM_DOWNLOAD_URL  folder that holds the release files, for mirrors and testing (default: the GitHub release)
-#   PPM_ALLOW_INSECURE set to 1 to allow a PPM_DOWNLOAD_URL that is not https://, for testing
+#   EVERYPORT_VERSION       release to install, such as 0.2.0 (default: latest)
+#   EVERYPORT_INSTALL_DIR   where to put everyport (default: ~/.local/bin)
+#   EVERYPORT_DOWNLOAD_URL  folder that holds the release files, for mirrors and testing (default: the GitHub release)
+#   EVERYPORT_ALLOW_INSECURE set to 1 to allow a EVERYPORT_DOWNLOAD_URL that is not https://, for testing
 set -eu
 
-repo="https://github.com/greenfield-inc/port-process-manager"
+repo="https://github.com/greenfield-inc/everyport"
 
 fail() {
-  echo "ppm install: $*" >&2
+  echo "everyport install: $*" >&2
   exit 1
 }
 
@@ -42,7 +42,7 @@ sha256() {
 
 # Everything runs from here, so a download cut short runs nothing.
 main() {
-  install_dir="${PPM_INSTALL_DIR:-$HOME/.local/bin}"
+  install_dir="${EVERYPORT_INSTALL_DIR:-$HOME/.local/bin}"
 
   case "$(uname -s)" in
     Darwin) os=apple-darwin ;;
@@ -62,12 +62,12 @@ main() {
     arch=aarch64
   fi
 
-  asset="ppm-$arch-$os"
+  asset="everyport-$arch-$os"
 
-  if [ -n "${PPM_DOWNLOAD_URL:-}" ]; then
-    base="$PPM_DOWNLOAD_URL"
-  elif [ -n "${PPM_VERSION:-}" ]; then
-    base="$repo/releases/download/v${PPM_VERSION#v}"
+  if [ -n "${EVERYPORT_DOWNLOAD_URL:-}" ]; then
+    base="$EVERYPORT_DOWNLOAD_URL"
+  elif [ -n "${EVERYPORT_VERSION:-}" ]; then
+    base="$repo/releases/download/v${EVERYPORT_VERSION#v}"
   else
     base="$repo/releases/latest/download"
   fi
@@ -75,25 +75,25 @@ main() {
   # SHA256SUMS comes from the same place as the binary, so only https protects it.
   case "$base" in
     https://*) ;;
-    *) [ "${PPM_ALLOW_INSECURE:-}" = 1 ] || fail "$base is not an https:// URL. For testing, set PPM_ALLOW_INSECURE=1." ;;
+    *) [ "${EVERYPORT_ALLOW_INSECURE:-}" = 1 ] || fail "$base is not an https:// URL. For testing, set EVERYPORT_ALLOW_INSECURE=1." ;;
   esac
 
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
   echo "Downloading $asset from $base"
-  download "$base/$asset" "$tmp/ppm" || fail "could not download $base/$asset"
+  download "$base/$asset" "$tmp/everyport" || fail "could not download $base/$asset"
   download "$base/SHA256SUMS" "$tmp/SHA256SUMS" || fail "could not download $base/SHA256SUMS"
 
   expected="$(awk -v name="$asset" '$2 == name || $2 == "*" name { print $1 }' "$tmp/SHA256SUMS")"
   [ -n "$expected" ] || fail "SHA256SUMS has no entry for $asset"
-  actual="$(sha256 "$tmp/ppm")"
+  actual="$(sha256 "$tmp/everyport")"
   [ "$actual" = "$expected" ] || fail "checksum mismatch for $asset: expected $expected, got $actual"
 
   mkdir -p "$install_dir"
-  chmod 755 "$tmp/ppm"
-  mv "$tmp/ppm" "$install_dir/ppm"
-  echo "Installed $("$install_dir/ppm" --version) to $install_dir/ppm"
+  chmod 755 "$tmp/everyport"
+  mv "$tmp/everyport" "$install_dir/everyport"
+  echo "Installed $("$install_dir/everyport" --version) to $install_dir/everyport"
 
   case ":$PATH:" in
     *":$install_dir:"*) ;;

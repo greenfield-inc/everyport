@@ -1,4 +1,4 @@
-import type { Machine, PpmClient, ProcRef, Server, Snapshot } from "@ppm/protocol";
+import type { Machine, EveryportClient, ProcRef, Server, Snapshot } from "@everyport/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type Action, DEFAULT_ALERT_MEMORY } from "./model.ts";
 
@@ -11,7 +11,7 @@ export type Pending = "stopping" | "restarting" | { error: string } | { confirm:
 
 /** Everything a view needs about one machine, and the actions on its servers. */
 export type ViewContext = {
-  client: PpmClient;
+  client: EveryportClient;
   machineId: string;
   snapshot: Snapshot;
   /** `snapshot.taken_at`: views measure uptime and idle time from it. */
@@ -57,7 +57,7 @@ function usePortColors(servers: Server[]) {
   return useCallback((port: number) => `var(--chart-${((map.get(port) ?? 0) % CHART_COLORS) + 1})`, [map]);
 }
 
-export function useViewContext(client: PpmClient, machine: Machine & { snapshot: Snapshot }, alertMemory = DEFAULT_ALERT_MEMORY): ViewContext {
+export function useViewContext(client: EveryportClient, machine: Machine & { snapshot: Snapshot }, alertMemory = DEFAULT_ALERT_MEMORY): ViewContext {
   const { snapshot, id: machineId } = machine;
   const [pending, setPending] = useState<ReadonlyMap<number, Pending>>(new Map());
   const colorOf = usePortColors(snapshot.servers);

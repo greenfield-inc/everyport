@@ -2,10 +2,10 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { StrictMode, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
-import "@ppm/ui/styles.css";
+import "@everyport/ui/styles.css";
 import "./app.css";
 import { syncAttentionColor } from "./attention";
-import { TauriPpmClient } from "./client";
+import { TauriEveryportClient } from "./client";
 import { NotificationWindow } from "./NotificationWindow";
 import { PopoverWindow } from "./PopoverWindow";
 import { SettingsWindow } from "./settings/SettingsWindow";
@@ -24,7 +24,7 @@ async function page(): Promise<ReactNode> {
   if (label === "notification") return <NotificationWindow />;
   root.toggleAttribute("data-hidden", true);
   syncAttentionColor();
-  return <PopoverWindow client={new TauriPpmClient()} />;
+  return <PopoverWindow client={new TauriEveryportClient()} />;
 }
 
 void page().then((content) =>

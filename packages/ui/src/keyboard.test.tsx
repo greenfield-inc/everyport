@@ -2,7 +2,7 @@
 // Keyboard use from the intent brief, item 8, through a rendered <Popover>,
 // and the class prefix every view relies on. jsdom reports no Mac platform,
 // so the command key is Ctrl here.
-import { fixtureSnapshot, type Machine, type PpmClient } from "@ppm/protocol";
+import { fixtureSnapshot, type Machine, type EveryportClient } from "@everyport/protocol";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,7 +14,7 @@ Element.prototype.scrollIntoView = () => {};
 
 let host: HTMLDivElement;
 let root: Root;
-let client: PpmClient & { call: ReturnType<typeof vi.fn>; openUrl: ReturnType<typeof vi.fn> };
+let client: EveryportClient & { call: ReturnType<typeof vi.fn>; openUrl: ReturnType<typeof vi.fn> };
 
 beforeEach(() => {
   const machines: Machine[] = [{ id: "local", label: "This Mac", host: null, state: "connected", snapshot: fixtureSnapshot }];
@@ -54,14 +54,14 @@ describe("keyboard", () => {
     const listbox = document.querySelector("[role=listbox]");
     expect(document.activeElement).toBe(listbox);
     expect(selected()).toBe("3001");
-    expect(listbox?.getAttribute("aria-activedescendant")).toBe("ppm-server-3001");
-    expect(document.getElementById("ppm-server-3001")?.getAttribute("aria-label")).toBe("Port 3001, greenfield.to, 612 MB");
+    expect(listbox?.getAttribute("aria-activedescendant")).toBe("everyport-server-3001");
+    expect(document.getElementById("everyport-server-3001")?.getAttribute("aria-label")).toBe("Port 3001, greenfield.to, 612 MB");
   });
 
   it("opens the detail with Enter and goes back with Escape, which the host doesn't see", () => {
     press("ArrowDown");
     press("Enter");
-    expect(title()).toBe("port-process-manager");
+    expect(title()).toBe("everyport");
     expect(press("Escape")).toBe(true);
     expect(title()).toBe("Servers");
     expect(selected()).toBe("3000");
@@ -180,7 +180,7 @@ describe("protected servers", () => {
     act(() => stop.click());
     act(() => stop.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
     expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
-    expect(title()).toBe("port-process-manager");
+    expect(title()).toBe("everyport");
     expect(client.call).not.toHaveBeenCalled();
   });
 
@@ -197,11 +197,11 @@ describe("protected servers", () => {
     press("Enter");
     press("r", { ctrlKey: true });
     expect(alert()).toBe("postgres :3000 is protected. Restart it anyway?");
-    expect(title()).toBe("port-process-manager");
+    expect(title()).toBe("everyport");
     act(() => button("Cancel")?.click());
     expect(alert()).toBeUndefined();
     press("Backspace", { ctrlKey: true });
-    expect(title()).toBe("port-process-manager");
+    expect(title()).toBe("everyport");
     act(() => button("Stop")?.click());
     expect(params("stop")).toMatchObject({ confirm_protected: true });
     expect(client.call).toHaveBeenCalledTimes(1);
@@ -218,17 +218,17 @@ describe("embedded in a page", () => {
 
     act(() => document.querySelector<HTMLElement>("[data-port='3001']")!.click());
     expect(title()).toBe("greenfield.to");
-    expect(document.activeElement?.closest(".ppm-panel")).not.toBeNull();
+    expect(document.activeElement?.closest(".everyport-panel")).not.toBeNull();
   });
 });
 
 describe("styles", () => {
-  // Tailwind utilities only apply with the ppm: prefix. The rest are the
+  // Tailwind utilities only apply with the everyport: prefix. The rest are the
   // package's own classes from styles.css.
-  const OWN = new Set(["ppm-root", "ppm-panel", "ppm-view", "ppm-grow", "ppm-scroll", "ppm-spin", "ppm-socket", "ppm-socket-slot", "selectable"]);
+  const OWN = new Set(["everyport-root", "everyport-panel", "everyport-view", "everyport-grow", "everyport-scroll", "everyport-spin", "everyport-socket", "everyport-socket-slot", "selectable"]);
   const unstyled = () =>
     [...document.querySelectorAll("[class]")].flatMap((element) =>
-      [...element.classList].filter((name) => !name.startsWith("ppm:") && !OWN.has(name)),
+      [...element.classList].filter((name) => !name.startsWith("everyport:") && !OWN.has(name)),
     );
   const click = (text: string) => {
     const button = [...document.querySelectorAll("button")].find((candidate) => candidate.textContent?.startsWith(text));
@@ -237,7 +237,7 @@ describe("styles", () => {
 
   it("prefixes every utility on the list, the expanded detail and Clean up", () => {
     press("ArrowDown");
-    act(() => document.getElementById("ppm-server-3000")?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true })));
+    act(() => document.getElementById("everyport-server-3000")?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true })));
     expect(unstyled()).toEqual([]);
     press("Enter");
     click("6 more");

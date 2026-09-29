@@ -1,4 +1,4 @@
-import type { Machine, ProcRef, Sample, Server, ServerProcess } from "@ppm/protocol";
+import type { Machine, ProcRef, Sample, Server, ServerProcess } from "@everyport/protocol";
 
 /** How far back `Server.history` reaches, as in the engine. */
 const HISTORY_MS = 10 * 60 * 1000;

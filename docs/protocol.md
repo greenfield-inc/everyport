@@ -1,13 +1,13 @@
-# The ppm protocol
+# The Everyport protocol
 
-`ppm` reports the servers on a machine as a stream of JSON events and takes JSON requests to act on them. Anything that can run a command or open a URL can use it: an editor extension, a status bar, a dashboard, or a workspace app.
+`everyport` reports the servers on a machine as a stream of JSON events and takes JSON requests to act on them. Anything that can run a command or open a URL can use it: an editor extension, a status bar, a dashboard, or a workspace app.
 
 There are two transports, with the same JSON:
 
-- `ppm stdio`: events on stdout, requests on stdin. The desktop app runs it as a sidecar, and runs it on remote machines through `ssh`, `docker exec -i`, `kubectl exec -i --` or `wsl`.
-- `ppm serve`: HTTP on loopback, with events as server-sent events.
+- `everyport stdio`: events on stdout, requests on stdin. The desktop app runs it as a sidecar, and runs it on remote machines through `ssh`, `docker exec -i`, `kubectl exec -i --` or `wsl`.
+- `everyport serve`: HTTP on loopback, with events as server-sent events.
 
-The types are defined in [`crates/ppm-core/src/protocol.rs`](../crates/ppm-core/src/protocol.rs), and TypeScript types are generated from it into `@ppm/protocol`.
+The types are defined in [`crates/everyport-core/src/protocol.rs`](../crates/everyport-core/src/protocol.rs), and TypeScript types are generated from it into `@everyport/protocol`.
 
 ## Conventions
 
@@ -15,28 +15,28 @@ The types are defined in [`crates/ppm-core/src/protocol.rs`](../crates/ppm-core/
 - Memory is bytes.
 - CPU values are floats, in percent of one core, so a busy server on an 8-core machine can report up to 800.0. `system.cpu_percent` is whole-machine CPU, from 0 to 100.
 - Optional fields are always present, as `null` when empty. The tables below mark them "or `null`".
-- "Clean up" is the list of servers `ppm` suggests stopping: those whose worktree was deleted, or that are idle, long-running or leaking.
+- "Clean up" is the list of servers `everyport` suggests stopping: those whose worktree was deleted, or that are idle, long-running or leaking.
 
 ## Framing
 
 On stdio, every message is one line of JSON ending in `\n`: one event per line on stdout, and one request per line on stdin. Blank lines on stdin are ignored.
 
-Over HTTP, events are server-sent events with one event per `data:` line, and a request is the body of a `POST`. See [ppm serve](#ppm-serve).
+Over HTTP, events are server-sent events with one event per `data:` line, and a request is the body of a `POST`. See [everyport serve](#everyport-serve).
 
 ## Handshake
 
-Every connection starts with `hello`, then a `snapshot` of the current state. After that, `ppm` sends:
+Every connection starts with `hello`, then a `snapshot` of the current state. After that, `everyport` sends:
 
 - a `snapshot` whenever anything changes (it scans every 2 s by default)
 - an `alert` when a server crosses a threshold
 - a `result` for each request
 
-A client needs no reply to `hello`. After a request, its `result` comes first, then any snapshot it caused. `ppm stdio` exits with status 0 when stdin closes, after answering every request it already read.
+A client needs no reply to `hello`. After a request, its `result` comes first, then any snapshot it caused. `everyport stdio` exits with status 0 when stdin closes, after answering every request it already read.
 
-In this transcript, → is a line from `ppm` and ← a line to it.
+In this transcript, → is a line from `everyport` and ← a line to it.
 
 ```text
-→ {"type":"hello","protocol":1,"ppm_version":"0.1.0","host":{"hostname":"devbox","os":"linux","arch":"x86_64","cores":8}}
+→ {"type":"hello","protocol":1,"everyport_version":"0.1.0","host":{"hostname":"devbox","os":"linux","arch":"x86_64","cores":8}}
 → {"type":"snapshot","taken_at":1790195040000,"system":{...},"servers":[...]}
 ← {"id":1,"method":"refresh"}
 → {"type":"result","id":1,"error":null}
@@ -55,7 +55,7 @@ The first event on every connection.
 {
   "type": "hello",
   "protocol": 1,
-  "ppm_version": "0.1.0",
+  "everyport_version": "0.1.0",
   "host": { "hostname": "devbox", "os": "linux", "arch": "x86_64", "cores": 8 }
 }
 ```
@@ -83,21 +83,21 @@ The full state. It's sent after `hello`, after every scan where something other 
       "root": { "pid": 48198, "started_at": 1790183520000 },
       "process_name": "node",
       "addresses": ["127.0.0.1", "::1"],
-      "cwd": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+      "cwd": "/Users/dev/conductor/workspaces/everyport/providence",
       "cwd_exists": true,
       "command": "npm run dev",
-      "launch_dir": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+      "launch_dir": "/Users/dev/conductor/workspaces/everyport/providence",
       "started_at": 1790183520000,
       "project": {
-        "name": "port-process-manager",
-        "root": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+        "name": "everyport",
+        "root": "/Users/dev/conductor/workspaces/everyport/providence",
         "framework": "Next.js",
         "branch": "menubar-port-monitor",
         "worktree": "providence",
-        "github": "greenfield-inc/port-process-manager",
+        "github": "greenfield-inc/everyport",
         "vercel": {
-          "project_id": "prj_ppm",
-          "preview_url": "https://port-process-manager-git-menubar-port-monitor.vercel.app"
+          "project_id": "prj_everyport",
+          "preview_url": "https://everyport-git-menubar-port-monitor.vercel.app"
         }
       },
       "workspace": { "kind": "conductor", "name": "providence", "open_url": null },
@@ -107,7 +107,7 @@ The full state. It's sent after `hello`, after every scan where something other 
         "title": "Dot-grid menu bar icon",
         "started_at": 1790183040000,
         "transcript_path": "/Users/dev/.claude/projects/providence/68c8fda6.jsonl",
-        "directory": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+        "directory": "/Users/dev/conductor/workspaces/everyport/providence",
         "resume_command": "claude --resume 68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c"
       },
       "processes": [
@@ -174,7 +174,7 @@ The full state. It's sent after `hello`, after every scan where something other 
 { "kind": "leaking", "bytes": 1191182336 }
 ```
 
-`other_ports` lists the ports that processes of other users or the system hold, such as a Docker-published port or a system database. `ppm` can't inspect those processes, so these ports have no tree and no actions. The list is sorted by port and covers the configured port range. A port in `servers` never appears here.
+`other_ports` lists the ports that processes of other users or the system hold, such as a Docker-published port or a system database. `everyport` can't inspect those processes, so these ports have no tree and no actions. The list is sorted by port and covers the configured port range. A port in `servers` never appears here.
 
 | Field | Meaning |
 |---|---|
@@ -183,11 +183,11 @@ The full state. It's sent after `hello`, after every scan where something other 
 | `owner` | The user the process runs as, such as `root`, or `null` when the OS doesn't say |
 | `process_name` | Name of the process that owns the socket, or `null` when the OS doesn't say. Linux doesn't tell a normal user which process holds another user's socket. |
 
-On macOS and Linux, when `ppm` runs as root, every port is a server and `other_ports` is empty. On macOS, `ppm` reads other users' ports from `nettop` at most every 10 seconds, so a new one can take that long to appear. macOS lists other users' sockets only to its own tools.
+On macOS and Linux, when `everyport` runs as root, every port is a server and `other_ports` is empty. On macOS, `everyport` reads other users' ports from `nettop` at most every 10 seconds, so a new one can take that long to appear. macOS lists other users' sockets only to its own tools.
 
 ### alert
 
-A server crossed a threshold. `ppm` sends it once, and again only after the server recovers and crosses it again. Clients decide whether and how to notify.
+A server crossed a threshold. `everyport` sends it once, and again only after the server recovers and crosses it again. Clients decide whether and how to notify.
 
 ```json
 { "type": "alert", "port": 6006, "kind": "leaking", "memory": 3017089024 }
@@ -210,7 +210,7 @@ A line that isn't a valid request still gets a `result` with an error. Its `id` 
 
 A request has a numeric `id` that you choose, a `method`, and `params` for the methods that take them. Every field of `params` is required, except in `configure`, which takes only the fields to change. Requests run one at a time, in order.
 
-Use ids from 1 up to 2^53, so JavaScript clients keep them exact. `ppm` only echoes them back, so they need to be unique only among your requests in flight.
+Use ids from 1 up to 2^53, so JavaScript clients keep them exact. `everyport` only echoes them back, so they need to be unique only among your requests in flight.
 
 ### refresh
 
@@ -222,9 +222,9 @@ Scan now and send a fresh snapshot, even if nothing changed.
 
 ### stop
 
-Stop a server's process tree, deepest processes first. `ppm` asks each process to quit, and kills whatever is left after 3 s. With `force: true`, it kills at once. On macOS and Linux, asking is SIGTERM and killing is SIGKILL. On Windows, asking sends Ctrl+C to the server's console when only the server and the shells that launched it are on that console. Otherwise it closes the process's windows, or terminates a process that has none. Killing terminates it. `port` is the server's port, and `root` must be the server's `root` from the snapshot. `ppm` checks every process's start time first, so it never signals a process whose pid was reused.
+Stop a server's process tree, deepest processes first. `everyport` asks each process to quit, and kills whatever is left after 3 s. With `force: true`, it kills at once. On macOS and Linux, asking is SIGTERM and killing is SIGKILL. On Windows, asking sends Ctrl+C to the server's console when only the server and the shells that launched it are on that console. Otherwise it closes the process's windows, or terminates a process that has none. Killing terminates it. `port` is the server's port, and `root` must be the server's `root` from the snapshot. `everyport` checks every process's start time first, so it never signals a process whose pid was reused.
 
-A server is protected when any process in its tree is on the `protected` list, such as `postgres`. `ppm` refuses to stop it unless `confirm_protected` is `true`, and the error `result` names the protected process, such as `postgres :5432 is protected; send confirm_protected to stop it anyway`. `confirm_protected` defaults to `false`. Clients ask the user before sending `true`.
+A server is protected when any process in its tree is on the `protected` list, such as `postgres`. `everyport` refuses to stop it unless `confirm_protected` is `true`, and the error `result` names the protected process, such as `postgres :5432 is protected; send confirm_protected to stop it anyway`. `confirm_protected` defaults to `false`. Clients ask the user before sending `true`.
 
 ```json
 { "id": 2, "method": "stop", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "force": false, "confirm_protected": false } }
@@ -234,9 +234,9 @@ The result arrives as soon as the processes are asked to quit. The server leaves
 
 ### restart
 
-Stop the server, then run its `command` again in its `launch_dir`, detached from `ppm`. The result arrives as soon as the old tree is asked to quit. Once that tree is gone and `port` is free, `ppm` starts the command, and the new server shows up in a later snapshot.
+Stop the server, then run its `command` again in its `launch_dir`, detached from `everyport`. The result arrives as soon as the old tree is asked to quit. Once that tree is gone and `port` is free, `everyport` starts the command, and the new server shows up in a later snapshot.
 
-A protected server needs `confirm_protected: true`, as for `stop`. An error `result` covers what `ppm` can check up front: the server is protected, the process changed, or its command or folder can't be read. A failure after that gets no second `result`. The server just doesn't come back on `port` in the snapshots over the next 10 s or so. The new server's output is in `port-process-manager/port-<port>.log` in the system temp folder (`$TMPDIR` or `%TEMP%`), and a failure to start it is one line on `ppm`'s stderr.
+A protected server needs `confirm_protected: true`, as for `stop`. An error `result` covers what `everyport` can check up front: the server is protected, the process changed, or its command or folder can't be read. A failure after that gets no second `result`. The server just doesn't come back on `port` in the snapshots over the next 10 s or so. The new server's output is in `everyport/port-<port>.log` in the system temp folder (`$TMPDIR` or `%TEMP%`), and a failure to start it is one line on `everyport`'s stderr.
 
 ```json
 { "id": 3, "method": "restart", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "confirm_protected": false } }
@@ -244,7 +244,7 @@ A protected server needs `confirm_protected: true`, as for `stop`. An error `res
 
 ### configure
 
-Change scanner settings. Fields you leave out keep their current value; `ppm` starts from `config.toml`. On stdio, they apply to that connection's scanner. Over HTTP, one scanner serves every client, so they apply to all of them.
+Change scanner settings. Fields you leave out keep their current value; `everyport` starts from `config.toml`. On stdio, they apply to that connection's scanner. Over HTTP, one scanner serves every client, so they apply to all of them.
 
 ```json
 {
@@ -276,10 +276,10 @@ These are the defaults.
 | `idle_after_secs` | Idle time after which Clean up suggests a server |
 | `long_running_after_secs` | Uptime after which Clean up suggests a server |
 | `protected` | Process names that protect a server: Clean up never suggests it, and `stop` and `restart` need `confirm_protected` |
-| `auto_kill` | What happens when a server starts to qualify for Clean up while `ppm` watches: `off` lists it, `ask` also sends a `clean_up` alert, `act` stops it. Servers that already qualify when `ppm` starts or when `auto_kill` changes are only listed, and so are leaking servers and servers whose process tree runs a protected process. |
+| `auto_kill` | What happens when a server starts to qualify for Clean up while `everyport` watches: `off` lists it, `ask` also sends a `clean_up` alert, `act` stops it. Servers that already qualify when `everyport` starts or when `auto_kill` changes are only listed, and so are leaking servers and servers whose process tree runs a protected process. |
 | `vercel_previews` | Look up each branch's Vercel preview through the GitHub CLI (`gh`), which goes online |
 
-Every `ppm` command starts from `config.toml` in the ppm config folder (see [ppm serve](#ppm-serve) for where it is), which the desktop app writes from Settings. It holds these same fields, and any it leaves out take their defaults. `ppm` never auto-kills on its own: `auto_kill` starts `off` whatever the file says, and only a client that sends it in `configure` turns it on. The desktop app does that for its own computer only.
+Every `everyport` command starts from `config.toml` in the Everyport config folder (see [everyport serve](#everyport-serve) for where it is), which the desktop app writes from Settings. It holds these same fields, and any it leaves out take their defaults. `everyport` never auto-kills on its own: `auto_kill` starts `off` whatever the file says, and only a client that sends it in `configure` turns it on. The desktop app does that for its own computer only.
 
 ## Versioning
 
@@ -287,38 +287,38 @@ Every `ppm` command starts from `config.toml` in the ppm config folder (see [ppm
 
 - ignore fields you don't know
 - ignore events whose `type` you don't know
-- expect an error `result` from an older `ppm` for a method it doesn't know
+- expect an error `result` from an older `everyport` for a method it doesn't know
 
-If `hello.protocol` is higher than the version you support, ask the user to update the client, and show `hello.ppm_version` in the message.
+If `hello.protocol` is higher than the version you support, ask the user to update the client, and show `hello.everyport_version` in the message.
 
 ## Other machines
 
-On another machine, run the same `ppm stdio` through a command prefix, such as `ssh devbox ppm stdio` or `docker exec -i box ppm stdio`. The protocol is the same.
+On another machine, run the same `everyport stdio` through a command prefix, such as `ssh devbox everyport stdio` or `docker exec -i box everyport stdio`. The protocol is the same.
 
-To open a server from a machine whose prefix can't forward ports, such as `docker exec -i`, run `ppm connect <port>` through the prefix. It connects to `localhost:<port>` on that machine and pipes the connection to its stdin and stdout, so a client can relay one TCP connection per `ppm connect`. It exits when the server closes the connection, and fails with status 1 when nothing answers on the port. `ppm connect --check <port>` only connects and exits, so a client can check the port before it listens locally. ssh and kubectl forward ports themselves, so they don't need it.
+To open a server from a machine whose prefix can't forward ports, such as `docker exec -i`, run `everyport connect <port>` through the prefix. It connects to `localhost:<port>` on that machine and pipes the connection to its stdin and stdout, so a client can relay one TCP connection per `everyport connect`. It exits when the server closes the connection, and fails with status 1 when nothing answers on the port. `everyport connect --check <port>` only connects and exits, so a client can check the port before it listens locally. ssh and kubectl forward ports themselves, so they don't need it.
 
-## ppm serve
+## everyport serve
 
 ```bash
-ppm serve                                   # listens on 127.0.0.1:7767
-ppm serve --listen 127.0.0.1:8080
-ppm serve --url https://devbox.tail1234.ts.net
-ppm serve --allow-origin https://dash.example.com
+everyport serve                                   # listens on 127.0.0.1:7767
+everyport serve --listen 127.0.0.1:8080
+everyport serve --url https://devbox.tail1234.ts.net
+everyport serve --allow-origin https://dash.example.com
 ```
 
-`ppm serve` listens only on loopback, and refuses any other address. Put a tunnel or proxy you trust in front of it, such as `tailscale serve --bg http://127.0.0.1:7767`.
+`everyport serve` listens only on loopback, and refuses any other address. Put a tunnel or proxy you trust in front of it, such as `tailscale serve --bg http://127.0.0.1:7767`.
 
 ### Token and connection code
 
-Every request needs `Authorization: Bearer <token>`. The token is created on first run and kept in `serve-token` in the ppm config folder (`~/Library/Application Support/port-process-manager` on macOS, `%APPDATA%\port-process-manager` on Windows, `~/.config/port-process-manager` on Linux), readable only by your user. To make a new token, delete the file and restart `ppm serve`.
+Every request needs `Authorization: Bearer <token>`. The token is created on first run and kept in `serve-token` in the Everyport config folder (`~/Library/Application Support/everyport` on macOS, `%APPDATA%\everyport` on Windows, `~/.config/everyport` on Linux), readable only by your user. To make a new token, delete the file and restart `everyport serve`.
 
-On start, `ppm serve` prints a connection code:
+On start, `everyport serve` prints a connection code:
 
 ```text
-ppm://eyJ0b2tlbiI6Ii4uLiIsInVybCI6Imh0dHA6Ly8xMjcuMC4wLjE6Nzc2NyJ9
+everyport://eyJ0b2tlbiI6Ii4uLiIsInVybCI6Imh0dHA6Ly8xMjcuMC4wLjE6Nzc2NyJ9
 ```
 
-It's `ppm://` followed by the unpadded base64url encoding of a JSON object with the URL and the token:
+It's `everyport://` followed by the unpadded base64url encoding of a JSON object with the URL and the token:
 
 ```json
 { "url": "http://127.0.0.1:7767", "token": "..." }
@@ -335,7 +335,7 @@ curl -N -H "Authorization: Bearer $TOKEN" http://127.0.0.1:7767/events
 ```
 
 ```text
-data: {"type":"hello","protocol":1,"ppm_version":"0.1.0","host":{...}}
+data: {"type":"hello","protocol":1,"everyport_version":"0.1.0","host":{...}}
 
 data: {"type":"snapshot","taken_at":1790195040000,"system":{...},"servers":[...]}
 
@@ -373,7 +373,7 @@ Snapshot changes the request causes arrive on `/events`.
 By default, responses carry no CORS headers, so a web page can't read them, even with a leaked connection code. To use the API from a page, allow its origin with `--allow-origin`, once per origin:
 
 ```bash
-ppm serve --allow-origin https://dash.example.com --allow-origin http://localhost:5173
+everyport serve --allow-origin https://dash.example.com --allow-origin http://localhost:5173
 ```
 
 Responses to a request from an allowed origin carry `Access-Control-Allow-Origin` with that origin, and `OPTIONS` preflight requests from it are answered without a token. Every other request still needs the token. `EventSource` can't send headers, so read `/events` with `fetch` and a stream reader.

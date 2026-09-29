@@ -1,4 +1,4 @@
-import type { Server } from "@ppm/protocol";
+import type { Server } from "@everyport/protocol";
 import { type ReactNode, useState } from "react";
 import { CpuChart, MemoryChart, sampleNear } from "../charts.tsx";
 import { Colon, Header, Menu, type MenuItem, ProtectedBadge, ProtectedConfirm } from "../components.tsx";
@@ -34,31 +34,31 @@ function DetailHeader({ ctx, server, onBack }: Props) {
   const confirm = confirmOf(pending);
   const canRestart = server.command !== null && server.cwd_exists;
   return (
-    <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
+    <div className="everyport:flex everyport:flex-col everyport:gap-2.5 everyport:px-4 everyport:pt-3 everyport:pb-4">
       <Header title={server.project.name} onBack={onBack} />
-      <div className="ppm:flex ppm:items-center ppm:justify-between ppm:gap-1.5">
-        <div className="ppm:flex ppm:items-center ppm:gap-1.5">
+      <div className="everyport:flex everyport:items-center everyport:justify-between everyport:gap-1.5">
+        <div className="everyport:flex everyport:items-center everyport:gap-1.5">
           <Colon status={server.status} color={ctx.colorOf(server.port)} large />
-          <span className="selectable ppm:font-mono ppm:text-28 ppm:font-medium ppm:text-fg">{server.port}</span>
+          <span className="selectable everyport:font-mono everyport:text-28 everyport:font-medium everyport:text-fg">{server.port}</span>
         </div>
-        <div className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-2.5">
+        <div className="everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-2.5">
           {error ? (
-            <span className="ppm:clamp-1 ppm:text-11 ppm:text-danger" title={error}>
+            <span className="everyport:clamp-1 everyport:text-11 everyport:text-danger" title={error}>
               {error}
             </span>
           ) : (
-            <span className="ppm:font-mono ppm:text-13 ppm:text-fg3">{restarting ? "restarting…" : up === null ? "" : `up ${duration(up)}`}</span>
+            <span className="everyport:font-mono everyport:text-13 everyport:text-fg3">{restarting ? "restarting…" : up === null ? "" : `up ${duration(up)}`}</span>
           )}
-          <div className="ppm:flex ppm:gap-1.5">
+          <div className="everyport:flex everyport:gap-1.5">
             <button
               type="button"
               aria-label="Restart"
               title={server.agent ? `Restart. It runs outside the ${agentName[server.agent.kind]} session.` : "Restart with the same command"}
               disabled={!canRestart || restarting}
               onClick={() => ctx.restart(server)}
-              className="ppm:flex ppm:size-[26px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:bg-accent ppm:text-fg ppm:disabled:opacity-40"
+              className="everyport:flex everyport:size-[26px] everyport:shrink-0 everyport:items-center everyport:justify-center everyport:rounded-[7px] everyport:bg-accent everyport:text-fg everyport:disabled:opacity-40"
             >
-              <RestartIcon className={restarting ? "ppm-spin" : undefined} />
+              <RestartIcon className={restarting ? "everyport-spin" : undefined} />
             </button>
             <button
               type="button"
@@ -67,7 +67,7 @@ function DetailHeader({ ctx, server, onBack }: Props) {
               onClick={() => {
                 if (ctx.stop(server)) onBack();
               }}
-              className="ppm:relative ppm:flex ppm:size-[26px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:bg-danger/14 ppm:text-danger"
+              className="everyport:relative everyport:flex everyport:size-[26px] everyport:shrink-0 everyport:items-center everyport:justify-center everyport:rounded-[7px] everyport:bg-danger/14 everyport:text-danger"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
                 <rect x="2" y="2" width="8" height="8" rx="1.8" fill="currentColor" />
@@ -78,7 +78,7 @@ function DetailHeader({ ctx, server, onBack }: Props) {
         </div>
       </div>
       {confirm && (
-        <div className="ppm:flex ppm:items-center ppm:rounded-[9px] ppm:bg-warn/10 ppm:px-2.5 ppm:py-2">
+        <div className="everyport:flex everyport:items-center everyport:rounded-[9px] everyport:bg-warn/10 everyport:px-2.5 everyport:py-2">
           <ProtectedConfirm ctx={ctx} server={server} action={confirm} />
         </div>
       )}
@@ -90,15 +90,15 @@ type Row = { label: string; value: ReactNode; title?: string };
 
 function InfoRow({ label, value, title }: Row) {
   return (
-    <div className="ppm:flex ppm:h-[30px] ppm:shrink-0 ppm:items-center ppm:gap-3" title={title}>
-      <span className="ppm:w-16 ppm:shrink-0 ppm:text-11 ppm:text-fg3">{label}</span>
-      <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:items-center ppm:gap-1.5">{value}</div>
+    <div className="everyport:flex everyport:h-[30px] everyport:shrink-0 everyport:items-center everyport:gap-3" title={title}>
+      <span className="everyport:w-16 everyport:shrink-0 everyport:text-11 everyport:text-fg3">{label}</span>
+      <div className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:items-center everyport:gap-1.5">{value}</div>
     </div>
   );
 }
 
 const Value = ({ children, mono = false, strong = false }: { children: ReactNode; mono?: boolean; strong?: boolean }) => (
-  <span className={`selectable ppm:clamp-1 ppm:text-13 ${mono ? "ppm:font-mono" : ""} ${strong ? "ppm:text-fg" : "ppm:text-fg2"}`}>{children}</span>
+  <span className={`selectable everyport:clamp-1 everyport:text-13 ${mono ? "everyport:font-mono" : ""} ${strong ? "everyport:text-fg" : "everyport:text-fg2"}`}>{children}</span>
 );
 
 function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
@@ -119,13 +119,13 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
           aria-haspopup="menu"
           aria-expanded={sessionMenu}
           onClick={() => setSessionMenu(true)}
-          className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:items-center ppm:gap-1.5"
+          className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:items-center everyport:gap-1.5"
         >
-          <AgentIcon kind={agent.kind} className="ppm:text-fg2" />
-          <span className="ppm:clamp-1 ppm:text-13 ppm:text-fg">{agent.title ?? agentName[agent.kind]}</span>
-          <span className="ppm:shrink-0 ppm:whitespace-pre ppm:font-mono ppm:text-13 ppm:text-fg3">{agent.id.slice(0, 8)}</span>
-          <span className="ppm:flex-1" />
-          <OpenIcon className="ppm:text-fg2" />
+          <AgentIcon kind={agent.kind} className="everyport:text-fg2" />
+          <span className="everyport:clamp-1 everyport:text-13 everyport:text-fg">{agent.title ?? agentName[agent.kind]}</span>
+          <span className="everyport:shrink-0 everyport:whitespace-pre everyport:font-mono everyport:text-13 everyport:text-fg3">{agent.id.slice(0, 8)}</span>
+          <span className="everyport:flex-1" />
+          <OpenIcon className="everyport:text-fg2" />
         </button>
       ),
     });
@@ -141,10 +141,10 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
       label: "Workspace",
       title: text,
       value: openable ? (
-        <button type="button" onClick={() => ctx.act(server, () => client.openWorkspace?.(machineId, server.port))} className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:items-center ppm:gap-1.5">
+        <button type="button" onClick={() => ctx.act(server, () => client.openWorkspace?.(machineId, server.port))} className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:items-center everyport:gap-1.5">
           <Value>{text}</Value>
-          <span className="ppm:flex-1" />
-          <OpenIcon className="ppm:text-fg2" />
+          <span className="everyport:flex-1" />
+          <OpenIcon className="everyport:text-fg2" />
         </button>
       ) : (
         <Value>{text}</Value>
@@ -175,14 +175,14 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
   }
 
   return (
-    <div className="ppm:hairline-t ppm:relative ppm:flex ppm:flex-col ppm:px-4 ppm:py-1.5">
+    <div className="everyport:hairline-t everyport:relative everyport:flex everyport:flex-col everyport:px-4 everyport:py-1.5">
       {primary.map((row) => (
         <InfoRow key={row.label} {...row} />
       ))}
       {secondary.length > 0 && (
         <>
-          <div className="ppm-grow" data-closed={!expanded || undefined} inert={!expanded}>
-            <div className="ppm:flex ppm:flex-col">
+          <div className="everyport-grow" data-closed={!expanded || undefined} inert={!expanded}>
+            <div className="everyport:flex everyport:flex-col">
               {secondary.map((row) => (
                 <InfoRow key={row.label} {...row} />
               ))}
@@ -191,9 +191,9 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
           <InfoRow
             label=""
             value={
-              <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="ppm:flex ppm:items-center ppm:gap-1 ppm:text-11 ppm:text-fg3">
+              <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="everyport:flex everyport:items-center everyport:gap-1 everyport:text-11 everyport:text-fg3">
                 {expanded ? "Less" : `${secondary.length} more`}
-                <Chevron direction={expanded ? "up" : "down"} className="ppm:text-fg3" />
+                <Chevron direction={expanded ? "up" : "down"} className="everyport:text-fg3" />
               </button>
             }
           />
@@ -201,11 +201,11 @@ function Info({ ctx, server }: { ctx: ViewContext; server: Server }) {
       )}
       {agent && sessionMenu && (
         <Menu
-          className="ppm:top-[42px] ppm:left-[84px] ppm:w-[300px]"
+          className="everyport:top-[42px] everyport:left-[84px] everyport:w-[300px]"
           onClose={() => setSessionMenu(false)}
           title={
             <>
-              <AgentIcon kind={agent.kind} className="ppm:text-fg2" />
+              <AgentIcon kind={agent.kind} className="everyport:text-fg2" />
               {agentName[agent.kind]}
               {agent.started_at !== null && ` · started ${clock(agent.started_at)}`}
             </>
@@ -223,15 +223,15 @@ function Charts({ ctx, server, hover, onHover }: { ctx: ViewContext; server: Ser
   const time = hovered ? clockSeconds(hovered.at) : null;
   return (
     <>
-      <div className="ppm:hairline-t ppm:flex ppm:flex-col ppm:gap-3.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
-        <ChartHead title="Memory" value={memory(hovered?.memory ?? server.memory)} note={<span className="ppm:font-mono">{time ?? "10 min"}</span>} />
+      <div className="everyport:hairline-t everyport:flex everyport:flex-col everyport:gap-3.5 everyport:px-4 everyport:pt-3 everyport:pb-4">
+        <ChartHead title="Memory" value={memory(hovered?.memory ?? server.memory)} note={<span className="everyport:font-mono">{time ?? "10 min"}</span>} />
         <MemoryChart history={server.history} now={ctx.now} hover={hover} onHover={onHover} threshold={ctx.alertMemory} />
       </div>
-      <div className="ppm:flex ppm:flex-col ppm:gap-3.5 ppm:px-4 ppm:pb-4">
+      <div className="everyport:flex everyport:flex-col everyport:gap-3.5 everyport:px-4 everyport:pb-4">
         <ChartHead
           title="CPU"
           value={percent(hovered?.cpu_percent ?? server.cpu_percent)}
-          note={time ? <span className="ppm:font-mono">{time}</span> : server.history.length ? `peak ${percent(peak)}` : null}
+          note={time ? <span className="everyport:font-mono">{time}</span> : server.history.length ? `peak ${percent(peak)}` : null}
         />
         <CpuChart history={server.history} now={ctx.now} hover={hover} onHover={onHover} />
       </div>
@@ -241,12 +241,12 @@ function Charts({ ctx, server, hover, onHover }: { ctx: ViewContext; server: Ser
 
 function ChartHead({ title, value, note }: { title: string; value: string; note: ReactNode }) {
   return (
-    <div className="ppm:flex ppm:items-baseline ppm:justify-between">
-      <div className="ppm:flex ppm:items-baseline ppm:gap-2">
-        <span className="ppm:text-13 ppm:font-medium ppm:text-fg2">{title}</span>
-        <span className="ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{value}</span>
+    <div className="everyport:flex everyport:items-baseline everyport:justify-between">
+      <div className="everyport:flex everyport:items-baseline everyport:gap-2">
+        <span className="everyport:text-13 everyport:font-medium everyport:text-fg2">{title}</span>
+        <span className="everyport:font-mono everyport:text-13 everyport:font-medium everyport:text-fg">{value}</span>
       </div>
-      <span className="ppm:text-11 ppm:text-fg3">{note}</span>
+      <span className="everyport:text-11 everyport:text-fg3">{note}</span>
     </div>
   );
 }
@@ -255,36 +255,36 @@ function Processes({ server }: { server: Server }) {
   const [open, setOpen] = useState(false);
   const largest = Math.max(1, ...server.processes.map((process) => process.memory));
   return (
-    <div className={`ppm:hairline-t ppm:flex ppm:flex-col ppm:gap-2 ppm:px-4 ${open ? "ppm:pt-3 ppm:pb-4" : "ppm:py-3.5"}`}>
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="ppm:flex ppm:h-4 ppm:shrink-0 ppm:items-center ppm:justify-between">
-        <span className="ppm:flex ppm:items-center ppm:gap-1">
-          <span className="ppm:text-13 ppm:text-fg2">Processes</span>
-          <Chevron direction={open ? "down" : "right"} className="ppm:text-fg3" />
+    <div className={`everyport:hairline-t everyport:flex everyport:flex-col everyport:gap-2 everyport:px-4 ${open ? "everyport:pt-3 everyport:pb-4" : "everyport:py-3.5"}`}>
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="everyport:flex everyport:h-4 everyport:shrink-0 everyport:items-center everyport:justify-between">
+        <span className="everyport:flex everyport:items-center everyport:gap-1">
+          <span className="everyport:text-13 everyport:text-fg2">Processes</span>
+          <Chevron direction={open ? "down" : "right"} className="everyport:text-fg3" />
         </span>
-        <span className="ppm:flex ppm:items-center ppm:gap-2 ppm:font-mono ppm:text-13">
-          <span className="ppm:text-fg3">{server.processes.length} ·</span>
-          <span className="ppm:text-fg2">{memory(server.memory)}</span>
+        <span className="everyport:flex everyport:items-center everyport:gap-2 everyport:font-mono everyport:text-13">
+          <span className="everyport:text-fg3">{server.processes.length} ·</span>
+          <span className="everyport:text-fg2">{memory(server.memory)}</span>
         </span>
       </button>
       {open && (
-        <div className="ppm:flex ppm:flex-col ppm:gap-[5px]">
+        <div className="everyport:flex everyport:flex-col everyport:gap-[5px]">
           {server.processes.map((process) => {
             const main = process.proc.pid === server.pid;
             const indent = process.depth > 0 ? `${"  ".repeat(process.depth - 1)}└ ` : "";
             return (
-              <div key={process.proc.pid} className="ppm:flex ppm:items-center" title={process.name}>
-                <span className={`selectable ppm:clamp-1 ppm:flex-1 ppm:whitespace-pre ppm:font-mono ppm:text-13 ${main ? "ppm:text-fg" : "ppm:text-fg/80"}`}>
+              <div key={process.proc.pid} className="everyport:flex everyport:items-center" title={process.name}>
+                <span className={`selectable everyport:clamp-1 everyport:flex-1 everyport:whitespace-pre everyport:font-mono everyport:text-13 ${main ? "everyport:text-fg" : "everyport:text-fg/80"}`}>
                   {indent}
                   {process.name}
                 </span>
-                <span className="selectable ppm:w-16 ppm:shrink-0 ppm:font-mono ppm:text-11 ppm:text-fg3">{process.proc.pid}</span>
-                <span className="ppm:flex ppm:h-1 ppm:w-16 ppm:shrink-0 ppm:rounded-sm ppm:bg-accent">
+                <span className="selectable everyport:w-16 everyport:shrink-0 everyport:font-mono everyport:text-11 everyport:text-fg3">{process.proc.pid}</span>
+                <span className="everyport:flex everyport:h-1 everyport:w-16 everyport:shrink-0 everyport:rounded-sm everyport:bg-accent">
                   <span
-                    className={`ppm:h-1 ppm:rounded-sm ${main ? "ppm:bg-fg/75" : "ppm:bg-fg/45"}`}
+                    className={`everyport:h-1 everyport:rounded-sm ${main ? "everyport:bg-fg/75" : "everyport:bg-fg/45"}`}
                     style={{ width: Math.max(3, (64 * process.memory) / largest) }}
                   />
                 </span>
-                <span className={`ppm:w-16 ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${main ? "ppm:text-fg/90" : "ppm:text-fg/70"}`}>{memory(process.memory)}</span>
+                <span className={`everyport:w-16 everyport:shrink-0 everyport:text-right everyport:font-mono everyport:text-13 ${main ? "everyport:text-fg/90" : "everyport:text-fg/70"}`}>{memory(process.memory)}</span>
               </div>
             );
           })}
@@ -309,11 +309,11 @@ function Footer({ ctx, server }: { ctx: ViewContext; server: Server }) {
   items.push("divider", { label: "Force stop", danger: true, onSelect: () => ctx.stop(server, true) });
 
   return (
-    <div className="ppm:hairline-t ppm:relative ppm:flex ppm:items-center ppm:gap-2 ppm:p-3">
+    <div className="everyport:hairline-t everyport:relative everyport:flex everyport:items-center everyport:gap-2 everyport:p-3">
       <button
         type="button"
         onClick={() => ctx.open(server)}
-        className="ppm:flex ppm:flex-1 ppm:items-center ppm:justify-center ppm:rounded-lg ppm:bg-primary ppm:px-3 ppm:py-[7px] ppm:text-13 ppm:font-medium ppm:text-on-primary ppm:hover:opacity-90"
+        className="everyport:flex everyport:flex-1 everyport:items-center everyport:justify-center everyport:rounded-lg everyport:bg-primary everyport:px-3 everyport:py-[7px] everyport:text-13 everyport:font-medium everyport:text-on-primary everyport:hover:opacity-90"
       >
         Open localhost:{server.port}
       </button>
@@ -322,9 +322,9 @@ function Footer({ ctx, server }: { ctx: ViewContext; server: Server }) {
           type="button"
           title={preview}
           onClick={() => ctx.act(server, () => client.openExternal?.(preview))}
-          className="ppm:flex ppm:items-center ppm:gap-1.5 ppm:rounded-lg ppm:bg-accent ppm:px-3 ppm:py-[7px] ppm:text-13 ppm:text-fg"
+          className="everyport:flex everyport:items-center everyport:gap-1.5 everyport:rounded-lg everyport:bg-accent everyport:px-3 everyport:py-[7px] everyport:text-13 everyport:text-fg"
         >
-          <VercelIcon className="ppm:text-fg2" />
+          <VercelIcon className="everyport:text-fg2" />
           Preview
         </button>
       )}
@@ -334,13 +334,13 @@ function Footer({ ctx, server }: { ctx: ViewContext; server: Server }) {
         aria-haspopup="menu"
         aria-expanded={more}
         onClick={() => setMore(true)}
-        className="ppm:flex ppm:size-[30px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:gap-[3px] ppm:rounded-lg ppm:bg-accent"
+        className="everyport:flex everyport:size-[30px] everyport:shrink-0 everyport:items-center everyport:justify-center everyport:gap-[3px] everyport:rounded-lg everyport:bg-accent"
       >
-        <span className="ppm:size-[3px] ppm:rounded-full ppm:bg-fg" />
-        <span className="ppm:size-[3px] ppm:rounded-full ppm:bg-fg" />
-        <span className="ppm:size-[3px] ppm:rounded-full ppm:bg-fg" />
+        <span className="everyport:size-[3px] everyport:rounded-full everyport:bg-fg" />
+        <span className="everyport:size-[3px] everyport:rounded-full everyport:bg-fg" />
+        <span className="everyport:size-[3px] everyport:rounded-full everyport:bg-fg" />
       </button>
-      {more && <Menu className="ppm:right-3 ppm:bottom-[50px] ppm:w-[200px]" onClose={() => setMore(false)} items={items} />}
+      {more && <Menu className="everyport:right-3 everyport:bottom-[50px] everyport:w-[200px]" onClose={() => setMore(false)} items={items} />}
     </div>
   );
 }

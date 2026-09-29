@@ -1,4 +1,4 @@
-import type { Machine, PpmClient, Server, Snapshot } from "@ppm/protocol";
+import type { Machine, EveryportClient, Server, Snapshot } from "@everyport/protocol";
 import { type KeyboardEvent, type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Header } from "./components.tsx";
 import { Socket } from "./icons.tsx";
@@ -13,7 +13,7 @@ import { ServerList } from "./views/ServerList.tsx";
 type Route = { view: "list" } | { view: "detail"; port: number } | { view: "cleanUp" };
 
 export type PopoverProps = ThemeProps & {
-  client: PpmClient;
+  client: EveryportClient;
   /** `Config.alert_memory`: the threshold line on memory charts. Defaults to 2 GB. */
   alertMemory?: number;
   /** Open on this server's detail, or the list when it's gone. */
@@ -41,7 +41,7 @@ export function Popover({ client, alertMemory, initialServer, onReady, autoFocus
 
   return (
     <Themed theme={theme} appearance={appearance}>
-      <div className="ppm-panel" tabIndex={0} onKeyDown={(event) => keys.current?.(event)}>
+      <div className="everyport-panel" tabIndex={0} onKeyDown={(event) => keys.current?.(event)}>
         {machines.length > 1 && machine && <MachineSwitcher machines={machines} current={machine.id} onSelect={setMachineId} />}
         {machine?.snapshot ? (
           <MachineView
@@ -54,11 +54,11 @@ export function Popover({ client, alertMemory, initialServer, onReady, autoFocus
             keys={keys}
           />
         ) : (
-          <div className="ppm:flex ppm:flex-col">
-            <div className="ppm:px-4 ppm:pt-3 ppm:pb-4">
+          <div className="everyport:flex everyport:flex-col">
+            <div className="everyport:px-4 everyport:pt-3 everyport:pb-4">
               <Header title="Servers" mark={<Socket size={14} />} />
             </div>
-            <div className="ppm:hairline-t">{machine ? <MachineStatus machine={machine} client={client} /> : null}</div>
+            <div className="everyport:hairline-t">{machine ? <MachineStatus machine={machine} client={client} /> : null}</div>
           </div>
         )}
       </div>
@@ -76,7 +76,7 @@ function MachineView({
   autoFocus,
   keys,
 }: {
-  client: PpmClient;
+  client: EveryportClient;
   machine: Machine & { snapshot: Snapshot };
   alertMemory?: number;
   initialPort?: number;
@@ -123,16 +123,16 @@ function MachineView({
   const view = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (!autoFocus && transitions.current === 0) return;
-    const root = view.current?.closest<HTMLElement>(".ppm-panel");
+    const root = view.current?.closest<HTMLElement>(".everyport-panel");
     (root?.querySelector<HTMLElement>("[role=listbox]") ?? root)?.focus({ preventScroll: true });
   }, [key]);
   return (
     <div
       key={key}
       ref={view}
-      className="ppm-view"
+      className="everyport-view"
       data-first={transitions.current === 0 || undefined}
-      style={{ ["--ppm-dir" as string]: direction }}
+      style={{ ["--everyport-dir" as string]: direction }}
     >
       {shown.view === "detail" && detail ? (
         <ServerDetail ctx={ctx} server={detail} onBack={back} />

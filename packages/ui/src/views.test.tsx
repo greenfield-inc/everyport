@@ -1,6 +1,6 @@
 // Each view rendered from the protocol fixture. Expected text comes from the
 // Paper frames in docs/design, which show the same servers.
-import { fixtureSnapshot, type Machine, type PpmClient, type Server, type Snapshot } from "@ppm/protocol";
+import { fixtureSnapshot, type Machine, type EveryportClient, type Server, type Snapshot } from "@everyport/protocol";
 import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
@@ -14,7 +14,7 @@ const machine = (snapshot: Snapshot): Machine & { snapshot: Snapshot } => ({
   snapshot,
 });
 
-const clientFor = (machines: Machine[]): PpmClient => ({
+const clientFor = (machines: Machine[]): EveryportClient => ({
   machines: () => machines,
   subscribe: () => () => {},
   call: async () => {},
@@ -43,7 +43,7 @@ describe("server list (Paper 01)", () => {
   });
 
   it("gives each row its memory, and a context line from its workspace, folder and times", () => {
-    expect(list).toContain("3000 port-process-manager menubar-port-monitor providence · up 3h 1.24 GB");
+    expect(list).toContain("3000 everyport menubar-port-monitor providence · up 3h 1.24 GB");
     expect(list).toContain("3001 greenfield.to main ~/Sites · up 1d 612 MB");
     expect(list).toContain("lisbon · idle 5h 184 MB");
     expect(list).toContain("+1.1 GB in 10 min 2.81 GB");
@@ -85,7 +85,7 @@ describe("server detail (Paper 02)", () => {
 
   it("puts six more facts behind a disclosure, in Paper's order", () => {
     expect(detail).toContain(
-      "Workspace Conductor · providence Folder ~/…/port-process-manager/providence Framework Next.js Command npm run dev Started Today 10:12 AM Address 127.0.0.1 · ::1 6 more",
+      "Workspace Conductor · providence Folder ~/…/everyport/providence Framework Next.js Command npm run dev Started Today 10:12 AM Address 127.0.0.1 · ::1 6 more",
     );
   });
 

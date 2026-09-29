@@ -1,7 +1,7 @@
-// One desktop: the OS's chrome, a wallpaper, and the real @ppm/ui popover
+// One desktop: the OS's chrome, a wallpaper, and the real @everyport/ui popover
 // under (or above) its tray icon.
-import type { Machine, Os, Server } from "@ppm/protocol";
-import { NotificationCard, Popover } from "@ppm/ui";
+import type { Machine, Os, Server } from "@everyport/protocol";
+import { NotificationCard, Popover } from "@everyport/ui";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DemoClient } from "./client.ts";
 import type { View } from "./sections.ts";
@@ -133,7 +133,7 @@ export function Screen({ os, client, machine, view, open, onToggle, alert, width
   }, [client]);
 
   const tray = (
-    <button type="button" className="tray" data-open={open} onClick={onToggle} aria-label={open ? "Close Port Process Manager" : "Open Port Process Manager"} aria-expanded={open}>
+    <button type="button" className="tray" data-open={open} onClick={onToggle} aria-label={open ? "Close Everyport" : "Open Everyport"} aria-expanded={open}>
       <Socket size={os === "windows" ? 17 : 16} state={servers.length === 0 ? "off" : attention && alert !== undefined ? "alert" : "on"} />
       {servers.length > 0 && (
         <span key={servers.length} className="tray-count">

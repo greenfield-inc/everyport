@@ -1,14 +1,14 @@
 # Packaging
 
-Files that package and publish `ppm` and the desktop app.
+Files that package and publish `everyport` and the desktop app.
 
 | Path | What |
 |---|---|
-| `npm/` | npm package `port-process-manager`: runs the release binary, downloaded on first run and checked against the `SHA256SUMS` packed into the package |
-| `pypi/` | PyPI package `port-process-manager`, the same for `uvx` and `pipx` |
-| `homebrew/ppm.rb` | Formula for `greenfield-inc/homebrew-tap` |
-| `homebrew/port-process-manager.rb` | Cask for the same tap |
-| `winget/` | winget manifests for `Greenfield.PortProcessManager` |
+| `npm/` | npm package `everyport`: runs the release binary, downloaded on first run and checked against the `SHA256SUMS` packed into the package |
+| `pypi/` | PyPI package `everyport`, the same for `uvx` and `pipx` |
+| `homebrew/Formula/everyport.rb` | Formula for `greenfield-inc/homebrew-tap` |
+| `homebrew/Casks/everyport.rb` | Cask for the same tap, laid out as the tap lays it out |
+| `winget/` | winget manifests for `Dcouple.Everyport` |
 | `../scripts/install.sh`, `../scripts/install.ps1` | CLI install scripts, attached to each release |
 | `../scripts/install-app.sh`, `../scripts/install-app.ps1` | Desktop app and CLI install scripts, attached to each release and served by the site as `/install.sh` and `/install.ps1` |
 
@@ -20,10 +20,10 @@ The version lives only in `Cargo.toml` (`workspace.package`). The desktop app re
 
 | File | Built from |
 |---|---|
-| `ppm-<target>` (`.exe` on Windows) | `cargo build` or `cargo zigbuild` for `x86_64` and `aarch64` on `apple-darwin`, `unknown-linux-musl` and `pc-windows-msvc` |
-| `port-process-manager-<version>-<arch>.dmg` | Tauri, `aarch64` and `x86_64` |
-| `port-process-manager-<version>-x86_64.{msi,deb,rpm,AppImage}` | Tauri |
-| `port-process-manager-<version>-x86_64-setup.exe` | Tauri's NSIS installer, per user. `install-app.ps1` uses it because the `.msi` installs per machine and needs admin. |
+| `everyport-<target>` (`.exe` on Windows) | `cargo build` or `cargo zigbuild` for `x86_64` and `aarch64` on `apple-darwin`, `unknown-linux-musl` and `pc-windows-msvc` |
+| `everyport-<version>-<arch>.dmg` | Tauri, `aarch64` and `x86_64` |
+| `everyport-<version>-x86_64.{msi,deb,rpm,AppImage}` | Tauri |
+| `everyport-<version>-x86_64-setup.exe` | Tauri's NSIS installer, per user. `install-app.ps1` uses it because the `.msi` installs per machine and needs admin. |
 | `install.sh`, `install.ps1`, `install-app.sh`, `install-app.ps1` | `scripts/` |
 | `SHA256SUMS` | every file above |
 
@@ -42,7 +42,7 @@ A tag build fails when a signing or notarization secret is missing, unless it wa
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | macOS signing: the Developer ID Application certificate as base64 `.p12`, and its password |
 | `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_SPECIFIC_PASSWORD` | macOS notarization |
 | `WINDOWS_CERTIFICATE`, `WINDOWS_CERTIFICATE_PASSWORD` | Windows signing: base64 `.pfx` and its password |
-| `CARGO_REGISTRY_TOKEN` | crates.io publish of `port-process-manager` and the workspace crates it depends on |
+| `CARGO_REGISTRY_TOKEN` | crates.io publish of `everyport` and the workspace crates it depends on |
 | `NPM_TOKEN` | npm publish, until npm trusted publishing is set up for the package |
 | `HOMEBREW_TAP_TOKEN` | Push to `greenfield-inc/homebrew-tap` |
 
@@ -55,8 +55,8 @@ A tag build fails when a signing or notarization secret is missing, unless it wa
 ## Try it locally
 
 ```bash
-cargo build -p port-process-manager --release --target aarch64-apple-darwin
-mkdir -p /tmp/artifacts && cp target.noindex/aarch64-apple-darwin/release/ppm /tmp/artifacts/ppm-aarch64-apple-darwin
+cargo build -p everyport --release --target aarch64-apple-darwin
+mkdir -p /tmp/artifacts && cp target.noindex/aarch64-apple-darwin/release/everyport /tmp/artifacts/everyport-aarch64-apple-darwin
 scripts/dist.sh /tmp/artifacts
 scripts/smoke-install.sh
 ```

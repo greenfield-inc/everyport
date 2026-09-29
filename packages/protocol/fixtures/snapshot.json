@@ -28,7 +28,7 @@
         "title": "Dot-grid menu bar icon",
         "started_at": 1790183040000,
         "transcript_path": "/Users/dev/.claude/projects/providence/68c8fda6.jsonl",
-        "directory": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+        "directory": "/Users/dev/conductor/workspaces/everyport/providence",
         "resume_command": "claude --resume 68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c"
       },
       "port": 3000,
@@ -38,20 +38,20 @@
         "started_at": 1790183520000
       },
       "process_name": "node",
-      "cwd": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+      "cwd": "/Users/dev/conductor/workspaces/everyport/providence",
       "command": "npm run dev",
-      "launch_dir": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+      "launch_dir": "/Users/dev/conductor/workspaces/everyport/providence",
       "started_at": 1790183520000,
       "project": {
-        "name": "port-process-manager",
-        "root": "/Users/dev/conductor/workspaces/port-process-manager/providence",
+        "name": "everyport",
+        "root": "/Users/dev/conductor/workspaces/everyport/providence",
         "framework": "Next.js",
         "branch": "menubar-port-monitor",
         "worktree": "providence",
-        "github": "greenfield-inc/port-process-manager",
+        "github": "greenfield-inc/everyport",
         "vercel": {
-          "project_id": "prj_ppm",
-          "preview_url": "https://port-process-manager-git-menubar-port-monitor.vercel.app"
+          "project_id": "prj_everyport",
+          "preview_url": "https://everyport-git-menubar-port-monitor.vercel.app"
         }
       },
       "processes": [

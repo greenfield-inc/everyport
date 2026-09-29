@@ -1,6 +1,6 @@
-// A look-alike of `ppm`'s terminal UI over the demo client: arrow keys select,
+// A look-alike of `everyport`'s terminal UI over the demo client: arrow keys select,
 // Enter opens details, s stops, Esc goes back and q quits to a prompt.
-import type { Machine, Os, Server } from "@ppm/protocol";
+import type { Machine, Os, Server } from "@everyport/protocol";
 import { type KeyboardEvent, type ReactNode, useState } from "react";
 import type { DemoClient } from "./client.ts";
 
@@ -57,7 +57,7 @@ const HINTS: Record<Screen["view"], [string, string][]> = {
   shell: [],
 };
 
-const TITLE: Record<Os, string> = { macos: "zsh · ppm", windows: "PowerShell", linux: "dev@pc: ~" };
+const TITLE: Record<Os, string> = { macos: "zsh · everyport", windows: "PowerShell", linux: "dev@pc: ~" };
 
 /** A terminal window in the chosen OS's style: macOS Terminal, Windows Terminal with tabs, or GNOME Console. */
 export function TerminalWindow({ os, title, className, children }: { os: Os; title: string; className?: string; children: ReactNode }) {
@@ -141,7 +141,7 @@ export function Terminal({ client, machine, os, columns }: { client: DemoClient;
 
   const lines =
     shown.view === "shell"
-      ? [{ text: "$ ppm" }, { text: "Press Enter to run it again.", tone: "dim" as const }]
+      ? [{ text: "$ everyport" }, { text: "Press Enter to run it again.", tone: "dim" as const }]
       : shown.view === "detail" && detail
         ? detailLines(detail, at, columns)
         : listLines(servers, Math.min(selected, servers.length - 1), at, columns);
@@ -153,7 +153,7 @@ export function Terminal({ client, machine, os, columns }: { client: DemoClient;
         className="terminal-body"
         tabIndex={0}
         role="application"
-        aria-label="ppm terminal UI demo. Arrow keys select, Enter opens details, s stops, Escape goes back, q quits."
+        aria-label="everyport terminal UI demo. Arrow keys select, Enter opens details, s stops, Escape goes back, q quits."
         onKeyDown={onKey}
       >
         <pre>
@@ -165,7 +165,7 @@ export function Terminal({ client, machine, os, columns }: { client: DemoClient;
         </pre>
         <pre className="terminal-hints">
           {protectedNote ? (
-            <span className="warn">Protected. ppm stop --protected stops it.</span>
+            <span className="warn">Protected. everyport stop --protected stops it.</span>
           ) : (
             HINTS[shown.view].map(([key, label]) => (
               <span key={key}>

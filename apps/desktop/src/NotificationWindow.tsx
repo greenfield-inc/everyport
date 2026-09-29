@@ -1,5 +1,5 @@
-import type { Alert, Server } from "@ppm/protocol";
-import { NotificationCard } from "@ppm/ui";
+import type { Alert, Server } from "@everyport/protocol";
+import { NotificationCard } from "@everyport/ui";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";

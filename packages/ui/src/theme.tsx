@@ -80,9 +80,9 @@ function semantic(color: string, grayHue: number): Oklch {
 function semanticColors(warning: string, destructive: string, panel: string) {
   const background = luminance(parse(panel));
   return {
-    "--ppm-warn": against(semantic(warning, ORANGE), background),
-    "--ppm-danger": against(semantic(destructive, RED), background),
-    "--ppm-danger-fill": against(semantic(destructive, RED), 1),
+    "--everyport-warn": against(semantic(warning, ORANGE), background),
+    "--everyport-danger": against(semantic(destructive, RED), background),
+    "--everyport-danger-fill": against(semantic(destructive, RED), 1),
   };
 }
 
@@ -104,7 +104,7 @@ function useSystemDark() {
   return useSyncExternalStore(subscribe, () => darkQuery().matches, () => false);
 }
 
-/** Root of every @ppm/ui surface: sets the theme's variables and app chrome. */
+/** Root of every @everyport/ui surface: sets the theme's variables and app chrome. */
 export function Themed({
   theme = DEFAULT_THEME,
   appearance = "system",
@@ -116,14 +116,14 @@ export function Themed({
   const chosen = THEMES[theme] ?? THEMES[DEFAULT_THEME];
   const colors = dark ? chosen.dark : chosen.light;
   const style: Record<string, string> = {
-    "--ppm-sans": chosen.sans,
-    "--ppm-mono": chosen.mono,
+    "--everyport-sans": chosen.sans,
+    "--everyport-mono": chosen.mono,
     ...semanticColors(warningColor(theme, dark), colors.destructive, colors.popover),
   };
   for (const [key, value] of Object.entries(colors)) style[`--${key}`] = value;
   return (
     <div
-      className={`ppm-root ${className ?? ""}`}
+      className={`everyport-root ${className ?? ""}`}
       data-appearance={dark ? "dark" : "light"}
       style={style as CSSProperties}
       onContextMenu={(event) => event.preventDefault()}

@@ -1,17 +1,17 @@
 /*
- * @ppm/ui styles. Import once from the host app, which runs Tailwind 4
- * (`@tailwindcss/vite`). Utilities and theme variables carry the `ppm:`
+ * @everyport/ui styles. Import once from the host app, which runs Tailwind 4
+ * (`@tailwindcss/vite`). Utilities and theme variables carry the `everyport:`
  * prefix and there is no preflight, so a Tailwind host keeps its own classes,
- * theme and base styles. Everything else is scoped to `.ppm-root`.
+ * theme and base styles. Everything else is scoped to `.everyport-root`.
  *
  * Host hooks:
  *   html[data-vibrancy]   native blur sits behind the page: tint the panel
  *   html[data-hidden]     the popover is hidden: pause animation
- *   --ppm-shadow          the panel's drop shadow; set to `none` inside a
+ *   --everyport-shadow          the panel's drop shadow; set to `none` inside a
  *                         native window, where the OS draws the shadow
  */
 @layer theme, base, components, utilities;
-@import "tailwindcss/theme" layer(theme) prefix(ppm);
+@import "tailwindcss/theme" layer(theme) prefix(everyport);
 @import "tailwindcss/utilities" layer(utilities);
 @source "./";
 
@@ -40,7 +40,7 @@
   unicode-range: U+2000-2001, U+2004-2008, U+200A, U+23B8-23BD, U+2500-259F;
 }
 
-/* Colors come from the active theme's CSS variables (set on .ppm-root). */
+/* Colors come from the active theme's CSS variables (set on .everyport-root). */
 @theme inline {
   --color-fg: var(--foreground);
   --color-fg2: var(--muted-foreground);
@@ -48,14 +48,14 @@
   --color-panel: var(--popover);
   --color-accent: var(--accent);
   --color-line: var(--border);
-  --color-warn: var(--ppm-warn);
-  --color-danger: var(--ppm-danger);
-  --color-danger-fill: var(--ppm-danger-fill);
+  --color-warn: var(--everyport-warn);
+  --color-danger: var(--everyport-danger);
+  --color-danger-fill: var(--everyport-danger-fill);
   --color-on-danger: #fff;
   --color-primary: var(--primary);
   --color-on-primary: var(--primary-foreground);
-  --font-sans: var(--ppm-sans);
-  --font-mono: var(--ppm-mono);
+  --font-sans: var(--everyport-sans);
+  --font-mono: var(--everyport-mono);
 }
 
 /* Paper's three type sizes. */
@@ -86,15 +86,15 @@
 
 /*
  * Semantic colors never come from chart slots. Themed sets them from the
- * theme, moved in lightness until they read on the panel: `--ppm-warn`
+ * theme, moved in lightness until they read on the panel: `--everyport-warn`
  * (attention, leaks, the alert threshold; the theme's `warning` or a fixed
- * amber), `--ppm-danger` (the theme's `destructive`) and `--ppm-danger-fill`
+ * amber), `--everyport-danger` (the theme's `destructive`) and `--everyport-danger-fill`
  * (a destructive fill that takes white text).
  */
-.ppm-root {
-  --ppm-tint: 100%;
+.everyport-root {
+  --everyport-tint: 100%;
   color-scheme: light;
-  font-family: var(--ppm-sans);
+  font-family: var(--everyport-sans);
   font-size: 13px;
   line-height: 16px;
   color: var(--foreground);
@@ -107,29 +107,29 @@
   overscroll-behavior: none;
 }
 
-.ppm-root[data-appearance="dark"] {
+.everyport-root[data-appearance="dark"] {
   color-scheme: dark;
 }
 
-html[data-vibrancy] .ppm-root {
-  --ppm-tint: 80%;
+html[data-vibrancy] .everyport-root {
+  --everyport-tint: 80%;
 }
 
-html[data-vibrancy] .ppm-root[data-appearance="dark"] {
-  --ppm-tint: 72%;
+html[data-vibrancy] .everyport-root[data-appearance="dark"] {
+  --everyport-tint: 72%;
 }
 
 @layer base {
-  .ppm-root *,
-  .ppm-root *::before,
-  .ppm-root *::after {
+  .everyport-root *,
+  .everyport-root *::before,
+  .everyport-root *::after {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
     border: 0 solid;
   }
 
-  .ppm-root button {
+  .everyport-root button {
     font: inherit;
     color: inherit;
     background: none;
@@ -137,85 +137,85 @@ html[data-vibrancy] .ppm-root[data-appearance="dark"] {
     cursor: default;
   }
 
-  .ppm-root :focus {
+  .everyport-root :focus {
     outline: none;
   }
 
   /* The panel and listboxes show focus through their selected row. */
-  .ppm-root .ppm-panel:focus-visible,
-  .ppm-root [role="listbox"]:focus-visible {
+  .everyport-root .everyport-panel:focus-visible,
+  .everyport-root [role="listbox"]:focus-visible {
     outline: none;
   }
 
-  .ppm-root :focus-visible {
+  .everyport-root :focus-visible {
     outline: 2px solid var(--ring, var(--primary));
     outline-offset: -2px;
   }
 }
 
-.ppm-root .selectable {
+.everyport-root .selectable {
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
 }
 
-.ppm-panel {
+.everyport-panel {
   width: 400px;
   border-radius: 16px;
   overflow: clip;
   position: relative;
-  background: color-mix(in oklab, var(--popover) var(--ppm-tint), transparent);
+  background: color-mix(in oklab, var(--popover) var(--everyport-tint), transparent);
   box-shadow:
     inset 0 0 0 0.5px var(--border),
-    var(--ppm-shadow, 0 0 0 0.5px rgb(0 0 0 / 0.6), 0 24px 64px rgb(0 0 0 / 0.55));
+    var(--everyport-shadow, 0 0 0 0.5px rgb(0 0 0 / 0.6), 0 24px 64px rgb(0 0 0 / 0.55));
   transform-origin: top center;
-  animation: ppm-open 140ms ease-out;
+  animation: everyport-open 140ms ease-out;
 }
 
-.ppm-scroll {
+.everyport-scroll {
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
 }
 
 /* Motion (intent brief, item 13). */
-@keyframes ppm-open {
+@keyframes everyport-open {
   from {
     opacity: 0;
     transform: scale(0.98);
   }
 }
 
-@keyframes ppm-view-in {
+@keyframes everyport-view-in {
   from {
     opacity: 0;
-    transform: translateX(calc(var(--ppm-dir, 1) * 28px));
+    transform: translateX(calc(var(--everyport-dir, 1) * 28px));
   }
 }
 
-@keyframes ppm-row-out {
+@keyframes everyport-row-out {
   to {
     grid-template-rows: 0fr;
     opacity: 0;
   }
 }
 
-@keyframes ppm-spin {
+@keyframes everyport-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
-.ppm-view {
-  animation: ppm-view-in 180ms
+.everyport-view {
+  animation: everyport-view-in 180ms
     linear(0, 0.25 8%, 0.62 20%, 0.86 33%, 0.98 46%, 1.02 58%, 1.01 72%, 1);
 }
 
-.ppm-view[data-first] {
+.everyport-view[data-first] {
   animation: none;
 }
 
-.ppm-grow {
+.everyport-grow {
   display: grid;
   grid-template-rows: 1fr;
   transition:
@@ -223,82 +223,82 @@ html[data-vibrancy] .ppm-root[data-appearance="dark"] {
     opacity 180ms ease-out;
 }
 
-.ppm-grow > * {
+.everyport-grow > * {
   min-height: 0;
   overflow: hidden;
 }
 
-.ppm-grow[data-closed] {
+.everyport-grow[data-closed] {
   grid-template-rows: 0fr;
   opacity: 0;
 }
 
 /* Rows added after the first render grow in; `data-live` is set once mounted. */
-[data-live] > .ppm-grow {
+[data-live] > .everyport-grow {
   @starting-style {
     grid-template-rows: 0fr;
     opacity: 0;
   }
 }
 
-.ppm-grow[data-leave] {
-  animation: ppm-row-out 180ms ease-in forwards;
+.everyport-grow[data-leave] {
+  animation: everyport-row-out 180ms ease-in forwards;
   pointer-events: none;
 }
 
-.ppm-spin {
-  animation: ppm-spin 900ms linear infinite;
+.everyport-spin {
+  animation: everyport-spin 900ms linear infinite;
 }
 
 /* The socket mark (brand/README.md): plug in, breathe on attention, unplug, seat on hover. */
-.ppm-socket {
+.everyport-socket {
   transition: transform 160ms ease-out;
 }
 
-.ppm-socket:hover {
+.everyport-socket:hover {
   transform: translateY(-1px);
 }
 
 /* Changing to idle fades the lit slot out: the unplug. */
-.ppm-socket-slot {
+.everyport-socket-slot {
   fill: color-mix(in oklab, currentColor 35%, transparent);
   transition: fill 400ms ease-in;
 }
 
-.ppm-socket[data-state="running"] .ppm-socket-slot {
+.everyport-socket[data-state="running"] .everyport-socket-slot {
   fill: light-dark(#2f9a5d, #7fd89d);
-  animation: ppm-plug-in 400ms ease-out;
+  animation: everyport-plug-in 400ms ease-out;
 }
 
-.ppm-socket[data-state="attention"] .ppm-socket-slot {
-  fill: var(--ppm-warn);
-  animation: ppm-breathe 2.4s ease-in-out infinite;
+.everyport-socket[data-state="attention"] .everyport-socket-slot {
+  fill: var(--everyport-warn);
+  animation: everyport-breathe 2.4s ease-in-out infinite;
 }
 
-@keyframes ppm-plug-in {
+@keyframes everyport-plug-in {
   from {
     clip-path: inset(100% 0 0 0);
   }
 }
 
-@keyframes ppm-breathe {
+@keyframes everyport-breathe {
   50% {
     fill-opacity: 0.6;
   }
 }
 
-html[data-hidden] .ppm-root *,
-html[data-hidden] .ppm-root {
+html[data-hidden] .everyport-root *,
+html[data-hidden] .everyport-root {
   animation-play-state: paused;
 }
 
-html[data-hidden] .ppm-panel {
+html[data-hidden] .everyport-panel {
   animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ppm-root *,
-  .ppm-root {
+  .everyport-root *,
+  .everyport-root {
     animation: none !important;
     transition: none !important;
   }

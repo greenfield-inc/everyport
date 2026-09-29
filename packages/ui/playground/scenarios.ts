@@ -1,5 +1,5 @@
 // Machines for the playground, built from the protocol fixture.
-import { fixtureSnapshot, type Machine, type PpmClient, type Server, type Snapshot } from "@ppm/protocol";
+import { fixtureSnapshot, type Machine, type EveryportClient, type Server, type Snapshot } from "@everyport/protocol";
 
 const host = (hostname: string, os: "macos" | "linux" | "windows") => ({ hostname, os, arch: "aarch64", cores: 10 });
 
@@ -85,12 +85,12 @@ function tick(snapshot: Snapshot, step: number): Snapshot {
 }
 
 /**
- * A PpmClient over in-memory machines. Stop removes the server, and `live`
+ * An EveryportClient over in-memory machines. Stop removes the server, and `live`
  * advances every snapshot on an interval like a real sidecar.
  */
-export function fixtureClient(machines: Machine[], live: number | null): PpmClient & { emit: () => void } {
+export function fixtureClient(machines: Machine[], live: number | null): EveryportClient & { emit: () => void } {
   const listeners = new Set<(machines: Machine[]) => void>();
-  const log = (...args: unknown[]) => console.info("[ppm]", ...args);
+  const log = (...args: unknown[]) => console.info("[everyport]", ...args);
   const emit = () => {
     machines = [...machines];
     for (const listener of listeners) listener(machines);

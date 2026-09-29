@@ -1,5 +1,5 @@
 //! Settings: the window, and the settings it edits. Scanner settings live in
-//! `config.toml`, which every `ppm` command also reads; the app's own (theme,
+//! `config.toml`, which every `everyport` command also reads; the app's own (theme,
 //! appearance, shortcut) live next to it in `app.toml`. Changes apply at once,
 //! from Settings or from an edit to either file: the scanner through
 //! `Call::Configure` (see `change_for`), the rest through a `settings` event
@@ -8,11 +8,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use ppm_client::machines as saved;
-use ppm_client::machines::Via;
-use ppm_client::protocol::{Call, Config, ConfigChange};
-use ppm_client::{discover, Connection};
-use ppm_core::config;
+use everyport_client::machines as saved;
+use everyport_client::machines::Via;
+use everyport_client::protocol::{Call, Config, ConfigChange};
+use everyport_client::{discover, Connection};
+use everyport_core::config;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::ManagerExt;
@@ -358,7 +358,7 @@ pub struct MachineSettings {
 #[derive(Serialize)]
 struct Saved {
     name: String,
-    /// The command prefix, or the `ppm serve` URL.
+    /// The command prefix, or the `everyport serve` URL.
     target: String,
 }
 
@@ -413,8 +413,8 @@ pub async fn settings_machines() -> Result<MachineSettings, String> {
 }
 
 /// Saves a machine reached through `target`: a command prefix such as
-/// `ssh devbox`, quoted like a shell command, or a `ppm://` code from
-/// `ppm serve`.
+/// `ssh devbox`, quoted like a shell command, or an `everyport://` code from
+/// `everyport serve`.
 #[tauri::command]
 pub fn machine_add(app: AppHandle, name: String, target: String) -> Result<(), String> {
     add_machine(&machines_file()?, &name, &target)?;
@@ -441,7 +441,7 @@ fn add_machine(path: &Path, name: &str, target: &str) -> Result<(), String> {
         return Err(format!("{name} is this computer's name. Pick another."));
     }
     let target = target.trim();
-    let via = if target.starts_with("ppm://") {
+    let via = if target.starts_with("everyport://") {
         match Connection::from_code(target).map_err(|e| e.to_string())? {
             Connection::Http { url, token } => Via::Url { url, token },
             _ => unreachable!("a code is always an HTTP connection"),
@@ -451,7 +451,7 @@ fn add_machine(path: &Path, name: &str, target: &str) -> Result<(), String> {
         let command = shell_words::split(target)
             .map_err(|_| "That command has an unclosed quote.".to_string())?;
         if command.is_empty() {
-            return Err("Enter a command, such as ssh devbox, or a ppm:// code.".into());
+            return Err("Enter a command, such as ssh devbox, or an everyport:// code.".into());
         }
         Via::Command { command }
     };
@@ -469,12 +469,14 @@ fn add_machine(path: &Path, name: &str, target: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ppm_client::protocol::AutoKill;
+    use everyport_client::protocol::AutoKill;
 
     #[test]
     fn adds_machines_by_command_or_code() {
-        let dir =
-            std::env::temp_dir().join(format!("ppm-settings-machines-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "everyport-settings-machines-{}",
+            std::process::id()
+        ));
         let path = dir.join("machines.toml");
         add_machine(
             &path,
@@ -483,7 +485,7 @@ mod tests {
         )
         .unwrap();
         // printf '{"url":"http://127.0.0.1:7767","token":"s3cret"}' | base64 | tr '+/' '-_' | tr -d '='
-        let code = "ppm://eyJ1cmwiOiJodHRwOi8vMTI3LjAuMC4xOjc3NjciLCJ0b2tlbiI6InMzY3JldCJ9";
+        let code = "everyport://eyJ1cmwiOiJodHRwOi8vMTI3LjAuMC4xOjc3NjciLCJ0b2tlbiI6InMzY3JldCJ9";
         add_machine(&path, "mini", code).unwrap();
         assert_eq!(
             load_machines(&path).unwrap(),
@@ -500,7 +502,7 @@ mod tests {
                     name: "mini".into(),
                     via: Via::Url {
                         url: "http://127.0.0.1:7767".into(),
-                        token: ppm_client::Token("s3cret".into()),
+                        token: everyport_client::Token("s3cret".into()),
                     },
                 },
             ]
@@ -509,7 +511,7 @@ mod tests {
         assert!(add_machine(&path, "local", "ssh devbox").is_err());
         assert!(add_machine(&path, "", "ssh devbox").is_err());
         assert!(add_machine(&path, "box", "  ").is_err());
-        assert!(add_machine(&path, "box", "ppm://nope").is_err());
+        assert!(add_machine(&path, "box", "everyport://nope").is_err());
         assert!(add_machine(&path, "box", "ssh 'devbox").is_err());
         assert_eq!(load_machines(&path).unwrap().len(), 2);
         std::fs::remove_dir_all(&dir).unwrap();
@@ -567,7 +569,8 @@ mod tests {
 
     #[test]
     fn app_settings_round_trip_and_keep_defaults() {
-        let dir = std::env::temp_dir().join(format!("ppm-app-settings-{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("everyport-app-settings-{}", std::process::id()));
         let path = dir.join("app.toml");
         assert_eq!(load_app(&path), Ok(App::default()));
         let prefs = App {

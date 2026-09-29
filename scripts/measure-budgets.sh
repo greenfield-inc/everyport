@@ -5,22 +5,22 @@
 #   scripts/measure-budgets.sh [app]
 #
 # `app` is the release .app or its binary (default: the one `pnpm --filter
-# @ppm/desktop build` writes). Starts 5 throwaway servers on ports 39101-39105,
+# @everyport/desktop build` writes). Starts 5 throwaway servers on ports 39101-39105,
 # launches the app hidden, lets it settle, then measures every process it runs:
-# the app, its WebKit processes and the ppm sidecar. Quit the app first, and
+# the app, its WebKit processes and the everyport sidecar. Quit the app first, and
 # free those ports.
 # Popover open and snapshot-to-UI time need the page on screen, so they're not here.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-app="${1:-$root/target.noindex/release/bundle/macos/Port Process Manager.app}"
-[[ -d "$app" ]] && app="$app/Contents/MacOS/ppm-desktop"
-[[ -x "$app" ]] || { echo "No app at $app. Build it with: pnpm --filter @ppm/desktop build" >&2; exit 1; }
+app="${1:-$root/target.noindex/release/bundle/macos/Everyport.app}"
+[[ -d "$app" ]] && app="$app/Contents/MacOS/everyport-desktop"
+[[ -x "$app" ]] || { echo "No app at $app. Build it with: pnpm --filter @everyport/desktop build" >&2; exit 1; }
 settle="${SETTLE:-30}"
 window="${WINDOW:-60}"
 
-if pgrep -xq ppm-desktop; then
-  echo "Port Process Manager is running. Quit it first; a second launch only opens the popover." >&2
+if pgrep -xq everyport-desktop; then
+  echo "Everyport is running. Quit it first; a second launch only opens the popover." >&2
   exit 1
 fi
 
@@ -48,7 +48,7 @@ t0=$(perl -MTime::HiRes=time -e 'printf "%.0f", time*1000')
 "$app" > /dev/null 2>&1 &
 pid=$!
 started+=("$pid")
-until sidecar="$(pgrep -P "$pid" ppm-sidecar)"; do
+until sidecar="$(pgrep -P "$pid" everyport-sidecar)"; do
   kill -0 "$pid" 2> /dev/null || { echo "The app exited." >&2; exit 1; }
   sleep 0.005
 done
@@ -93,7 +93,7 @@ for i in "${!procs[@]}"; do
   mb=$(footprint_mb "$p")
   cpu=$(awk -v a="${cpu_start[$i]}" -v b="$(cpu_seconds "$p")" -v w="$window" 'BEGIN { printf "%.3f", (b - a) / w * 100 }')
   if [[ "$p" == "$sidecar" ]]; then
-    label="ppm sidecar"
+    label="everyport sidecar"
     scan_cpu=$cpu
   else
     if [[ "$p" == "$pid" ]]; then label="app"; else label="$(name "$p")"; fi
@@ -111,4 +111,4 @@ row "---" "---" "---" "---"
 row "Cold start to tray (sidecar spawn, just after)" "< 400 ms" "$((t1 - t0)) ms" "$(verdict $((t1 - t0)) 400)"
 row "Idle memory, app + WebKit + sidecar" "< 60 MB" "$(printf '%.1f' "$total_mb") MB" "$(verdict "$total_mb" 60)"
 row "Idle CPU, popover hidden (app + WebKit)" "< 0.3%" "$(printf '%.3f' "$ui_cpu")%" "$(verdict "$ui_cpu" 0.3)"
-row "Scan cost at 2 s (ppm)" "< 1%" "${scan_cpu}%" "$(verdict "$scan_cpu" 1)"
+row "Scan cost at 2 s (everyport)" "< 1%" "${scan_cpu}%" "$(verdict "$scan_cpu" 1)"

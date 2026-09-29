@@ -11,9 +11,9 @@ settings use a separate temporary home directory.
 
 ## Findings
 
-1. **Fixed in this PR: plain listing hid other users’ listeners.** Run `su qa -s /bin/sh -c 'ppm list'` while the root fixtures are
+1. **Fixed in this PR: plain listing hid other users’ listeners.** Run `su qa -s /bin/sh -c 'everyport list'` while the root fixtures are
    listening. It prints `Nothing listening on ports 3000-65535.` The same user's
-   `ppm list --json` includes those ports in `other_ports`. The follow-up adds a read-only `Other ports` section to plain listing and the
+   `everyport list --json` includes those ports in `other_ports`. The follow-up adds a read-only `Other ports` section to plain listing and the
    TUI, and considers both collections before showing an empty state. This affects local and remote plain listing through the shared
    formatter. The local behavior is verified; the remote consequence is inferred
    from that shared code.
@@ -33,7 +33,7 @@ it. That finding is resolved upstream.
 ## Follow-up: other ports and protected actions
 
 The orchestrator requested the small CLI fix in this lane. Changes are limited to
-`crates/ppm/`: a shared row formatter, the plain list, the TUI list, and one CLI
+`crates/everyport/`: a shared row formatter, the plain list, the TUI list, and one CLI
 integration test. There are no protocol changes or new stop/restart paths.
 The existing #13 confirmation behavior remains in use.
 
@@ -80,12 +80,12 @@ captures, not desktop screenshots. There is no Paper frame for this CLI section.
 <summary>Follow-up: real protected fixture, listing and TUI</summary>
 
 ```text
-$ docker exec ppm-w3-followup-qa sh -c 'test -f /work/redis-server'
+$ docker exec everyport-w3-followup-qa sh -c 'test -f /work/redis-server'
 exit: 0
-$ docker exec ppm-w3-followup-qa sha256sum /usr/local/bin/ppm
-d9a74ddd461de24ed84359083f9ba34e9f8bd881d026d27ddd00ba4beecd7df8  /usr/local/bin/ppm
+$ docker exec everyport-w3-followup-qa sha256sum /usr/local/bin/everyport
+d9a74ddd461de24ed84359083f9ba34e9f8bd881d026d27ddd00ba4beecd7df8  /usr/local/bin/everyport
 exit: 0
-$ docker exec ppm-w3-followup-qa ppm list --json
+$ docker exec everyport-w3-followup-qa everyport list --json
 {
   "taken_at": 1790677034663,
   "system": {
@@ -153,32 +153,32 @@ $ docker exec ppm-w3-followup-qa ppm list --json
   "other_ports": []
 }
 exit: 0
-$ docker exec ppm-w3-followup-qa ppm stop 39121
-ppm: redis-server :39121 is protected. Run `ppm stop 39121 --protected` to stop it anyway.
+$ docker exec everyport-w3-followup-qa everyport stop 39121
+everyport: redis-server :39121 is protected. Run `everyport stop 39121 --protected` to stop it anyway.
 exit: 1
-$ docker exec ppm-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
+$ docker exec everyport-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
 200exit: 0
-$ docker exec ppm-w3-followup-qa ppm restart 39121
-ppm: redis-server :39121 is protected. Run `ppm restart 39121 --protected` to restart it anyway.
+$ docker exec everyport-w3-followup-qa everyport restart 39121
+everyport: redis-server :39121 is protected. Run `everyport restart 39121 --protected` to restart it anyway.
 exit: 1
-$ docker exec ppm-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
+$ docker exec everyport-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
 200exit: 0
-$ docker exec ppm-w3-followup-qa ppm restart 39121 --protected
+$ docker exec everyport-w3-followup-qa everyport restart 39121 --protected
 Restarted :39121 with redis-server -m http.server 39121
 exit: 0
-$ docker exec ppm-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
+$ docker exec everyport-w3-followup-qa curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:39121
 200exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'ppm list'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'everyport list'
 Other ports
 :39121  0.0.0.0  root
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux new-session -d -s qa-dark -x 100 -y 28'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux new-session -d -s qa-dark -x 100 -y 28'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux set-option -t qa-dark window-style "fg=#eeeeee,bg=#161616"'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux set-option -t qa-dark window-style "fg=#eeeeee,bg=#161616"'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-dark "env COLORTERM=truecolor ppm" Enter'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-dark "env COLORTERM=truecolor everyport" Enter'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t qa-dark'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t qa-dark'
                                               Servers
 
   0 MB                                                                           CPU (servers)  0%
@@ -208,17 +208,17 @@ $ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t
   pgup pgdn Scroll   ? Keys   q Quit
 
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-dark q'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-dark q'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux kill-session -t qa-dark'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux kill-session -t qa-dark'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux new-session -d -s qa-light -x 100 -y 28'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux new-session -d -s qa-light -x 100 -y 28'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux set-option -t qa-light window-style "fg=#202020,bg=#ffffff"'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux set-option -t qa-light window-style "fg=#202020,bg=#ffffff"'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-light "env COLORTERM=truecolor ppm" Enter'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-light "env COLORTERM=truecolor everyport" Enter'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t qa-light'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t qa-light'
                                               Servers
 
   0 MB                                                                           CPU (servers)  0%
@@ -248,29 +248,29 @@ $ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux capture-pane -e -p -t
   pgup pgdn Scroll   ? Keys   q Quit
 
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-light q'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux send-keys -t qa-light q'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'tmux kill-session -t qa-light'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'tmux kill-session -t qa-light'
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'ppm list'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'everyport list'
 PORT    NAME  BRANCH  MEMORY  CPU  UP  SESSION
 :39122  work           15 MB   0%  1m
 
 Other ports
 :39121  0.0.0.0  root
 exit: 0
-$ docker exec ppm-w3-followup-qa su qa -s /bin/sh -c 'ppm stop 39122'
+$ docker exec everyport-w3-followup-qa su qa -s /bin/sh -c 'everyport stop 39122'
 Stopped work :39122
 exit: 0
-$ docker exec ppm-w3-followup-qa ppm stop 39121 --protected
+$ docker exec everyport-w3-followup-qa everyport stop 39121 --protected
 Stopped work :39121
 exit: 0
-$ docker exec ppm-w3-followup-qa curl -s --max-time 1 http://127.0.0.1:39121
+$ docker exec everyport-w3-followup-qa curl -s --max-time 1 http://127.0.0.1:39121
 exit: 7
-$ docker exec ppm-w3-followup-qa ppm stop 39121 --force
+$ docker exec everyport-w3-followup-qa everyport stop 39121 --force
 Stopped work :39121, killed
 exit: 0
-$ docker exec ppm-w3-followup-qa ppm list
+$ docker exec everyport-w3-followup-qa everyport list
 Nothing listening on ports 3000-65535.
 exit: 0
 ```
@@ -281,7 +281,7 @@ exit: 0
 <summary>Follow-up: mixed TUI list and scrolling through other ports</summary>
 
 ```text
-$ tmux new-session -d -s scroll -x 100 -y 18 "ppm"
+$ tmux new-session -d -s scroll -x 100 -y 18 "everyport"
 
 $ tmux capture-pane -p -t scroll
                                               Servers
@@ -436,7 +436,7 @@ crate could not link the existing bitcode dependencies. The full-profile retry u
 
 ```sh
 CARGO_BUILD_JOBS=2 CARGO_PROFILE_RELEASE_LTO=false \
-  CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 cargo build --release -p port-process-manager
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 cargo build --release -p everyport
 ```
 
 This changes build optimization settings, not product source. Install the distro's
@@ -451,16 +451,16 @@ Fixtures:
 | 39102 | `/work/node` | `node server.js`, package name `qa-node`, Express manifest dependency, git branch `qa-linux` |
 | 39103 | `/` | `python3 -m http.server 39103` |
 | 39104 | `/work/deleted` | `python3 -m http.server 39104`, remove its empty working directory after launch |
-| 39109 | temporary | `ppm serve --listen 127.0.0.1:39109` |
+| 39109 | temporary | `everyport serve --listen 127.0.0.1:39109` |
 | 39190 | `/` | local HTTP release server, `--directory /qa/artifacts` |
 
 The Node fixture uses the standard HTTP module, returning `qa-node`. Its manifest
 includes Express to check manifest-based framework labeling; it does not test
 Express itself. The Git repository has an unborn `qa-linux` branch.
 
-The release folder holds `ppm-aarch64-unknown-linux-musl` and `SHA256SUMS` generated
+The release folder holds `everyport-aarch64-unknown-linux-musl` and `SHA256SUMS` generated
 with `sha256sum`. Copy those checksums into both wrapper source trees before
-`npm pack` and `uv build --wheel`. Set `PPM_DOWNLOAD_URL` to the local release URL.
+`npm pack` and `uv build --wheel`. Set `EVERYPORT_DOWNLOAD_URL` to the local release URL.
 Use separate empty caches for npm and Python so both must download and verify.
 For rejection tests, serve the literal `corrupt\n` under the binary's asset name
 alongside the original checksum file, again with empty caches.
@@ -468,9 +468,9 @@ alongside the original checksum file, again with empty caches.
 
 Remote tests set `HOME` to a fresh temporary Mac directory and preserve Docker's
 endpoint through `DOCKER_HOST` (otherwise the temporary home loses the Colima
-context). `PPM_BINARY_DIR` points to the same musl artifact. Each target's installed
+context). `EVERYPORT_BINARY_DIR` points to the same musl artifact. Each target's installed
 binary is removed before testing the prompt; `y` is entered through a real PTY.
-After `ppm --on <name> open 39102`, an HTTP request to the printed local URL must
+After `everyport --on <name> open 39102`, an HTTP request to the printed local URL must
 return `qa-node`. Each forwarding process is stopped with SIGINT by its own PID.
 
 ## Evidence
@@ -485,7 +485,7 @@ The build container uses Rust 1.98.1. Artifact SHA-256:
 
 Below are captured transcripts. Large snapshot JSON is projected to the fields
 being checked; SSE snapshot bodies are shortened. Command prompts show the argument sequence; shell `-c` payloads need quoting
-when copied. Host binary paths in the remote transcript are shortened to `ppm`. TUI captures are plain text from tmux at
+when copied. Host binary paths in the remote transcript are shortened to `everyport`. TUI captures are plain text from tmux at
 100 × 32 or 110 × 32, not claims about desktop rendering.
 
 <details>
@@ -493,27 +493,27 @@ when copied. Host binary paths in the remote transcript are shortened to `ppm`. 
 
 ```text
 $ sh /src/scripts/install.sh
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190
-Installed ppm 0.1.0 to /root/.local/bin/ppm
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190
+Installed everyport 0.1.0 to /root/.local/bin/everyport
 Add /root/.local/bin to your PATH, for example: export PATH="/root/.local/bin:$PATH"
 exit: 0
-$ /root/.local/bin/ppm --version
-ppm 0.1.0
+$ /root/.local/bin/everyport --version
+everyport 0.1.0
 exit: 0
-$ sha256sum /root/.local/bin/ppm /qa/artifacts/ppm-aarch64-unknown-linux-musl
-4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /root/.local/bin/ppm
-4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /qa/artifacts/ppm-aarch64-unknown-linux-musl
+$ sha256sum /root/.local/bin/everyport /qa/artifacts/everyport-aarch64-unknown-linux-musl
+4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /root/.local/bin/everyport
+4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /qa/artifacts/everyport-aarch64-unknown-linux-musl
 exit: 0
-$ npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+$ npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 exit: 0
-$ uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
+$ uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
 Installed 1 package in 1ms
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 exit: 0
-$ /root/.local/bin/ppm list
+$ /root/.local/bin/everyport list
 PORT    NAME               BRANCH    MEMORY  CPU   UP  SESSION
 :39101  qa-python                     11 MB   0%   1m
 :39102  qa-node            qa-linux   42 MB   0%   6m
@@ -521,7 +521,7 @@ PORT    NAME               BRANCH    MEMORY  CPU   UP  SESSION
 :39104  deleted (deleted)             11 MB   0%   1m
 :39190  /                             11 MB   0%   8m
 exit: 0
-$ /root/.local/bin/ppm list --json
+$ /root/.local/bin/everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -654,9 +654,9 @@ exit: 0
 watch snapshots: 2
 watch ports: [39101, 39102, 39103, 39104, 39190]
 watch ports: [39101, 39102, 39103, 39104, 39190]
-$ cp /root/.local/bin/ppm /usr/local/bin/ppm
+$ cp /root/.local/bin/everyport /usr/local/bin/everyport
 exit: 0
-$ su qa -s /bin/sh -c ppm list --json
+$ su qa -s /bin/sh -c everyport list --json
 [snapshot JSON projection]
 {
   "servers": [],
@@ -704,22 +704,22 @@ $ su qa -s /bin/sh -c ppm list --json
   ]
 }
 exit: 0
-$ /root/.local/bin/ppm doctor
-ppm 0.1.0 · protocol 1 · Linux aarch64 · 2 cores
+$ /root/.local/bin/everyport doctor
+everyport 0.1.0 · protocol 1 · Linux aarch64 · 2 cores
 ✓ Listening ports: 5 found
 ✓ Processes: 10 found
 ✓ Folder and command of your own processes
 ✓ Memory and CPU of your own processes
-✓ Settings folder: /root/.config/port-process-manager
+✓ Settings folder: /root/.config/everyport
   Desktop app window blank on NVIDIA? Start it with WEBKIT_DISABLE_DMABUF_RENDERER=1.
 exit: 0
-$ /root/.local/bin/ppm serve --listen 0.0.0.0:39109
-ppm: 0.0.0.0:39109 is not a loopback address; ppm serve listens only on loopback, so put a tunnel or proxy in front of it
+$ /root/.local/bin/everyport serve --listen 0.0.0.0:39109
+everyport: 0.0.0.0:39109 is not a loopback address; everyport serve listens only on loopback, so put a tunnel or proxy in front of it
 exit: 1
 GET /events missing token: 401
 GET /events wrong token: 401
 GET /events valid token: 200 text/event-stream
-data: {"type":"hello","protocol":1,"ppm_version":"0.1.0","host":{"hostname":"0e89cad1a712","os":"linux","arch":"aarch64","cores":2}}
+data: {"type":"hello","protocol":1,"everyport_version":"0.1.0","host":{"hostname":"0e89cad1a712","os":"linux","arch":"aarch64","cores":2}}
 
 data: {"type":"snapshot", ...} [body omitted; listing checked separately]
 
@@ -730,23 +730,23 @@ $ sh -c cat /proc/net/tcp | awk '$2 ~ /:98C5$/ {print $2}'
 0100007F:98C5
 exit: 0
 [Initial TUI transcript omitted; dedicated captures below.]
-$ /root/.local/bin/ppm restart 39102
+$ /root/.local/bin/everyport restart 39102
 Restarted :39102 with node server.js
 exit: 0
 $ curl -fsS http://127.0.0.1:39102
 qa-node
 exit: 0
-$ /root/.local/bin/ppm stop 39101
+$ /root/.local/bin/everyport stop 39101
 Stopped qa-python :39101
 exit: 0
-$ /root/.local/bin/ppm stop 39103 --force
+$ /root/.local/bin/everyport stop 39103 --force
 Stopped / :39103, killed
 exit: 0
-$ /root/.local/bin/ppm clean --yes
+$ /root/.local/bin/everyport clean --yes
 :39104 deleted (deleted)           12 MB   Worktree deleted
 Stopped 1 server, freeing 12 MB.
 exit: 0
-$ /root/.local/bin/ppm list --json
+$ /root/.local/bin/everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -803,17 +803,17 @@ $ /root/.local/bin/ppm list --json
 }
 exit: 0
 $ sh /src/scripts/install.sh
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190/bad
-ppm install: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190/bad
+everyport install: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
-$ npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+$ npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
-$ uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
+$ uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
 Installed 1 package in 1ms
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
 ```
 
@@ -823,21 +823,21 @@ exit: 1
 <summary>Ubuntu: normal-user installs, stdio, tree and HTTP call</summary>
 
 ```text
-$ docker exec ppm-w3-ubuntu-arm64 su qa -s /bin/sh -c export PPM_DOWNLOAD_URL=http://127.0.0.1:39190; sh /src/scripts/install.sh && npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version && XDG_CACHE_HOME=/home/qa/.cache/python-qa uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190
-Installed ppm 0.1.0 to /home/qa/.local/bin/ppm
+$ docker exec everyport-w3-ubuntu-arm64 su qa -s /bin/sh -c export EVERYPORT_DOWNLOAD_URL=http://127.0.0.1:39190; sh /src/scripts/install.sh && npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version && XDG_CACHE_HOME=/home/qa/.cache/python-qa uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190
+Installed everyport 0.1.0 to /home/qa/.local/bin/everyport
 Add /home/qa/.local/bin to your PATH, for example: export PATH="/home/qa/.local/bin:$PATH"
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 Installed 1 package in 1ms
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 
-$ docker exec -e QA_DISTRO=ubuntu ppm-w3-ubuntu-arm64 python3 /qa/extra.py
+$ docker exec -e QA_DISTRO=ubuntu everyport-w3-ubuntu-arm64 python3 /qa/extra.py
 Nothing listening on ports 3000-65535.
-$ su qa -s /bin/sh -c "ppm list"
-$ ppm stdio (configure port 39102, 1-byte memory alert, 200ms interval; observe 33s)
-handshake: {'type': 'hello', 'protocol': 1, 'ppm_version': '0.1.0', 'host': {'hostname': '0e89cad1a712', 'os': 'linux', 'arch': 'aarch64', 'cores': 2}}
+$ su qa -s /bin/sh -c "everyport list"
+$ everyport stdio (configure port 39102, 1-byte memory alert, 200ms interval; observe 33s)
+handshake: {'type': 'hello', 'protocol': 1, 'everyport_version': '0.1.0', 'host': {'hostname': '0e89cad1a712', 'os': 'linux', 'arch': 'aarch64', 'cores': 2}}
 configure results: [{'type': 'result', 'id': 1, 'error': None}]
 alerts: [{'type': 'alert', 'port': 39102, 'kind': 'over_threshold', 'memory': 45121536}]
 snapshots: 158
@@ -845,7 +845,7 @@ final server summary: [{'port': 39102, 'status': 'attention', 'memory': 45121536
 stdio exit: 0
 
 {
-  "command": "ppm list --json (normal user, forked 32 MiB worker on 39107)",
+  "command": "everyport list --json (normal user, forked 32 MiB worker on 39107)",
   "server": {
     "port": 39107,
     "pid": 10611,
@@ -916,13 +916,13 @@ stdio exit: 0
 POST /call refresh with valid token: 200 {"type":"result","id":7,"error":null}
 token file permissions: 0o600
 
-$ docker exec ppm-w3-ubuntu-arm64 cp /root/.local/bin/ppm /usr/local/bin/ppm
+$ docker exec everyport-w3-ubuntu-arm64 cp /root/.local/bin/everyport /usr/local/bin/everyport
 exit: 0
-$ docker exec ppm-w3-ubuntu-arm64 su qa -s /bin/sh -c ppm list
+$ docker exec everyport-w3-ubuntu-arm64 su qa -s /bin/sh -c everyport list
 PORT    NAME       BRANCH  MEMORY  CPU  UP  SESSION
 :39106  qa-python           13 MB   0%  1m
 exit: 0
-$ docker exec ppm-w3-ubuntu-arm64 su qa -s /bin/sh -c ppm list --json
+$ docker exec everyport-w3-ubuntu-arm64 su qa -s /bin/sh -c everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -971,10 +971,10 @@ $ docker exec ppm-w3-ubuntu-arm64 su qa -s /bin/sh -c ppm list --json
   ]
 }
 exit: 0
-$ docker exec ppm-w3-ubuntu-arm64 su qa -s /bin/sh -c ppm stop 39106 --force
+$ docker exec everyport-w3-ubuntu-arm64 su qa -s /bin/sh -c everyport stop 39106 --force
 Stopped qa-python :39106, killed
 exit: 0
-$ docker exec ppm-w3-ubuntu-arm64 sh -c curl -s --max-time 1 http://127.0.0.1:39106 >/dev/null; echo curl_exit:$?
+$ docker exec everyport-w3-ubuntu-arm64 sh -c curl -s --max-time 1 http://127.0.0.1:39106 >/dev/null; echo curl_exit:$?
 curl_exit:7
 exit: 0
 ```
@@ -1042,7 +1042,7 @@ Detail; keys=['Enter']; capture exit=0
        │
        │
      0 │
-  History fills in while ppm runs.
+  History fills in while everyport runs.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1110,7 +1110,7 @@ Back to detail; keys=['Escape']; capture exit=0
        │
        │
      0 │
-  History fills in while ppm runs.
+  History fills in while everyport runs.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1166,27 +1166,27 @@ can't find pane: qa-final
 
 ```text
 $ sh /src/scripts/install.sh
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190
-Installed ppm 0.1.0 to /root/.local/bin/ppm
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190
+Installed everyport 0.1.0 to /root/.local/bin/everyport
 Add /root/.local/bin to your PATH, for example: export PATH="/root/.local/bin:$PATH"
 exit: 0
-$ /root/.local/bin/ppm --version
-ppm 0.1.0
+$ /root/.local/bin/everyport --version
+everyport 0.1.0
 exit: 0
-$ sha256sum /root/.local/bin/ppm /qa/artifacts/ppm-aarch64-unknown-linux-musl
-4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /root/.local/bin/ppm
-4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /qa/artifacts/ppm-aarch64-unknown-linux-musl
+$ sha256sum /root/.local/bin/everyport /qa/artifacts/everyport-aarch64-unknown-linux-musl
+4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /root/.local/bin/everyport
+4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /qa/artifacts/everyport-aarch64-unknown-linux-musl
 exit: 0
-$ npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+$ npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 exit: 0
-$ uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
+$ uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
 Installed 1 package in 1ms
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 exit: 0
-$ /root/.local/bin/ppm list
+$ /root/.local/bin/everyport list
 PORT    NAME               BRANCH    MEMORY  CPU   UP  SESSION
 :39101  qa-python                     11 MB   0%   1m
 :39102  qa-node            qa-linux   43 MB   0%   6m
@@ -1194,7 +1194,7 @@ PORT    NAME               BRANCH    MEMORY  CPU   UP  SESSION
 :39104  deleted (deleted)             11 MB   0%   1m
 :39190  /                             11 MB   0%   8m
 exit: 0
-$ /root/.local/bin/ppm list --json
+$ /root/.local/bin/everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -1327,9 +1327,9 @@ exit: 0
 watch snapshots: 2
 watch ports: [39101, 39102, 39103, 39104, 39190]
 watch ports: [39101, 39102, 39103, 39104, 39190]
-$ cp /root/.local/bin/ppm /usr/local/bin/ppm
+$ cp /root/.local/bin/everyport /usr/local/bin/everyport
 exit: 0
-$ su qa -s /bin/sh -c ppm list --json
+$ su qa -s /bin/sh -c everyport list --json
 [snapshot JSON projection]
 {
   "servers": [],
@@ -1377,22 +1377,22 @@ $ su qa -s /bin/sh -c ppm list --json
   ]
 }
 exit: 0
-$ /root/.local/bin/ppm doctor
-ppm 0.1.0 · protocol 1 · Linux aarch64 · 2 cores
+$ /root/.local/bin/everyport doctor
+everyport 0.1.0 · protocol 1 · Linux aarch64 · 2 cores
 ✓ Listening ports: 5 found
 ✓ Processes: 10 found
 ✓ Folder and command of your own processes
 ✓ Memory and CPU of your own processes
-✓ Settings folder: /root/.config/port-process-manager
+✓ Settings folder: /root/.config/everyport
   Desktop app window blank on NVIDIA? Start it with WEBKIT_DISABLE_DMABUF_RENDERER=1.
 exit: 0
-$ /root/.local/bin/ppm serve --listen 0.0.0.0:39109
-ppm: 0.0.0.0:39109 is not a loopback address; ppm serve listens only on loopback, so put a tunnel or proxy in front of it
+$ /root/.local/bin/everyport serve --listen 0.0.0.0:39109
+everyport: 0.0.0.0:39109 is not a loopback address; everyport serve listens only on loopback, so put a tunnel or proxy in front of it
 exit: 1
 GET /events missing token: 401
 GET /events wrong token: 401
 GET /events valid token: 200 text/event-stream
-data: {"type":"hello","protocol":1,"ppm_version":"0.1.0","host":{"hostname":"19544cb0fbba","os":"linux","arch":"aarch64","cores":2}}
+data: {"type":"hello","protocol":1,"everyport_version":"0.1.0","host":{"hostname":"19544cb0fbba","os":"linux","arch":"aarch64","cores":2}}
 
 data: {"type":"snapshot", ...} [body omitted; listing checked separately]
 
@@ -1402,23 +1402,23 @@ $ sh -c cat /proc/net/tcp | awk '$2 ~ /:98C5$/ {print $2}'
 0100007F:98C5
 exit: 0
 [Initial TUI transcript omitted; dedicated captures below.]
-$ /root/.local/bin/ppm restart 39102
+$ /root/.local/bin/everyport restart 39102
 Restarted :39102 with node server.js
 exit: 0
 $ curl -fsS http://127.0.0.1:39102
 qa-node
 exit: 0
-$ /root/.local/bin/ppm stop 39101
+$ /root/.local/bin/everyport stop 39101
 Stopped qa-python :39101
 exit: 0
-$ /root/.local/bin/ppm stop 39103 --force
+$ /root/.local/bin/everyport stop 39103 --force
 Stopped / :39103, killed
 exit: 0
-$ /root/.local/bin/ppm clean --yes
+$ /root/.local/bin/everyport clean --yes
 :39104 deleted (deleted)           11 MB   Worktree deleted
 Stopped 1 server, freeing 11 MB.
 exit: 0
-$ /root/.local/bin/ppm list --json
+$ /root/.local/bin/everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -1475,17 +1475,17 @@ $ /root/.local/bin/ppm list --json
 }
 exit: 0
 $ sh /src/scripts/install.sh
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190/bad
-ppm install: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190/bad
+everyport install: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
-$ npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+$ npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
-$ uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
+$ uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
 Installed 1 package in 1ms
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
 ```
 
@@ -1495,21 +1495,21 @@ exit: 1
 <summary>Debian: normal-user installs, stdio, tree and HTTP call</summary>
 
 ```text
-$ docker exec ppm-w3-debian-arm64 su qa -s /bin/sh -c export PPM_DOWNLOAD_URL=http://127.0.0.1:39190; sh /src/scripts/install.sh && npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version && XDG_CACHE_HOME=/home/qa/.cache/python-qa uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190
-Installed ppm 0.1.0 to /home/qa/.local/bin/ppm
+$ docker exec everyport-w3-debian-arm64 su qa -s /bin/sh -c export EVERYPORT_DOWNLOAD_URL=http://127.0.0.1:39190; sh /src/scripts/install.sh && npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version && XDG_CACHE_HOME=/home/qa/.cache/python-qa uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190
+Installed everyport 0.1.0 to /home/qa/.local/bin/everyport
 Add /home/qa/.local/bin to your PATH, for example: export PATH="/home/qa/.local/bin:$PATH"
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 Installed 1 package in 1ms
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 
-$ docker exec -e QA_DISTRO=debian ppm-w3-debian-arm64 python3 /qa/extra.py
+$ docker exec -e QA_DISTRO=debian everyport-w3-debian-arm64 python3 /qa/extra.py
 Nothing listening on ports 3000-65535.
-$ su qa -s /bin/sh -c "ppm list"
-$ ppm stdio (configure port 39102, 1-byte memory alert, 200ms interval; observe 33s)
-handshake: {'type': 'hello', 'protocol': 1, 'ppm_version': '0.1.0', 'host': {'hostname': '19544cb0fbba', 'os': 'linux', 'arch': 'aarch64', 'cores': 2}}
+$ su qa -s /bin/sh -c "everyport list"
+$ everyport stdio (configure port 39102, 1-byte memory alert, 200ms interval; observe 33s)
+handshake: {'type': 'hello', 'protocol': 1, 'everyport_version': '0.1.0', 'host': {'hostname': '19544cb0fbba', 'os': 'linux', 'arch': 'aarch64', 'cores': 2}}
 configure results: [{'type': 'result', 'id': 1, 'error': None}]
 alerts: [{'type': 'alert', 'port': 39102, 'kind': 'over_threshold', 'memory': 45777920}]
 snapshots: 158
@@ -1517,7 +1517,7 @@ final server summary: [{'port': 39102, 'status': 'attention', 'memory': 45777920
 stdio exit: 0
 
 {
-  "command": "ppm list --json (normal user, forked 32 MiB worker on 39107)",
+  "command": "everyport list --json (normal user, forked 32 MiB worker on 39107)",
   "server": {
     "port": 39107,
     "pid": 12119,
@@ -1588,19 +1588,19 @@ stdio exit: 0
 POST /call refresh with valid token: 200 {"type":"result","id":7,"error":null}
 token file permissions: 0o600
 
-$ docker exec ppm-w3-debian-arm64 cp /root/.local/bin/ppm /usr/local/bin/ppm
+$ docker exec everyport-w3-debian-arm64 cp /root/.local/bin/everyport /usr/local/bin/everyport
 exit: 0
-$ docker exec ppm-w3-debian-arm64 su qa -s /bin/sh -c ppm list
+$ docker exec everyport-w3-debian-arm64 su qa -s /bin/sh -c everyport list
 PORT    NAME       BRANCH  MEMORY  CPU  UP  SESSION
 :39106  qa-python           12 MB   0%  1m
 exit: 0
-$ docker exec ppm-w3-debian-arm64 su qa -s /bin/sh -c ppm list --json
-sh: 1: ppm: not found
+$ docker exec everyport-w3-debian-arm64 su qa -s /bin/sh -c everyport list --json
+sh: 1: everyport: not found
 exit: 127
-$ docker exec ppm-w3-debian-arm64 su qa -s /bin/sh -c ppm stop 39106 --force
-sh: 1: ppm: not found
+$ docker exec everyport-w3-debian-arm64 su qa -s /bin/sh -c everyport stop 39106 --force
+sh: 1: everyport: not found
 exit: 127
-$ docker exec ppm-w3-debian-arm64 sh -c curl -s --max-time 1 http://127.0.0.1:39106 >/dev/null; echo curl_exit:$?
+$ docker exec everyport-w3-debian-arm64 sh -c curl -s --max-time 1 http://127.0.0.1:39106 >/dev/null; echo curl_exit:$?
 curl_exit:0
 exit: 0
 ```
@@ -1668,7 +1668,7 @@ Detail; keys=['Enter']; capture exit=0
        │
        │
      0 │
-  History fills in while ppm runs.
+  History fills in while everyport runs.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1736,7 +1736,7 @@ Back to detail; keys=['Escape']; capture exit=0
        │
        │
      0 │
-  History fills in while ppm runs.
+  History fills in while everyport runs.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -1792,28 +1792,28 @@ can't find pane: qa-final
 
 ```text
 $ sh /src/scripts/install.sh
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190
-Installed ppm 0.1.0 to /root/.local/bin/ppm
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190
+Installed everyport 0.1.0 to /root/.local/bin/everyport
 Add /root/.local/bin to your PATH, for example: export PATH="/root/.local/bin:$PATH"
 exit: 0
-$ /root/.local/bin/ppm --version
-ppm 0.1.0
+$ /root/.local/bin/everyport --version
+everyport 0.1.0
 exit: 0
-$ sha256sum /root/.local/bin/ppm /qa/artifacts/ppm-aarch64-unknown-linux-musl
-4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /root/.local/bin/ppm
-4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /qa/artifacts/ppm-aarch64-unknown-linux-musl
+$ sha256sum /root/.local/bin/everyport /qa/artifacts/everyport-aarch64-unknown-linux-musl
+4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /root/.local/bin/everyport
+4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287  /qa/artifacts/everyport-aarch64-unknown-linux-musl
 exit: 0
-$ npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+$ npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 exit: 0
-$ uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
+$ uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
 Installed 1 package in 1ms
 realpath: --: No such file or directory
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 exit: 0
-$ /root/.local/bin/ppm list
+$ /root/.local/bin/everyport list
 PORT    NAME               BRANCH    MEMORY  CPU   UP  SESSION
 :39101  qa-python                     11 MB   0%   1m
 :39102  qa-node            qa-linux   42 MB   0%   6m
@@ -1821,7 +1821,7 @@ PORT    NAME               BRANCH    MEMORY  CPU   UP  SESSION
 :39104  deleted (deleted)             11 MB   0%   1m
 :39190  /                             11 MB   0%   8m
 exit: 0
-$ /root/.local/bin/ppm list --json
+$ /root/.local/bin/everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -1954,9 +1954,9 @@ exit: 0
 watch snapshots: 2
 watch ports: [39101, 39102, 39103, 39104, 39190]
 watch ports: [39101, 39102, 39103, 39104, 39190]
-$ cp /root/.local/bin/ppm /usr/local/bin/ppm
+$ cp /root/.local/bin/everyport /usr/local/bin/everyport
 exit: 0
-$ su qa -s /bin/sh -c ppm list --json
+$ su qa -s /bin/sh -c everyport list --json
 [snapshot JSON projection]
 {
   "servers": [],
@@ -2004,22 +2004,22 @@ $ su qa -s /bin/sh -c ppm list --json
   ]
 }
 exit: 0
-$ /root/.local/bin/ppm doctor
-ppm 0.1.0 · protocol 1 · Linux aarch64 · 2 cores
+$ /root/.local/bin/everyport doctor
+everyport 0.1.0 · protocol 1 · Linux aarch64 · 2 cores
 ✓ Listening ports: 5 found
 ✓ Processes: 18 found
 ✓ Folder and command of your own processes
 ✓ Memory and CPU of your own processes
-✓ Settings folder: /root/.config/port-process-manager
+✓ Settings folder: /root/.config/everyport
   Desktop app window blank on NVIDIA? Start it with WEBKIT_DISABLE_DMABUF_RENDERER=1.
 exit: 0
-$ /root/.local/bin/ppm serve --listen 0.0.0.0:39109
-ppm: 0.0.0.0:39109 is not a loopback address; ppm serve listens only on loopback, so put a tunnel or proxy in front of it
+$ /root/.local/bin/everyport serve --listen 0.0.0.0:39109
+everyport: 0.0.0.0:39109 is not a loopback address; everyport serve listens only on loopback, so put a tunnel or proxy in front of it
 exit: 1
 GET /events missing token: 401
 GET /events wrong token: 401
 GET /events valid token: 200 text/event-stream
-data: {"type":"hello","protocol":1,"ppm_version":"0.1.0","host":{"hostname":"905fe78a38d0","os":"linux","arch":"aarch64","cores":2}}
+data: {"type":"hello","protocol":1,"everyport_version":"0.1.0","host":{"hostname":"905fe78a38d0","os":"linux","arch":"aarch64","cores":2}}
 
 data: {"type":"snapshot", ...} [body omitted; listing checked separately]
 
@@ -2030,23 +2030,23 @@ $ sh -c cat /proc/net/tcp | awk '$2 ~ /:98C5$/ {print $2}'
 0100007F:98C5
 exit: 0
 [Initial TUI transcript omitted; dedicated captures below.]
-$ /root/.local/bin/ppm restart 39102
+$ /root/.local/bin/everyport restart 39102
 Restarted :39102 with node server.js
 exit: 0
 $ curl -fsS http://127.0.0.1:39102
 qa-node
 exit: 0
-$ /root/.local/bin/ppm stop 39101
+$ /root/.local/bin/everyport stop 39101
 Stopped qa-python :39101
 exit: 0
-$ /root/.local/bin/ppm stop 39103 --force
+$ /root/.local/bin/everyport stop 39103 --force
 Stopped / :39103, killed
 exit: 0
-$ /root/.local/bin/ppm clean --yes
+$ /root/.local/bin/everyport clean --yes
 :39104 deleted (deleted)           11 MB   Worktree deleted
 Stopped 1 server, freeing 11 MB.
 exit: 0
-$ /root/.local/bin/ppm list --json
+$ /root/.local/bin/everyport list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -2103,18 +2103,18 @@ $ /root/.local/bin/ppm list --json
 }
 exit: 0
 $ sh /src/scripts/install.sh
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190/bad
-ppm install: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190/bad
+everyport install: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
-$ npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+$ npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
-$ uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
+$ uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
 Installed 1 package in 1ms
 realpath: --: No such file or directory
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm: checksum mismatch for ppm-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport: checksum mismatch for everyport-aarch64-unknown-linux-musl: expected 4b181452e2f605e095ff0baed7eef8eae8169f5d2d67e994241bee0befadb287, got 06d0083ba740ff26c91cb17f10d15d398eea1affd3112599b429f30452b59db4
 exit: 1
 ```
 
@@ -2124,22 +2124,22 @@ exit: 1
 <summary>Alpine: normal-user installs, stdio, tree and HTTP call</summary>
 
 ```text
-$ docker exec ppm-w3-alpine-arm64 su qa -s /bin/sh -c export PPM_DOWNLOAD_URL=http://127.0.0.1:39190; sh /src/scripts/install.sh && npx --yes --package=/qa/packages/port-process-manager-0.1.0.tgz ppm --version && XDG_CACHE_HOME=/home/qa/.cache/python-qa uvx --from /qa/packages/port_process_manager-0.1.0-py3-none-any.whl ppm --version
-Downloading ppm-aarch64-unknown-linux-musl from http://127.0.0.1:39190
-Installed ppm 0.1.0 to /home/qa/.local/bin/ppm
+$ docker exec everyport-w3-alpine-arm64 su qa -s /bin/sh -c export EVERYPORT_DOWNLOAD_URL=http://127.0.0.1:39190; sh /src/scripts/install.sh && npx --yes --package=/qa/packages/everyport-0.1.0.tgz everyport --version && XDG_CACHE_HOME=/home/qa/.cache/python-qa uvx --from /qa/packages/everyport-0.1.0-py3-none-any.whl everyport --version
+Downloading everyport-aarch64-unknown-linux-musl from http://127.0.0.1:39190
+Installed everyport 0.1.0 to /home/qa/.local/bin/everyport
 Add /home/qa/.local/bin to your PATH, for example: export PATH="/home/qa/.local/bin:$PATH"
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 Installed 1 package in 1ms
 realpath: --: No such file or directory
-ppm: downloading ppm-aarch64-unknown-linux-musl 0.1.0
-ppm 0.1.0
+everyport: downloading everyport-aarch64-unknown-linux-musl 0.1.0
+everyport 0.1.0
 
-$ docker exec -e QA_DISTRO=alpine ppm-w3-alpine-arm64 python3 /qa/extra.py
+$ docker exec -e QA_DISTRO=alpine everyport-w3-alpine-arm64 python3 /qa/extra.py
 Nothing listening on ports 3000-65535.
-$ su qa -s /bin/sh -c "ppm list"
-$ ppm stdio (configure port 39102, 1-byte memory alert, 200ms interval; observe 33s)
-handshake: {'type': 'hello', 'protocol': 1, 'ppm_version': '0.1.0', 'host': {'hostname': '905fe78a38d0', 'os': 'linux', 'arch': 'aarch64', 'cores': 2}}
+$ su qa -s /bin/sh -c "everyport list"
+$ everyport stdio (configure port 39102, 1-byte memory alert, 200ms interval; observe 33s)
+handshake: {'type': 'hello', 'protocol': 1, 'everyport_version': '0.1.0', 'host': {'hostname': '905fe78a38d0', 'os': 'linux', 'arch': 'aarch64', 'cores': 2}}
 configure results: [{'type': 'result', 'id': 1, 'error': None}]
 alerts: [{'type': 'alert', 'port': 39102, 'kind': 'over_threshold', 'memory': 45381632}]
 snapshots: 158
@@ -2147,7 +2147,7 @@ final server summary: [{'port': 39102, 'status': 'attention', 'memory': 45381632
 stdio exit: 0
 
 {
-  "command": "ppm list --json (normal user, forked 32 MiB worker on 39107)",
+  "command": "everyport list --json (normal user, forked 32 MiB worker on 39107)",
   "server": {
     "port": 39107,
     "pid": 1322,
@@ -2218,18 +2218,18 @@ stdio exit: 0
 POST /call refresh with valid token: 200 {"type":"result","id":7,"error":null}
 token file permissions: 0o600
 
-$ docker exec ppm-w3-alpine-arm64 cp /root/.local/bin/ppm /usr/local/bin/ppm
+$ docker exec everyport-w3-alpine-arm64 cp /root/.local/bin/everyport /usr/local/bin/everyport
 exit: 0
-$ docker exec ppm-w3-alpine-arm64 su qa -s /bin/sh -c ppm list
-sh: ppm: not found
+$ docker exec everyport-w3-alpine-arm64 su qa -s /bin/sh -c everyport list
+sh: everyport: not found
 exit: 127
-$ docker exec ppm-w3-alpine-arm64 su qa -s /bin/sh -c ppm list --json
-sh: ppm: not found
+$ docker exec everyport-w3-alpine-arm64 su qa -s /bin/sh -c everyport list --json
+sh: everyport: not found
 exit: 127
-$ docker exec ppm-w3-alpine-arm64 su qa -s /bin/sh -c ppm stop 39106 --force
-sh: ppm: not found
+$ docker exec everyport-w3-alpine-arm64 su qa -s /bin/sh -c everyport stop 39106 --force
+sh: everyport: not found
 exit: 127
-$ docker exec ppm-w3-alpine-arm64 sh -c curl -s --max-time 1 http://127.0.0.1:39106 >/dev/null; echo curl_exit:$?
+$ docker exec everyport-w3-alpine-arm64 sh -c curl -s --max-time 1 http://127.0.0.1:39106 >/dev/null; echo curl_exit:$?
 curl_exit:0
 exit: 0
 ```
@@ -2297,7 +2297,7 @@ Detail; keys=['Enter']; capture exit=0
        │
        │
      0 │
-  History fills in while ppm runs.
+  History fills in while everyport runs.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -2365,7 +2365,7 @@ Back to detail; keys=['Escape']; capture exit=0
        │
        │
      0 │
-  History fills in while ppm runs.
+  History fills in while everyport runs.
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -2422,23 +2422,23 @@ can't find pane: qa-final
 ```text
 
 DISTRO ubuntu
-$ docker exec ppm-w3-ubuntu-arm64 sh -c mv /root/.local/bin/ppm /tmp/installed-ppm; rm /usr/local/bin/ppm
+$ docker exec everyport-w3-ubuntu-arm64 sh -c mv /root/.local/bin/everyport /tmp/installed-everyport; rm /usr/local/bin/everyport
 exit: 0
-$ ppm remote add ubuntu -- docker exec -i ppm-w3-ubuntu-arm64
-Added ubuntu. Run `ppm --on ubuntu` to see its servers.
+$ everyport remote add ubuntu -- docker exec -i everyport-w3-ubuntu-arm64
+Added ubuntu. Run `everyport --on ubuntu` to see its servers.
 exit: 0
-$ ppm --on ubuntu list
-ppm: ppm isn't installed on ubuntu. Run again with --yes to install it.
+$ everyport --on ubuntu list
+everyport: everyport isn't installed on ubuntu. Run again with --yes to install it.
 exit: 1
 interactive install (answered y):
-Install ppm on ubuntu? [y/N] y
-Installing ppm 0.1.0 on ubuntu…
-Installed ppm in /root/.local/bin/ppm on ubuntu.
+Install everyport on ubuntu? [y/N] y
+Installing everyport 0.1.0 on ubuntu…
+Installed everyport in /root/.local/bin/everyport on ubuntu.
 PORT    NAME     BRANCH    MEMORY  CPU  UP  SESSION
 :39102  qa-node  qa-linux   43 MB   0%  1m
 :39190  /                   16 MB   0%  9m
 
-$ ppm --on ubuntu list --json
+$ everyport --on ubuntu list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -2498,28 +2498,28 @@ forward HTTP: 200 qa-node
 
 Opened http://127.0.0.1:39102, forwarded from :39102 on ubuntu. Press Ctrl-C to stop forwarding.
 
-$ ppm remote rm ubuntu
+$ everyport remote rm ubuntu
 Removed ubuntu.
 exit: 0
 
 DISTRO debian
-$ docker exec ppm-w3-debian-arm64 sh -c mv /root/.local/bin/ppm /tmp/installed-ppm; rm /usr/local/bin/ppm
+$ docker exec everyport-w3-debian-arm64 sh -c mv /root/.local/bin/everyport /tmp/installed-everyport; rm /usr/local/bin/everyport
 exit: 0
-$ ppm remote add debian -- docker exec -i ppm-w3-debian-arm64
-Added debian. Run `ppm --on debian` to see its servers.
+$ everyport remote add debian -- docker exec -i everyport-w3-debian-arm64
+Added debian. Run `everyport --on debian` to see its servers.
 exit: 0
-$ ppm --on debian list
-ppm: ppm isn't installed on debian. Run again with --yes to install it.
+$ everyport --on debian list
+everyport: everyport isn't installed on debian. Run again with --yes to install it.
 exit: 1
 interactive install (answered y):
-Install ppm on debian? [y/N] y
-Installing ppm 0.1.0 on debian…
-Installed ppm in /root/.local/bin/ppm on debian.
+Install everyport on debian? [y/N] y
+Installing everyport 0.1.0 on debian…
+Installed everyport in /root/.local/bin/everyport on debian.
 PORT    NAME     BRANCH    MEMORY  CPU  UP  SESSION
 :39102  qa-node  qa-linux   43 MB   0%  1m
 :39190  /                   13 MB   0%  9m
 
-$ ppm --on debian list --json
+$ everyport --on debian list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -2579,28 +2579,28 @@ forward HTTP: 200 qa-node
 
 Opened http://127.0.0.1:39102, forwarded from :39102 on debian. Press Ctrl-C to stop forwarding.
 
-$ ppm remote rm debian
+$ everyport remote rm debian
 Removed debian.
 exit: 0
 
 DISTRO alpine
-$ docker exec ppm-w3-alpine-arm64 sh -c mv /root/.local/bin/ppm /tmp/installed-ppm; rm /usr/local/bin/ppm
+$ docker exec everyport-w3-alpine-arm64 sh -c mv /root/.local/bin/everyport /tmp/installed-everyport; rm /usr/local/bin/everyport
 exit: 0
-$ ppm remote add alpine -- docker exec -i ppm-w3-alpine-arm64
-Added alpine. Run `ppm --on alpine` to see its servers.
+$ everyport remote add alpine -- docker exec -i everyport-w3-alpine-arm64
+Added alpine. Run `everyport --on alpine` to see its servers.
 exit: 0
-$ ppm --on alpine list
-ppm: ppm isn't installed on alpine. Run again with --yes to install it.
+$ everyport --on alpine list
+everyport: everyport isn't installed on alpine. Run again with --yes to install it.
 exit: 1
 interactive install (answered y):
-Install ppm on alpine? [y/N] y
-Installing ppm 0.1.0 on alpine…
-Installed ppm in /root/.local/bin/ppm on alpine.
+Install everyport on alpine? [y/N] y
+Installing everyport 0.1.0 on alpine…
+Installed everyport in /root/.local/bin/everyport on alpine.
 PORT    NAME     BRANCH    MEMORY  CPU  UP  SESSION
 :39102  qa-node  qa-linux   43 MB   0%  1m
 :39190  /                   13 MB   0%  9m
 
-$ ppm --on alpine list --json
+$ everyport --on alpine list --json
 [snapshot JSON projection]
 {
   "servers": [
@@ -2660,7 +2660,7 @@ forward HTTP: 200 qa-node
 
 Opened http://127.0.0.1:39102, forwarded from :39102 on alpine. Press Ctrl-C to stop forwarding.
 
-$ ppm remote rm alpine
+$ everyport remote rm alpine
 Removed alpine.
 exit: 0
 ```

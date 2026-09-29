@@ -9,7 +9,7 @@ export type Snapshot = { taken_at: number, system: SystemStats,
  */
 servers: Array<Server>, 
 /**
- * Ports held by other users' or the system's processes, which ppm can't
+ * Ports held by other users' or the system's processes, which everyport can't
  * inspect. Sorted by port, and never a port in `servers`.
  */
 other_ports: Array<OtherPort>, };

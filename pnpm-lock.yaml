@@ -10,10 +10,10 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@ppm/protocol':
+      '@everyport/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
-      '@ppm/ui':
+      '@everyport/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tauri-apps/api':
@@ -68,7 +68,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@ppm/protocol':
+      '@everyport/protocol':
         specifier: workspace:*
         version: link:../protocol
     devDependencies:
@@ -114,10 +114,10 @@ importers:
 
   site:
     dependencies:
-      '@ppm/protocol':
+      '@everyport/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
-      '@ppm/ui':
+      '@everyport/ui':
         specifier: workspace:*
         version: link:../packages/ui
       react:

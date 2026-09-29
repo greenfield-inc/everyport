@@ -1,5 +1,5 @@
-import type { Machine, Os } from "@ppm/protocol";
-import { MachineSwitcher, Themed } from "@ppm/ui";
+import type { Machine, Os } from "@everyport/protocol";
+import { MachineSwitcher, Themed } from "@everyport/ui";
 import { type CSSProperties, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { demoClient } from "./client.ts";
 import { Credit, SectionCopy } from "./Copy.tsx";
@@ -42,7 +42,7 @@ function Brand() {
   return (
     <a className="brand" href="#" onClick={() => scrollTo({ top: 0 })}>
       <Socket size={22} accent="var(--green)" />
-      Port Process Manager
+      Everyport
     </a>
   );
 }
@@ -72,7 +72,7 @@ function Controls({ os, onOs, machines, machine, onMachine, changed, onReset }: 
       </div>
       <p className="cli-line">
         <code>
-          <span aria-hidden>$ </span>ppm {name ? `--on ${name} ` : ""}list
+          <span aria-hidden>$ </span>everyport {name ? `--on ${name} ` : ""}list
         </code>
         <span>
           {count} {count === 1 ? "server" : "servers"}

@@ -1,4 +1,4 @@
-import type { OtherPort, Server } from "@ppm/protocol";
+import type { OtherPort, Server } from "@everyport/protocol";
 import { useEffect, useRef, useState } from "react";
 import { Sparkline } from "../charts.tsx";
 import { Colon, Grow, Header, ProtectedBadge, ProtectedConfirm, useLeaving, useTween } from "../components.tsx";
@@ -30,37 +30,37 @@ export function ServerList({ ctx, selected, onOpen, onCleanUp }: Props) {
   return (
     <>
       <Summary ctx={ctx} segment={segment} highlighted={hoveredRow} onSegment={setSegment} onOpen={onOpen} />
-      <div className="ppm:hairline-t">
+      <div className="everyport:hairline-t">
         {servers.length ? (
           <Rows ctx={ctx} selected={selected} segment={segment} onHover={setHoveredRow} onOpen={onOpen} />
         ) : (
-          <div className="ppm:flex ppm:flex-col ppm:items-center ppm:gap-3 ppm:py-7 ppm:text-center">
-            <span className="ppm:text-fg3">
+          <div className="everyport:flex everyport:flex-col everyport:items-center everyport:gap-3 everyport:py-7 everyport:text-center">
+            <span className="everyport:text-fg3">
               <Socket size={48} />
             </span>
-            <span className="ppm:text-13 ppm:text-fg2">Nothing listening</span>
-            <span className="ppm:text-11 ppm:text-fg3">Dev servers show up here when they start.</span>
+            <span className="everyport:text-13 everyport:text-fg2">Nothing listening</span>
+            <span className="everyport:text-11 everyport:text-fg3">Dev servers show up here when they start.</span>
           </div>
         )}
         {snapshot.other_ports.length > 0 && <OtherPorts ports={snapshot.other_ports} />}
       </div>
-      <div className="ppm:hairline-t ppm:flex ppm:items-center ppm:justify-between ppm:p-3">
+      <div className="everyport:hairline-t everyport:flex everyport:items-center everyport:justify-between everyport:p-3">
         <button
           type="button"
           onClick={onCleanUp}
           disabled={!servers.length}
-          className="ppm:flex ppm:items-center ppm:gap-[7px] ppm:rounded-[7px] ppm:bg-accent ppm:py-[5px] ppm:pr-2.5 ppm:pl-2 ppm:shadow-[inset_0_0.5px_0_color-mix(in_oklab,var(--foreground)_12%,transparent)] ppm:disabled:opacity-50"
+          className="everyport:flex everyport:items-center everyport:gap-[7px] everyport:rounded-[7px] everyport:bg-accent everyport:py-[5px] everyport:pr-2.5 everyport:pl-2 everyport:shadow-[inset_0_0.5px_0_color-mix(in_oklab,var(--foreground)_12%,transparent)] everyport:disabled:opacity-50"
         >
-          <BroomIcon className="ppm:text-fg" />
-          <span className="ppm:text-13 ppm:font-medium ppm:text-fg">Clean up</span>
-          {suggested > 0 && <span className="ppm:font-mono ppm:text-11 ppm:font-medium ppm:text-fg2">{suggested}</span>}
+          <BroomIcon className="everyport:text-fg" />
+          <span className="everyport:text-13 everyport:font-medium everyport:text-fg">Clean up</span>
+          {suggested > 0 && <span className="everyport:font-mono everyport:text-11 everyport:font-medium everyport:text-fg2">{suggested}</span>}
         </button>
         {client.openSettings && (
           <button
             type="button"
             aria-label="Settings"
             onClick={() => client.openSettings?.()}
-            className="ppm:-m-[5px] ppm:flex ppm:size-[26px] ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:text-fg2 ppm:hover:bg-accent"
+            className="everyport:-m-[5px] everyport:flex everyport:size-[26px] everyport:items-center everyport:justify-center everyport:rounded-[7px] everyport:text-fg2 everyport:hover:bg-accent"
           >
             <GearIcon />
           </button>
@@ -89,25 +89,25 @@ function Summary(props: {
       ? `${total(system.memory_other_apps)} other apps · ${total(system.memory_total - system.memory_used)} free`
       : `CPU ${percent(system.cpu_percent)}`;
   return (
-    <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
+    <div className="everyport:flex everyport:flex-col everyport:gap-2.5 everyport:px-4 everyport:pt-3 everyport:pb-4">
       <Header
         title={focused ? `${focused.project.name} :${focused.port}` : "Servers"}
         mark={<Socket size={14} state={servers.some((s) => s.status === "attention") ? "attention" : servers.length ? "running" : "idle"} />}
       />
-      <div className="ppm:flex ppm:flex-col ppm:gap-1.5">
-        <div className="ppm:flex ppm:items-center ppm:gap-1.5">
+      <div className="everyport:flex everyport:flex-col everyport:gap-1.5">
+        <div className="everyport:flex everyport:items-center everyport:gap-1.5">
           <div
-            className="ppm:flex ppm:items-center ppm:gap-1.5"
+            className="everyport:flex everyport:items-center everyport:gap-1.5"
             onPointerEnter={() => setShowMemory(true)}
             onPointerLeave={() => setShowMemory(false)}
           >
-            <span className="ppm:font-mono ppm:text-28 ppm:font-medium ppm:text-fg">{amount}</span>
-            <span className="ppm:self-end ppm:pb-1 ppm:font-mono ppm:text-13 ppm:text-fg3">{unit}</span>
+            <span className="everyport:font-mono everyport:text-28 everyport:font-medium everyport:text-fg">{amount}</span>
+            <span className="everyport:self-end everyport:pb-1 everyport:font-mono everyport:text-13 everyport:text-fg3">{unit}</span>
           </div>
-          <span className="ppm:ml-auto ppm:grow ppm:text-right ppm:font-mono ppm:text-13 ppm:text-fg3">{detail}</span>
+          <span className="everyport:ml-auto everyport:grow everyport:text-right everyport:font-mono everyport:text-13 everyport:text-fg3">{detail}</span>
         </div>
-        <div className="ppm:flex ppm:h-4 ppm:shrink-0 ppm:items-center" onPointerLeave={() => props.onSegment(null)}>
-          <div className="ppm:flex ppm:h-2 ppm:w-full ppm:items-center ppm:gap-0.5" aria-label="Memory by server" role="group">
+        <div className="everyport:flex everyport:h-4 everyport:shrink-0 everyport:items-center" onPointerLeave={() => props.onSegment(null)}>
+          <div className="everyport:flex everyport:h-2 everyport:w-full everyport:items-center everyport:gap-0.5" aria-label="Memory by server" role="group">
             {servers.map((server, index) => (
               <button
                 key={server.port}
@@ -116,14 +116,14 @@ function Summary(props: {
                 aria-label={`${server.project.name} :${server.port} · ${memory(server.memory)}`}
                 onPointerEnter={() => props.onSegment(server.port)}
                 onClick={() => props.onOpen(server)}
-                className="ppm:h-full ppm:min-w-0.5 ppm:transition-[opacity] ppm:duration-100"
+                className="everyport:h-full everyport:min-w-0.5 everyport:transition-[opacity] everyport:duration-100"
                 style={{ flex: `${server.memory} 0 0`, opacity: lit !== null && lit !== server.port ? 0.35 : 1 }}
               >
                 <span
-                  className="ppm:block ppm:w-full ppm:transition-[height] ppm:duration-100"
+                  className="everyport:block everyport:w-full everyport:transition-[height] everyport:duration-100"
                   style={{
                     height: lit === server.port ? 8 : 6,
-                    background: server.status === "attention" ? "var(--ppm-warn)" : props.ctx.colorOf(server.port),
+                    background: server.status === "attention" ? "var(--everyport-warn)" : props.ctx.colorOf(server.port),
                     borderRadius: `${index ? 1 : 3}px ${index === servers.length - 1 ? 3 : 1}px ${index === servers.length - 1 ? 3 : 1}px ${index ? 1 : 3}px`,
                   }}
                 />
@@ -164,9 +164,9 @@ function Rows({
       role="listbox"
       aria-label="Servers"
       tabIndex={0}
-      aria-activedescendant={selected === null ? undefined : `ppm-server-${selected}`}
+      aria-activedescendant={selected === null ? undefined : `everyport-server-${selected}`}
       data-live={live || undefined}
-      className="ppm-scroll ppm:p-1.5"
+      className="everyport-scroll everyport:p-1.5"
       style={{ maxHeight: VISIBLE_ROWS * ROW_HEIGHT + 12 }}
       onPointerLeave={() => {
         setHovered(null);
@@ -228,40 +228,40 @@ function Row({
 
   return (
     <div
-      id={`ppm-server-${server.port}`}
+      id={`everyport-server-${server.port}`}
       data-port={server.port}
       role="option"
       aria-selected={selected}
       aria-label={`Port ${server.port}, ${server.project.name}, ${memory(server.memory)}`}
       onPointerEnter={onHover}
       onClick={onOpen}
-      className={`ppm:flex ppm:items-center ppm:rounded-[9px] ppm:px-2.5 ppm:py-[9px] ppm:transition-opacity ppm:duration-100 ${active ? "ppm:bg-accent" : ""}`}
+      className={`everyport:flex everyport:items-center everyport:rounded-[9px] everyport:px-2.5 everyport:py-[9px] everyport:transition-opacity everyport:duration-100 ${active ? "everyport:bg-accent" : ""}`}
       style={{ opacity }}
     >
       <Colon status={server.status} color={ctx.colorOf(server.port)} />
-      <span className="ppm:w-[46px] ppm:shrink-0 ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{server.port}</span>
+      <span className="everyport:w-[46px] everyport:shrink-0 everyport:font-mono everyport:text-13 everyport:font-medium everyport:text-fg">{server.port}</span>
       {confirm ? (
         <ProtectedConfirm ctx={ctx} server={server} action={confirm} />
       ) : (
         <>
-          <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px ppm:pr-2.5">
-            <div className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1.5 ppm:overflow-clip">
-              <span className="ppm:shrink-0 ppm:whitespace-pre ppm:text-13 ppm:font-medium ppm:text-fg">{server.project.name}</span>
+          <div className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:flex-col everyport:gap-px everyport:pr-2.5">
+            <div className="everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-1.5 everyport:overflow-clip">
+              <span className="everyport:shrink-0 everyport:whitespace-pre everyport:text-13 everyport:font-medium everyport:text-fg">{server.project.name}</span>
               {server.project.branch && (
-                <span className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1 ppm:text-fg2">
+                <span className="everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-1 everyport:text-fg2">
                   <BranchIcon />
-                  <span className="ppm:clamp-1 ppm:text-13">{server.project.branch}</span>
+                  <span className="everyport:clamp-1 everyport:text-13">{server.project.branch}</span>
                 </span>
               )}
             </div>
-            <div className={`ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-[5px] ppm:text-11 ${warn ? "ppm:text-warn" : "ppm:text-fg2"}`}>
+            <div className={`everyport:flex everyport:min-w-0 everyport:items-center everyport:gap-[5px] everyport:text-11 ${warn ? "everyport:text-warn" : "everyport:text-fg2"}`}>
               {!note && !warn && icon}
-              <span className="ppm:clamp-1">{note ?? context.text}</span>
+              <span className="everyport:clamp-1">{note ?? context.text}</span>
             </div>
           </div>
           {active ? (
             // Pointer shortcuts; the keyboard has ⌘O and ⌘⌫, so they stay out of the listbox's tab order.
-            <span className="ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-0.5" aria-hidden>
+            <span className="everyport:flex everyport:shrink-0 everyport:items-center everyport:gap-0.5" aria-hidden>
               <button
                 type="button"
                 tabIndex={-1}
@@ -270,7 +270,7 @@ function Row({
                   event.stopPropagation();
                   ctx.open(server);
                 }}
-                className="ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:bg-accent ppm:text-fg ppm:hover:bg-[color-mix(in_oklab,var(--accent),var(--foreground)_8%)]"
+                className="everyport:flex everyport:size-[22px] everyport:items-center everyport:justify-center everyport:rounded-md everyport:bg-accent everyport:text-fg everyport:hover:bg-[color-mix(in_oklab,var(--accent),var(--foreground)_8%)]"
               >
                 <OpenIcon />
               </button>
@@ -283,7 +283,7 @@ function Row({
                   event.stopPropagation();
                   ctx.stop(server);
                 }}
-                className="ppm:relative ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:text-fg/80 ppm:hover:bg-accent"
+                className="everyport:relative everyport:flex everyport:size-[22px] everyport:items-center everyport:justify-center everyport:rounded-md everyport:text-fg/80 everyport:hover:bg-accent"
               >
                 <StopIcon />
                 {server.protected && <ProtectedBadge />}
@@ -292,7 +292,7 @@ function Row({
           ) : (
             <Sparkline history={server.history} warn={attention} />
           )}
-          <span className={`ppm:w-[58px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${attention ? "ppm:text-warn" : "ppm:text-fg/85"}`}>
+          <span className={`everyport:w-[58px] everyport:shrink-0 everyport:text-right everyport:font-mono everyport:text-13 ${attention ? "everyport:text-warn" : "everyport:text-fg/85"}`}>
             {memory(server.memory)}
           </span>
         </>
@@ -305,31 +305,31 @@ function Row({
 function OtherPorts({ ports }: { ports: OtherPort[] }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="ppm:px-1.5 ppm:pb-1.5">
+    <div className="everyport:px-1.5 everyport:pb-1.5">
       <button
         type="button"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="ppm:flex ppm:w-full ppm:items-center ppm:gap-1 ppm:rounded-[9px] ppm:px-2.5 ppm:py-[7px] ppm:hover:bg-accent"
+        className="everyport:flex everyport:w-full everyport:items-center everyport:gap-1 everyport:rounded-[9px] everyport:px-2.5 everyport:py-[7px] everyport:hover:bg-accent"
       >
-        <span className="ppm:text-13 ppm:text-fg2">Other ports</span>
-        <span className="ppm:font-mono ppm:text-13 ppm:text-fg3">· {ports.length}</span>
-        <Chevron direction={open ? "down" : "right"} className="ppm:text-fg3" />
+        <span className="everyport:text-13 everyport:text-fg2">Other ports</span>
+        <span className="everyport:font-mono everyport:text-13 everyport:text-fg3">· {ports.length}</span>
+        <Chevron direction={open ? "down" : "right"} className="everyport:text-fg3" />
       </button>
-      <div className="ppm-grow" data-closed={!open || undefined} inert={!open}>
-        {/* `.ppm-grow > *` clips its child, so the scroller sits one level in. */}
+      <div className="everyport-grow" data-closed={!open || undefined} inert={!open}>
+        {/* `.everyport-grow > *` clips its child, so the scroller sits one level in. */}
         <div>
-          <div className="ppm-scroll" style={{ maxHeight: VISIBLE_ROWS * 26 }}>
+          <div className="everyport-scroll" style={{ maxHeight: VISIBLE_ROWS * 26 }}>
           {ports.map((other) => (
             <div
               key={other.port}
               aria-label={`Port ${other.port}${other.process_name ? `, ${other.process_name}` : ""}${other.owner ? `, owned by ${other.owner}` : ""}`}
-              className="ppm:flex ppm:items-center ppm:px-2.5 ppm:py-[5px] ppm:text-fg2"
+              className="everyport:flex everyport:items-center everyport:px-2.5 everyport:py-[5px] everyport:text-fg2"
             >
-              <span className="ppm:w-[9px] ppm:shrink-0" />
-              <span className="selectable ppm:w-[46px] ppm:shrink-0 ppm:font-mono ppm:text-13">{other.port}</span>
-              <span className="selectable ppm:clamp-1 ppm:flex-1 ppm:pr-2.5 ppm:text-13">{other.process_name}</span>
-              <span className="ppm:shrink-0 ppm:text-11 ppm:text-fg3">{other.owner}</span>
+              <span className="everyport:w-[9px] everyport:shrink-0" />
+              <span className="selectable everyport:w-[46px] everyport:shrink-0 everyport:font-mono everyport:text-13">{other.port}</span>
+              <span className="selectable everyport:clamp-1 everyport:flex-1 everyport:pr-2.5 everyport:text-13">{other.process_name}</span>
+              <span className="everyport:shrink-0 everyport:text-11 everyport:text-fg3">{other.owner}</span>
             </div>
           ))}
           </div>
