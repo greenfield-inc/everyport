@@ -26,7 +26,7 @@ use std::process::ExitCode;
     about = "See every dev server running on your machine. Run with no command for the terminal UI."
 )]
 struct Cli {
-    /// Run the command on another machine (see `ppm remote list`)
+    /// Run the command on another machine
     #[arg(long, value_name = "MACHINE")]
     on: Option<String>,
     /// Don't ask: install ppm on the machine, or stop what clean suggests

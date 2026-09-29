@@ -101,9 +101,16 @@ From the terminal:
 
 ```bash
 ppm remote add devbox -- ssh devbox
-ppm --on devbox                   # terminal UI for devbox
+ppm remote list                   # saved and discovered machines, and the ppm on each
+ppm --on devbox                   # terminal UI for devbox; Tab switches machines
 ppm --on devbox list --json
+ppm --on devbox open 5173         # forwards the port and opens it here
+ppm remote rm devbox
 ```
+
+`ppm --on <machine>` works with `list`, `watch`, `stop`, `restart`, `open`, `clean` and the terminal UI. A machine can be a saved one or any host `ppm remote list` discovers. The first time, ppm asks before installing itself there. Pass `--yes` to install without asking, as in scripts. `open` forwards through ssh or kubectl, or through `ppm connect` on the machine for other connections such as Docker, and keeps the forward open until you press Ctrl-C.
+
+To add a machine that runs `ppm serve`, use its connection code: `ppm remote add mac-mini --code ppm://…`.
 
 ### Connect through Tailscale or a proxy
 
@@ -131,7 +138,7 @@ ppm clean [--yes]          Stop the servers Clean up suggests
 ppm stdio                  Speak the ppm protocol on stdin and stdout
 ppm serve                  Speak the ppm protocol over HTTP on loopback
 ppm remote add|list|rm     Manage remote machines
-ppm --on <machine> ...     Run any command against a remote machine
+ppm --on <machine> ...     Run the command on another machine
 ppm doctor                 Check permissions and platform support
 ```
 

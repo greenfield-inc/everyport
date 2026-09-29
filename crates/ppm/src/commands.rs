@@ -77,7 +77,6 @@ pub fn list(mut machine: Machine, json: bool) -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-
 fn write_table(out: &mut impl Write, snapshot: &Snapshot) -> io::Result<()> {
     let palette = Palette::detect();
     let headers = ["PORT", "NAME", "BRANCH", "MEMORY", "CPU", "UP", "SESSION"];
@@ -245,9 +244,13 @@ pub fn stop(mut machine: Machine, port: u16, force: bool) -> io::Result<ExitCode
     let root = server.root;
     let start = Instant::now();
     let id = machine.call(Call::Stop { port, root, force });
-    let settled = settle(&mut machine, &[id], snapshot, GRACE + SETTLE, |s, errors| {
-        errors.contains_key(&id) || !running(s, root)
-    })?;
+    let settled = settle(
+        &mut machine,
+        &[id],
+        snapshot,
+        GRACE + SETTLE,
+        |s, errors| errors.contains_key(&id) || !running(s, root),
+    )?;
     if let Some(error) = settled.errors.get(&id) {
         return Ok(failed(error.clone()));
     }
