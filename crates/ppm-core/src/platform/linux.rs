@@ -3,7 +3,8 @@
 //! and their sockets show port and owner, but not which process holds them.
 
 use super::{
-    unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails, ProcInfo, ProcUsage,
+    inbound_connections, unix, Listener, MemoryStats, OtherListener, Platform, ProcDetails,
+    ProcInfo, ProcUsage,
 };
 use crate::protocol::ProcRef;
 use std::collections::HashMap;
@@ -137,14 +138,17 @@ impl Platform for Linux {
 
     /// Every user's connections are counted: the table needs no pid.
     fn connections(&self) -> Option<HashMap<u16, u32>> {
-        let mut counts = HashMap::new();
-        for row in tcp_rows()
-            .into_iter()
+        let rows = tcp_rows();
+        let listening: Vec<(IpAddr, u16)> = rows
+            .iter()
+            .filter(|row| row.state == TCP_LISTEN)
+            .map(|row| (row.address, row.port))
+            .collect();
+        let established = rows
+            .iter()
             .filter(|row| row.state == TCP_ESTABLISHED)
-        {
-            *counts.entry(row.port).or_default() += 1;
-        }
-        Some(counts)
+            .map(|row| (row.address, row.port));
+        Some(inbound_connections(&listening, established))
     }
 
     fn environment(&self, pid: u32) -> Option<Vec<(String, String)>> {

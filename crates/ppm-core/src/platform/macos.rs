@@ -5,7 +5,9 @@
 //! lists sockets without root only for Apple's own binaries on macOS 27. Any
 //! other program gets just the header, and so does a `netstat` it starts.
 
-use super::{unix, Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage};
+use super::{
+    inbound_connections, unix, Listener, MemoryStats, Platform, ProcDetails, ProcInfo, ProcUsage,
+};
 use crate::protocol::ProcRef;
 use std::collections::{HashMap, HashSet};
 use std::ffi::{c_char, c_void, CStr};
@@ -154,16 +156,16 @@ impl Platform for Macos {
 #[derive(Clone)]
 struct Sockets {
     listeners: Vec<Listener>,
-    /// Established connections by local port, each socket counted once.
+    /// Inbound established connections by local port, each socket counted
+    /// once.
     connections: HashMap<u16, u32>,
 }
 
 impl Sockets {
     fn walk() -> io::Result<Self> {
-        let mut sockets = Self {
-            listeners: Vec::new(),
-            connections: HashMap::new(),
-        };
+        let mut listeners = Vec::new();
+        let mut listening = Vec::new();
+        let mut established = Vec::new();
         let mut counted = HashSet::new();
         for pid in all_pids()? {
             for fd in socket_fds(pid) {
@@ -171,22 +173,28 @@ impl Sockets {
                     continue;
                 };
                 match tcp.state {
-                    TSI_S_LISTEN => sockets.listeners.push(Listener {
-                        port: tcp.port,
-                        pid,
-                        address: tcp.address.to_string(),
-                    }),
+                    TSI_S_LISTEN => {
+                        listening.push((tcp.address, tcp.port));
+                        listeners.push(Listener {
+                            port: tcp.port,
+                            pid,
+                            address: tcp.address.to_string(),
+                        });
+                    }
                     // A socket shared by forked processes is counted once.
                     TSI_S_ESTABLISHED if counted.insert(tcp.id) => {
-                        *sockets.connections.entry(tcp.port).or_default() += 1;
+                        established.push((tcp.address, tcp.port));
                     }
                     _ => {}
                 }
             }
         }
-        sockets.listeners.sort_by_key(|l| (l.port, l.pid));
-        sockets.listeners.dedup();
-        Ok(sockets)
+        listeners.sort_by_key(|l| (l.port, l.pid));
+        listeners.dedup();
+        Ok(Self {
+            listeners,
+            connections: inbound_connections(&listening, established),
+        })
     }
 }
 
