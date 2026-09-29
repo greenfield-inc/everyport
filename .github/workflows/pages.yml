@@ -7,6 +7,7 @@ on:
       - "packages/ui/**"
       - "packages/protocol/**"
       - "pnpm-lock.yaml"
+      - "scripts/install-app.*"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 concurrency:
@@ -28,6 +29,8 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @ppm/site build
+      # The one-command app installers, served from the site root.
+      - run: cp scripts/install-app.sh site/dist/install.sh && cp scripts/install-app.ps1 site/dist/install.ps1
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with: { path: site/dist }
 

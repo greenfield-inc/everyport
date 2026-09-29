@@ -4,6 +4,15 @@
 
 Install the desktop app, the CLI, or both. The desktop app is a menu bar app on macOS, and a tray app on Windows and Linux. The CLI is one binary, `ppm`, with a terminal UI, for servers, VMs and containers.
 
+To install both with one command:
+
+```bash
+curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh          # macOS and Linux
+irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex               # Windows (PowerShell)
+```
+
+Or install each one separately:
+
 | | Desktop app | CLI |
 |---|---|---|
 | macOS | `brew install --cask greenfield-inc/tap/port-process-manager` | `brew install greenfield-inc/tap/ppm` |

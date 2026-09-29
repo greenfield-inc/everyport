@@ -26,7 +26,13 @@
 
 **Quick install**
 
-<sub>Desktop app: macOS, Windows, Linux</sub><br />
+<sub>Desktop app and CLI: macOS, Linux</sub><br />
+<pre><code>curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh</code></pre>
+
+<sub>Desktop app and CLI: Windows (PowerShell)</sub><br />
+<pre><code>irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex</code></pre>
+
+<sub>Other ways</sub><br />
 <a href="https://github.com/greenfield-inc/port-process-manager/releases/latest">Download from Releases</a> · <code>brew install --cask greenfield-inc/tap/port-process-manager</code> · <code>winget install Greenfield.PortProcessManager</code>
 
 <sub>CLI only: servers, VMs, containers</sub><br />
@@ -93,6 +99,34 @@ Free and open source. No account. No telemetry.
 ## Install
 
 ### Desktop app
+
+Install the app and the `ppm` CLI with one command. It checks both against the release's SHA-256 checksums, then opens the app. The app opens without a Gatekeeper or SmartScreen prompt.
+
+```bash
+curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://greenfield-inc.github.io/port-process-manager/install.ps1 | iex
+```
+
+On macOS the app goes into `/Applications`, or `~/Applications` if that isn't writable. On Linux it's an AppImage in `~/.local/share/port-process-manager` with a menu entry. On Windows it installs for your user, with no admin prompt. Linux on arm64 gets the CLI only, since there is no arm64 desktop build yet.
+
+Options: `--cli` installs only the CLI, `--no-open` skips opening the app, and `--deb` installs the `.deb` with apt on Debian and Ubuntu. Pass them after `sh -s --`:
+
+```bash
+curl -fsSL https://greenfield-inc.github.io/port-process-manager/install.sh | sh -s -- --cli
+```
+
+On Windows the options are `-Cli` and `-NoOpen`:
+
+```powershell
+& ([scriptblock]::Create((irm https://greenfield-inc.github.io/port-process-manager/install.ps1))) -Cli
+```
+
+Or install it another way:
 
 | Platform | Install |
 |---|---|
