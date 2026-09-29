@@ -13,6 +13,7 @@ For agents and scripts:
 
 ## Docs
 
+- [Website](https://greenfield-inc.github.io/port-process-manager/): the landing page, with an interactive demo of the popover and terminal UI
 - [README](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/README.md): features, install, quick start and privacy
 - [Getting started](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/getting-started.md): the desktop app, the terminal UI and their keys
 - [Remote machines](https://raw.githubusercontent.com/greenfield-inc/port-process-manager/main/docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, port forwarding, `ppm serve` and Tailscale

@@ -208,6 +208,20 @@ describe("protected servers", () => {
   });
 });
 
+describe("embedded in a page", () => {
+  it("leaves focus where it was until the visitor opens a server", () => {
+    const button = document.createElement("button");
+    document.body.append(button);
+    button.focus();
+    act(() => root.render(<Popover key="embedded" client={client} autoFocus={false} />));
+    expect(document.activeElement).toBe(button);
+
+    act(() => document.querySelector<HTMLElement>("[data-port='3001']")!.click());
+    expect(title()).toBe("greenfield.to");
+    expect(document.activeElement?.closest(".ppm-panel")).not.toBeNull();
+  });
+});
+
 describe("styles", () => {
   // Tailwind utilities only apply with the ppm: prefix. The rest are the
   // package's own classes from styles.css.

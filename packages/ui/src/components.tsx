@@ -146,6 +146,32 @@ export function useLeaving<T>(items: T[], key: (item: T) => string | number, ms 
   return shown;
 }
 
+/**
+ * Follows `value` over 250 ms, eased, so totals count up or down instead of
+ * jumping. A new value picks up from wherever the count is.
+ */
+export function useTween(value: number) {
+  const [shown, setShown] = useState(value);
+  const current = useRef(value);
+  useEffect(() => {
+    const from = current.current;
+    if (from === value || matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      current.current = value;
+      setShown(value);
+      return;
+    }
+    const start = performance.now();
+    let frame = requestAnimationFrame(function step(now) {
+      const t = Math.min(1, (now - start) / 250);
+      current.current = from + (value - from) * (1 - (1 - t) ** 3);
+      setShown(current.current);
+      if (t < 1) frame = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return shown;
+}
+
 /** Wraps a row so its height animates in when added and out when `leaving`. */
 export function Grow({ leaving = false, children }: { leaving?: boolean; children: ReactNode }) {
   return (

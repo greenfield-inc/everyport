@@ -32,7 +32,7 @@
 <sub>CLI only: servers, VMs, containers</sub><br />
 <pre><code>curl -fsSL https://github.com/greenfield-inc/port-process-manager/releases/latest/download/install.sh | sh</code></pre>
 
-[Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Remote machines](#remote-machines) · [CLI](#cli) · [Docs](#documentation)
+[Website](https://greenfield-inc.github.io/port-process-manager/) · [Features](#features) · [Install](#install) · [Quick start](#quick-start) · [Remote machines](#remote-machines) · [CLI](#cli) · [Docs](#documentation)
 
 </div>
 
@@ -245,6 +245,7 @@ See [AGENTS.md](AGENTS.md) for the repo layout and checks.
 
 ## Documentation
 
+- [Website](https://greenfield-inc.github.io/port-process-manager/): try the popover and the terminal UI in your browser
 - [Getting started](docs/getting-started.md)
 - [Remote machines](docs/remote-machines.md): SSH, Docker, Kubernetes, WSL, `ppm serve` and Tailscale
 - [Settings and clean up](docs/settings.md)

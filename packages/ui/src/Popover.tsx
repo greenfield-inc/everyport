@@ -19,10 +19,12 @@ export type PopoverProps = ThemeProps & {
   initialServer?: { machineId: string; port: number };
   /** Called once, after the first render that shows data. */
   onReady?: () => void;
+  /** Move keyboard focus into the popover as it opens. Defaults to true; a page that embeds it passes false. */
+  autoFocus?: boolean;
 };
 
 /** The whole popover: server list, detail and Clean up, for every machine the client knows. */
-export function Popover({ client, alertMemory, initialServer, onReady, theme, appearance }: PopoverProps) {
+export function Popover({ client, alertMemory, initialServer, onReady, autoFocus = true, theme, appearance }: PopoverProps) {
   const [machines, setMachines] = useState(() => client.machines());
   useEffect(() => client.subscribe(setMachines), [client]);
   const [machineId, setMachineId] = useState(initialServer?.machineId);
@@ -47,6 +49,7 @@ export function Popover({ client, alertMemory, initialServer, onReady, theme, ap
             machine={machine as Machine & { snapshot: Snapshot }}
             alertMemory={alertMemory}
             initialPort={initialServer?.machineId === machine.id ? initialServer.port : undefined}
+            autoFocus={autoFocus}
             keys={keys}
           />
         ) : (
@@ -69,12 +72,14 @@ function MachineView({
   machine,
   alertMemory,
   initialPort,
+  autoFocus,
   keys,
 }: {
   client: PpmClient;
   machine: Machine & { snapshot: Snapshot };
   alertMemory?: number;
   initialPort?: number;
+  autoFocus: boolean;
   keys: RefObject<((event: KeyboardEvent) => void) | null>;
 }) {
   const ctx = useViewContext(client, machine, alertMemory);
@@ -116,6 +121,7 @@ function MachineView({
   // a screen reader reads the selected row, or the panel on the detail page.
   const view = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
+    if (!autoFocus && transitions.current === 0) return;
     const root = view.current?.closest<HTMLElement>(".ppm-panel");
     (root?.querySelector<HTMLElement>("[role=listbox]") ?? root)?.focus({ preventScroll: true });
   }, [key]);
