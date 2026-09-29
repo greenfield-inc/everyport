@@ -889,7 +889,7 @@ pub fn connect_machine(app: AppHandle, machine_id: String) -> Result<(), String>
 /// that passes connects again right away.
 #[tauri::command]
 pub async fn check_machine(app: AppHandle, machine_id: String) -> Result<Vec<Step>, String> {
-    let (via, label, hint, failed) = {
+    let (via, label, hint, run_then) = {
         let all = machines(&app);
         let entry = all
             .entry(&machine_id)
@@ -898,11 +898,20 @@ pub async fn check_machine(app: AppHandle, machine_id: String) -> Result<Vec<Ste
             .via
             .clone()
             .ok_or("this computer is always connected")?;
-        let failed = entry.machine.state == MachineState::Error;
-        (via, entry.machine.label.clone(), entry.hint.clone(), failed)
+        (
+            via,
+            entry.machine.label.clone(),
+            entry.hint.clone(),
+            entry.run,
+        )
     };
     let report = check::check(&label, &via, &hint).await;
-    if failed && report.probe.is_some() {
+    // Only if it's still failing in the same run, so a retry that connected
+    // meanwhile keeps its connection.
+    let still_failing = machines(&app)
+        .entry(&machine_id)
+        .is_some_and(|e| e.run == run_then && e.machine.state == MachineState::Error);
+    if still_failing && report.probe.is_some() {
         run(&app, &machine_id);
     }
     Ok(report.steps)

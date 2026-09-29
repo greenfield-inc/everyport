@@ -94,7 +94,7 @@ impl Failure {
             Self::ChangedHostKey
         } else if has("Host key verification failed") {
             Self::NewHostKey
-        } else if has("Permission denied (") {
+        } else if has("Permission denied (") || has("Too many authentication failures") {
             Self::KeyRejected
         } else if has("Connection refused") {
             Self::SshOff
@@ -146,6 +146,14 @@ impl Failure {
         } else {
             format!("[{host}]:{port}")
         };
+        // Windows has no ssh-copy-id, so its PowerShell appends the key itself.
+        let copy_key = if cfg!(windows) {
+            format!(
+                r#"type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh {dest} "cat >> .ssh/authorized_keys""#
+            )
+        } else {
+            format!("ssh-copy-id {dest}")
+        };
         let mut fix = match (self, os) {
             (Self::NoName, _) => format!(
                 "This computer can't find {host}. Check the name, and that you're on the same network, VPN or tailnet."
@@ -154,16 +162,16 @@ impl Failure {
                 "{machine} didn't answer. Check that it's on and awake, and on the same network or tailnet."
             ),
             (Self::SshOff, Some(Os::Macos)) => format!(
-                "SSH is off on {machine}. On it, turn on System Settings > General > Sharing > Remote Login."
+                "SSH is off on {machine}. On {machine}, turn on System Settings > General > Sharing > Remote Login."
             ),
             (Self::SshOff, Some(Os::Linux)) => format!(
-                "SSH is off on {machine}. On it, run `sudo systemctl enable --now ssh`."
+                "SSH is off on {machine}. On {machine}, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch)."
             ),
             (Self::SshOff, Some(Os::Windows)) => format!(
-                "SSH is off on {machine}. On it, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
+                "SSH is off on {machine}. On {machine}, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
             ),
             (Self::SshOff, None) => format!(
-                "SSH is off on {machine}. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh`. On Windows, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
+                "SSH is off on {machine}. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch). On Windows, in PowerShell as administrator, run `{WINDOWS_SSHD}`."
             ),
             (Self::ServeOff, _) => format!(
                 "everyport serve isn't running on {machine}. Start it there with `everyport serve`."
@@ -178,10 +186,10 @@ impl Failure {
                 "{machine} didn't accept your key. Add your public key to {WINDOWS_KEYS} on it."
             ),
             (Self::KeyRejected, Some(_)) => format!(
-                "{machine} didn't accept your key. Run `ssh-copy-id {dest}` to add it."
+                "{machine} didn't accept your key. Run `{copy_key}` to add it."
             ),
             (Self::KeyRejected, None) => format!(
-                "{machine} didn't accept your key. Run `ssh-copy-id {dest}` to add it. For Windows, add your public key to {WINDOWS_KEYS}."
+                "{machine} didn't accept your key. Run `{copy_key}` to add it. For Windows, add your public key to {WINDOWS_KEYS}."
             ),
         };
         if hint.pane && matches!(self, Self::SshOff | Self::NoAnswer) {
@@ -372,14 +380,8 @@ async fn reach(
         steps.fail(failure.label(target), fix, detail);
     };
     let lookup = tokio::net::lookup_host((target.host.as_str(), target.port));
-    let address: SocketAddr = match tokio::time::timeout(TIMEOUT, lookup).await {
-        Ok(Ok(mut addresses)) => match addresses.next() {
-            Some(address) => address,
-            None => {
-                fail(steps, Failure::NoName, String::new());
-                return None;
-            }
-        },
+    let addresses: Vec<SocketAddr> = match tokio::time::timeout(TIMEOUT, lookup).await {
+        Ok(Ok(addresses)) => addresses.collect(),
         Ok(Err(error)) => {
             fail(steps, Failure::NoName, error.to_string());
             return None;
@@ -389,26 +391,36 @@ async fn reach(
             return None;
         }
     };
-    steps.pass(format!("{} resolves to {}", target.host, address.ip()));
-    let mut stream = match tokio::time::timeout(TIMEOUT, TcpStream::connect(address)).await {
-        Ok(Ok(stream)) => stream,
-        Ok(Err(error)) if error.kind() == std::io::ErrorKind::ConnectionRefused => {
-            let off = if target.dest.contains("://") {
-                Failure::ServeOff
-            } else {
-                Failure::SshOff
-            };
-            fail(steps, off, error.to_string());
-            return None;
+    let Some(first) = addresses.first() else {
+        fail(steps, Failure::NoName, String::new());
+        return None;
+    };
+    steps.pass(format!("{} resolves to {}", target.host, first.ip()));
+    // Like ssh, try each address, such as ::1 and then 127.0.0.1 for localhost.
+    let mut errors = Vec::new();
+    let mut refused = false;
+    let mut connected = None;
+    for address in &addresses {
+        match tokio::time::timeout(TIMEOUT, TcpStream::connect(address)).await {
+            Ok(Ok(stream)) => {
+                connected = Some(stream);
+                break;
+            }
+            Ok(Err(error)) => {
+                refused |= error.kind() == std::io::ErrorKind::ConnectionRefused;
+                errors.push(format!("{address}: {error}"));
+            }
+            Err(_) => errors.push(format!("{address}: The connection timed out.")),
         }
-        Ok(Err(error)) => {
-            fail(steps, Failure::NoAnswer, error.to_string());
-            return None;
-        }
-        Err(_) => {
-            fail(steps, Failure::NoAnswer, "The connection timed out.".into());
-            return None;
-        }
+    }
+    let Some(mut stream) = connected else {
+        let failure = match (refused, target.dest.contains("://")) {
+            (true, true) => Failure::ServeOff,
+            (true, false) => Failure::SshOff,
+            (false, _) => Failure::NoAnswer,
+        };
+        fail(steps, failure, errors.join("\n"));
+        return None;
     };
     steps.pass(format!("Port {} answers", target.port));
     // sshd greets first, such as `SSH-2.0-OpenSSH_for_Windows_9.5`.
@@ -501,6 +513,9 @@ Offending ED25519 key in /tmp/known_hosts:1\n\
 Host key for [127.0.0.1]:39022 has changed and you have requested strict checking.\n\
 Host key verification failed.";
     const DENIED: &str = "parsas@127.0.0.1: Permission denied (publickey).";
+    // From OpenSSH's auth.c, when ssh offers more keys than the server's MaxAuthTries.
+    const TOO_MANY_KEYS: &str =
+        "Received disconnect from 10.0.0.5 port 22:2: Too many authentication failures";
 
     #[test]
     fn classifies_what_ssh_prints() {
@@ -516,6 +531,7 @@ Host key verification failed.";
         assert_eq!(Failure::of(NEW_KEY), Some(Failure::NewHostKey));
         assert_eq!(Failure::of(CHANGED_KEY), Some(Failure::ChangedHostKey));
         assert_eq!(Failure::of(DENIED), Some(Failure::KeyRejected));
+        assert_eq!(Failure::of(TOO_MANY_KEYS), Some(Failure::KeyRejected));
         assert_eq!(Failure::of("bash: everyport: command not found"), None);
     }
 
@@ -550,20 +566,25 @@ Host key verification failed.";
         let none = Hint::default();
         assert_eq!(
             Failure::SshOff.fix("Mini", &target(), Some(Os::Macos), &none),
-            "SSH is off on Mini. On it, turn on System Settings > General > Sharing > Remote Login."
+            "SSH is off on Mini. On Mini, turn on System Settings > General > Sharing > Remote Login."
         );
         assert_eq!(
             Failure::SshOff.fix("Mini", &target(), Some(Os::Linux), &none),
-            "SSH is off on Mini. On it, run `sudo systemctl enable --now ssh`."
+            "SSH is off on Mini. On Mini, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch)."
         );
         assert!(Failure::SshOff
             .fix("Mini", &target(), Some(Os::Windows), &none)
             .contains(
                 "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd"
             ));
+        let copy_key = if cfg!(windows) {
+            r#"type $env:USERPROFILE\.ssh\id_ed25519.pub | ssh me@mini "cat >> .ssh/authorized_keys""#
+        } else {
+            "ssh-copy-id me@mini"
+        };
         assert_eq!(
             Failure::KeyRejected.fix("Mini", &target(), Some(Os::Linux), &none),
-            "Mini didn't accept your key. Run `ssh-copy-id me@mini` to add it."
+            format!("Mini didn't accept your key. Run `{copy_key}` to add it.")
         );
         assert!(Failure::KeyRejected
             .fix("Mini", &target(), Some(Os::Windows), &none)
@@ -627,7 +648,7 @@ Host key verification failed.";
         );
         assert_eq!(
             report.steps[1].fix.as_deref(),
-            Some("SSH is off on box. On it, run `sudo systemctl enable --now ssh`.")
+            Some("SSH is off on box. On box, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch).")
         );
         assert!(report.probe.is_none() && !report.waits_for_user && !report.ok());
     }

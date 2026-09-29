@@ -70,7 +70,7 @@ export const scenarios: Record<string, () => Machine[]> = {
         {
           label: "Nothing listens on port 1",
           ok: false,
-          fix: "SSH is off on studio-mac. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh`. On Windows, in PowerShell as administrator, run `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic`.",
+          fix: "SSH is off on studio-mac. On a Mac, turn on System Settings > General > Sharing > Remote Login. On Linux, run `sudo systemctl enable --now ssh` (`sshd` on Fedora and Arch). On Windows, in PowerShell as administrator, run `Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0; Start-Service sshd; Set-Service sshd -StartupType Automatic`.",
           detail: "Connection refused (os error 61)",
         },
       ],

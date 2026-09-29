@@ -86,7 +86,7 @@ describe("another machine", () => {
         {
           label: "Nothing listens on port 22",
           ok: false,
-          fix: "SSH is off on Studio Mac. On it, turn on System Settings > General > Sharing > Remote Login.",
+          fix: "SSH is off on Studio Mac. On Studio Mac, turn on System Settings > General > Sharing > Remote Login.",
           detail: "Connection refused (os error 61)",
         },
       ],
