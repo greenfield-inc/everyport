@@ -363,15 +363,12 @@ impl View<'_> {
                 !focused
             };
             let index = app.color_index(server.port);
-            let color = if dimmed {
+            let style = if dimmed {
                 app.palette.faded_port(index, 0.35)
             } else {
-                app.palette.port(index)
+                Style::new().fg(app.palette.port(index))
             };
-            line.push(span(
-                (if focused { "█" } else { "▅" }).repeat(count),
-                Style::new().fg(color),
-            ));
+            line.push(span((if focused { "█" } else { "▅" }).repeat(count), style));
         }
         line.push(span("▂".repeat(other_columns), self.s.faint));
         let free = columns.saturating_sub(width(&line));
@@ -511,8 +508,9 @@ impl View<'_> {
             }
         }
         let highlight = if selected { self.s.highlight } else { None };
+        let mut first = true;
         lines.map(|line| {
-            let marker = if selected && highlight.is_none() && width(&line) > 0 {
+            let marker = if selected && highlight.is_none() && std::mem::take(&mut first) {
                 "›"
             } else {
                 " "
@@ -904,10 +902,7 @@ impl View<'_> {
         (0..rows)
             .map(|row| {
                 let (label, style) = if row == threshold_row {
-                    (
-                        threshold_label.as_str(),
-                        Style::new().fg(self.app.palette.faded_amber(0.85)),
-                    )
+                    (threshold_label.as_str(), self.app.palette.faded_amber(0.85))
                 } else if row == rows - 1 {
                     ("0", self.s.text3)
                 } else {
@@ -917,7 +912,7 @@ impl View<'_> {
                     span(format!("{} ", pad_left(label, gutter - 1)), style),
                     span("│", self.s.track),
                 ];
-                let mark = Style::new().fg(self.app.palette.faded_amber(0.6));
+                let mark = self.app.palette.faded_amber(0.6);
                 for column in 0..canvas.columns {
                     if !canvas.is_empty(row, column) {
                         line.push(span(canvas.char(row, column).to_string(), self.s.text1));
@@ -1216,11 +1211,16 @@ fn tilde(path: &str) -> String {
 /// "~/…/parent/folder" for deep paths.
 fn folder(path: &str) -> String {
     let short = tilde(path);
+    let root = if short.starts_with('/') { "/" } else { "" };
     let parts: Vec<&str> = short.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
     if parts.len() <= 3 {
         return short;
     }
-    format!("{}/…/{}", parts[0], parts[parts.len() - 2..].join("/"))
+    format!(
+        "{root}{}/…/{}",
+        parts[0],
+        parts[parts.len() - 2..].join("/")
+    )
 }
 
 /// Cuts the middle of `text` to fit `width`, keeping both ends.

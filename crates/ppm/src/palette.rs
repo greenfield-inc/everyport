@@ -2,7 +2,7 @@
 //! amber and red from the design, and text levels are the terminal's own
 //! foreground blended over its background, like the popover's translucent text.
 
-use ratatui::style::Color;
+use ratatui::style::{Color, Modifier, Style};
 use std::io::IsTerminal;
 use std::time::Duration;
 
@@ -121,18 +121,22 @@ impl Palette {
         self.pick(PORTS[index % PORTS.len()])
     }
     /// A port color at partial opacity, for unselected memory-bar segments.
-    pub fn faded_port(&self, index: usize, alpha: f32) -> Color {
-        let pair = PORTS[index % PORTS.len()];
-        match self.background {
-            Some(bg) => self.color(blend(if self.dark { pair.1 } else { pair.0 }, bg, alpha)),
-            None => self.port(index),
-        }
+    pub fn faded_port(&self, index: usize, alpha: f32) -> Style {
+        self.faded(PORTS[index % PORTS.len()], alpha)
     }
     /// Amber at partial opacity, for the threshold line.
-    pub fn faded_amber(&self, alpha: f32) -> Color {
+    pub fn faded_amber(&self, alpha: f32) -> Style {
+        self.faded(AMBER, alpha)
+    }
+    /// Blended over the background, or dim when the terminal didn't report it.
+    fn faded(&self, pair: (Rgb, Rgb), alpha: f32) -> Style {
         match self.background {
-            Some(bg) => self.color(blend(if self.dark { AMBER.1 } else { AMBER.0 }, bg, alpha)),
-            None => self.amber(),
+            Some(bg) => Style::new().fg(self.color(blend(
+                if self.dark { pair.1 } else { pair.0 },
+                bg,
+                alpha,
+            ))),
+            None => Style::new().fg(self.pick(pair)).add_modifier(Modifier::DIM),
         }
     }
 
