@@ -110,11 +110,13 @@ ppm --on devbox list --json
 When a command connection won't work, for example from a browser, run `ppm serve` on the machine:
 
 ```bash
-ppm serve                         # listens on 127.0.0.1:7767 and prints a connection code
 tailscale serve --bg http://127.0.0.1:7767
+ppm serve --url https://devbox.tail1234.ts.net   # listens on 127.0.0.1:7767 and prints a connection code
 ```
 
-`ppm serve` only listens on loopback, so it's reachable only through a tunnel or proxy you set up, and every request needs the token in the connection code. Paste the code into **Settings → Machines → Add by code**.
+`ppm serve` only listens on loopback, so it's reachable only through a tunnel or proxy you set up, and every request needs the token in the connection code. `--url` puts the address clients use into the code. Paste the code into **Settings → Machines → Add by code**.
+
+Web pages can't read its responses unless you allow their origin, as in `ppm serve --allow-origin https://dash.example.com`. See [docs/protocol.md](docs/protocol.md#browsers).
 
 ## CLI
 
