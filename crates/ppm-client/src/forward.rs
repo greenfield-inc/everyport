@@ -86,7 +86,7 @@ pub async fn forward(connection: &Connection, port: u16) -> anyhow::Result<Forwa
     let local_port = free_port(port)?;
     match tunnel(prefix, local_port, port)? {
         Some(argv) => spawn_tunnel(&argv, local_port, port).await,
-        None => relay(prefix, ppm_path, local_port, port),
+        None => relay(prefix, ppm_path, local_port, port).await,
     }
 }
 
@@ -127,16 +127,35 @@ async fn spawn_tunnel(argv: &[String], local_port: u16, port: u16) -> anyhow::Re
     bail!("Forwarding port {port} took longer than 10 s.")
 }
 
-/// Listens on `local_port` and pipes each connection through
-/// `<prefix> <ppm_path> connect <port>`.
-fn relay(prefix: &[String], ppm_path: &str, local_port: u16, port: u16) -> anyhow::Result<Forward> {
+/// Checks that the server answers, then listens on `local_port` and pipes
+/// each connection through `<prefix> <ppm_path> connect <port>`.
+async fn relay(
+    prefix: &[String],
+    ppm_path: &str,
+    local_port: u16,
+    port: u16,
+) -> anyhow::Result<Forward> {
+    let os = remote::os_of(ppm_path);
+    let check = remote::command(
+        prefix,
+        os,
+        &[ppm_path, "connect", "--check", &port.to_string()],
+    )
+    .stdin(Stdio::null())
+    .output()
+    .await
+    .with_context(|| format!("Couldn't run {}", prefix.first().map_or(ppm_path, |p| p)))?;
+    if !check.status.success() {
+        let stderr = String::from_utf8_lossy(&check.stderr);
+        let reason = stderr.trim().trim_start_matches("ppm: ");
+        bail!("Couldn't forward port {port}: {reason}");
+    }
     let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, local_port))?;
     listener.set_nonblocking(true)?;
     let listener = tokio::net::TcpListener::from_std(listener)?;
     let (prefix, ppm_path, port) = (prefix.to_vec(), ppm_path.to_string(), port.to_string());
     let accept = tokio::spawn(async move {
         while let Ok((socket, _)) = listener.accept().await {
-            let os = remote::os_of(&ppm_path);
             let mut command = remote::command(&prefix, os, &[&ppm_path, "connect", &port]);
             command.stderr(Stdio::null());
             let Ok(mut child) = command.spawn() else {

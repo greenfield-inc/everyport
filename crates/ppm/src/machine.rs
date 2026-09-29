@@ -10,7 +10,7 @@ use ppm_client::install::{self, Probe};
 use ppm_client::machines::{self, Via};
 use ppm_client::{discover, Client, Connection, Update};
 use ppm_core::protocol::{Call, Event, Request, RequestResult};
-use std::io::{self, IsTerminal};
+use std::io;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::LazyLock;
 use std::thread;
@@ -89,9 +89,7 @@ impl Machine {
     /// Connects to a saved or discovered machine, installing ppm there first
     /// when `install` allows.
     pub fn remote(name: &str, install: Install) -> Result<Self, String> {
-        let connection = RUNTIME
-            .block_on(connection(name, install))
-            .map_err(|e| format!("{e:#}"))?;
+        let connection = connection(name, install)?;
         let _runtime = RUNTIME.enter();
         let (client, mut updates) = ppm_client::connect(connection.clone());
         let (tx, feed) = mpsc::channel();
@@ -182,11 +180,6 @@ impl Machine {
         Ok(url)
     }
 
-    /// True while a URL from [`Machine::url`] needs this process to stay up.
-    pub fn is_forwarding(&self) -> bool {
-        matches!(&self.link, Link::Remote { forwards, .. } if forwards.iter().any(|(_, f)| f.is_tunnel()))
-    }
-
     /// Ends the connection. On this machine, first lets the scanner finish
     /// any stop or restart, so it isn't lost when ppm exits.
     pub fn close(self) {
@@ -200,8 +193,15 @@ impl Machine {
 }
 
 /// How to reach `name`, from `machines.toml` first, then the machines
-/// `ppm remote list` discovers.
-async fn connection(name: &str, install: Install) -> anyhow::Result<Connection> {
+/// `ppm remote list` discovers. Installs ppm there first when `install`
+/// allows.
+pub fn connection(name: &str, install: Install) -> Result<Connection, String> {
+    RUNTIME
+        .block_on(reach(name, install))
+        .map_err(|e| format!("{e:#}"))
+}
+
+async fn reach(name: &str, install: Install) -> anyhow::Result<Connection> {
     let prefix = match find(name).await? {
         Via::Url { url, token } => return Ok(Connection::Http { url, token }),
         Via::Command { command } => command,
@@ -211,7 +211,12 @@ async fn connection(name: &str, install: Install) -> anyhow::Result<Connection> 
         .with_context(|| format!("Couldn't reach {name}"))?;
     let ppm_path = if probe.up_to_date() {
         probe.ppm_path
-    } else if should_install(name, &probe, install)? {
+    } else if should_install(
+        name,
+        &probe,
+        install,
+        commands::can_ask().then_some(&mut commands::confirm),
+    )? {
         eprintln!("Installing ppm {} on {name}…", install::VERSION);
         install::install(&prefix, &probe).await?;
         eprintln!("Installed ppm in {} on {name}.", probe.install_path);
@@ -225,16 +230,25 @@ async fn connection(name: &str, install: Install) -> anyhow::Result<Connection> 
     })
 }
 
-/// Asks before installing or updating. An older ppm that isn't updated still
-/// runs, and ppm-client reports a protocol mismatch if there is one.
-fn should_install(name: &str, probe: &Probe, install: Install) -> anyhow::Result<bool> {
+/// Asks a person a yes or no question.
+type Ask<'a> = &'a mut dyn FnMut(&str) -> io::Result<bool>;
+
+/// Asks before installing or updating, through `ask` when a person can
+/// answer. An older ppm that isn't updated still runs, and ppm-client reports
+/// a protocol mismatch if there is one.
+fn should_install(
+    name: &str,
+    probe: &Probe,
+    install: Install,
+    ask: Option<Ask>,
+) -> anyhow::Result<bool> {
     let missing = probe.installed.is_none();
-    match install {
-        Install::Yes => Ok(true),
-        Install::No if missing => {
+    match (install, ask) {
+        (Install::Yes, _) => Ok(true),
+        (Install::No, _) if missing => {
             bail!("ppm isn't installed on {name}. Run `ppm --on {name}` to install it.")
         }
-        Install::Ask if io::stdin().is_terminal() => {
+        (Install::Ask, Some(ask)) => {
             let question = match &probe.installed {
                 None => format!("Install ppm on {name}?"),
                 Some(version) => format!(
@@ -242,13 +256,13 @@ fn should_install(name: &str, probe: &Probe, install: Install) -> anyhow::Result
                     install::VERSION
                 ),
             };
-            let yes = commands::confirm(&question)?;
+            let yes = ask(&question)?;
             if missing && !yes {
                 bail!("ppm isn't installed on {name}.");
             }
             Ok(yes)
         }
-        Install::Ask if missing => {
+        (Install::Ask, None) if missing => {
             bail!("ppm isn't installed on {name}. Run again with --yes to install it.")
         }
         _ => Ok(false),
@@ -272,4 +286,83 @@ async fn find(name: &str) -> anyhow::Result<Via> {
 
 pub fn machines_path() -> anyhow::Result<std::path::PathBuf> {
     machines::path().context("No config folder for this user")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ppm_core::protocol::Os;
+
+    fn probe(installed: Option<&str>) -> Probe {
+        Probe {
+            os: Os::Linux,
+            target: "x86_64-unknown-linux-musl".into(),
+            install_path: "/home/me/.local/bin/ppm".into(),
+            ppm_path: "/home/me/.local/bin/ppm".into(),
+            installed: installed.map(String::from),
+        }
+    }
+
+    /// Runs `should_install` with a person who answers `answer`, and returns
+    /// the result and the question they saw.
+    fn answered(installed: Option<&str>, answer: bool) -> (anyhow::Result<bool>, Option<String>) {
+        let mut asked = None;
+        let mut ask = |question: &str| {
+            asked = Some(question.to_string());
+            Ok(answer)
+        };
+        let result = should_install("box", &probe(installed), Install::Ask, Some(&mut ask));
+        (result, asked)
+    }
+
+    #[test]
+    fn yes_installs_without_asking() {
+        let mut ask = |_: &str| -> io::Result<bool> { panic!("asked") };
+        assert!(should_install("box", &probe(None), Install::Yes, Some(&mut ask)).unwrap());
+        assert!(should_install("box", &probe(Some("0.0.1")), Install::Yes, None).unwrap());
+    }
+
+    #[test]
+    fn a_terminal_asks_before_installing() {
+        let (result, asked) = answered(None, true);
+        assert!(result.unwrap());
+        assert_eq!(asked.as_deref(), Some("Install ppm on box?"));
+
+        let (result, _) = answered(None, false);
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "ppm isn't installed on box."
+        );
+
+        let (result, asked) = answered(Some("0.0.1"), false);
+        assert!(!result.unwrap(), "declining an update keeps the old ppm");
+        assert_eq!(
+            asked,
+            Some(format!(
+                "Update ppm on box from 0.0.1 to {}?",
+                install::VERSION
+            ))
+        );
+    }
+
+    #[test]
+    fn without_a_terminal_it_fails_rather_than_wait() {
+        let error = should_install("box", &probe(None), Install::Ask, None).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "ppm isn't installed on box. Run again with --yes to install it."
+        );
+        // An outdated ppm still runs.
+        assert!(!should_install("box", &probe(Some("0.0.1")), Install::Ask, None).unwrap());
+    }
+
+    #[test]
+    fn the_machine_switcher_never_installs() {
+        let error = should_install("box", &probe(None), Install::No, None).unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "ppm isn't installed on box. Run `ppm --on box` to install it."
+        );
+        assert!(!should_install("box", &probe(Some("0.0.1")), Install::No, None).unwrap());
+    }
 }

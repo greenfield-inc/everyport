@@ -133,7 +133,7 @@ ppm list [--json]          List servers once
 ppm watch --jsonl          Print a snapshot on every change
 ppm stop <port>            Stop the server on a port (--force to kill)
 ppm restart <port>         Stop it, then rerun its command in the folder it started from
-ppm open <port>            Open http://localhost:<port>
+ppm open <port>            Open the server in your browser, forwarding its port with --on
 ppm clean [--yes]          Stop the servers Clean up suggests
 ppm stdio                  Speak the ppm protocol on stdin and stdout
 ppm serve                  Speak the ppm protocol over HTTP on loopback

@@ -2,8 +2,9 @@
 //! Each runs against a [`Machine`], this one or another, through the protocol.
 
 use crate::format;
-use crate::machine::{Feed, Machine, RUNTIME};
+use crate::machine::{self, Feed, Install, Machine, RUNTIME};
 use crate::palette::Palette;
+use ppm_client::forward::forward;
 use ppm_core::engine::Engine;
 use ppm_core::platform;
 use ppm_core::protocol::{Call, Config, Event, Os, ProcRef, Server, ServerStatus, Snapshot};
@@ -17,10 +18,16 @@ pub fn engine() -> Engine {
     Engine::new(platform::native(), Config::default())
 }
 
-/// Asks a yes or no question in the terminal. No is the default.
+/// True when a person can answer a question: stdin and stderr are both a
+/// terminal. Stdout may be redirected, as in `ppm list --json > out.json`.
+pub fn can_ask() -> bool {
+    io::stdin().is_terminal() && io::stderr().is_terminal()
+}
+
+/// Asks a yes or no question on stderr, keeping stdout for output. No is
+/// the default.
 pub fn confirm(question: &str) -> io::Result<bool> {
-    print!("{question} [y/N] ");
-    io::stdout().flush()?;
+    eprint!("{question} [y/N] ");
     let mut answer = String::new();
     io::stdin().lock().read_line(&mut answer)?;
     Ok(matches!(answer.trim(), "y" | "Y" | "yes"))
@@ -316,24 +323,37 @@ pub fn restart(mut machine: Machine, port: u16) -> io::Result<ExitCode> {
 
 /// Opens the server in the browser. A server on another machine is
 /// forwarded first, and the forward stays open until Ctrl-C.
-pub fn open(mut machine: Machine, port: u16) -> io::Result<ExitCode> {
-    let url = match machine.url(port) {
-        Ok(url) => url,
-        Err(error) => return Ok(failed(error)),
+pub fn open(on: Option<&str>, install: Install, port: u16) -> io::Result<ExitCode> {
+    let Some(name) = on else {
+        return Ok(open_url(&format!("http://localhost:{port}")));
     };
-    if let Err(error) = open::that_detached(&url) {
+    let connection = machine::connection(name, install).map_err(io::Error::other)?;
+    let forwarded = match RUNTIME.block_on(forward(&connection, port)) {
+        Ok(forwarded) => forwarded,
+        Err(error) => return Ok(failed(format!("{error:#}"))),
+    };
+    if !forwarded.is_tunnel() {
+        return Ok(open_url(&forwarded.url));
+    }
+    if let Err(error) = open::that_detached(&forwarded.url) {
         return Ok(failed(error.to_string()));
     }
-    if !machine.is_forwarding() {
-        println!("Opened {url}");
-        return Ok(ExitCode::SUCCESS);
-    }
     println!(
-        "Opened {url}, forwarded from :{port} on {}. Press Ctrl-C to stop forwarding.",
-        machine.label()
+        "Opened {}, forwarded from :{port} on {name}. Press Ctrl-C to stop forwarding.",
+        forwarded.url
     );
     RUNTIME.block_on(tokio::signal::ctrl_c())?;
     Ok(ExitCode::SUCCESS)
+}
+
+fn open_url(url: &str) -> ExitCode {
+    match open::that_detached(url) {
+        Ok(()) => {
+            println!("Opened {url}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => failed(error.to_string()),
+    }
 }
 
 pub fn clean(mut machine: Machine, yes: bool) -> io::Result<ExitCode> {
@@ -364,7 +384,7 @@ pub fn clean(mut machine: Machine, yes: bool) -> io::Result<ExitCode> {
     let memory: u64 = picks.iter().map(|s| s.memory).sum();
     let count = format::plural(picks.len(), "server", "servers");
     if !yes {
-        if !io::stdin().is_terminal() {
+        if !can_ask() {
             eprintln!("ppm: run `ppm clean --yes` to stop these without asking");
             return Ok(ExitCode::FAILURE);
         }

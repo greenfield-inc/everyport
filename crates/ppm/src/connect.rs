@@ -7,9 +7,13 @@ use std::net::{Shutdown, TcpStream};
 use std::process::ExitCode;
 use std::thread;
 
-pub fn run(port: u16) -> io::Result<ExitCode> {
+/// With `check`, exits as soon as the connection is made.
+pub fn run(port: u16, check: bool) -> io::Result<ExitCode> {
     let stream = TcpStream::connect(("localhost", port))
         .map_err(|e| io::Error::new(e.kind(), format!("nothing answers on :{port}: {e}")))?;
+    if check {
+        return Ok(ExitCode::SUCCESS);
+    }
     let mut upload = stream.try_clone()?;
     thread::spawn(move || {
         let _ = io::copy(&mut io::stdin().lock(), &mut upload);

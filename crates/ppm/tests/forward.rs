@@ -42,3 +42,24 @@ async fn relays_through_ppm_connect() {
     .unwrap();
     assert_eq!(reply, "pong");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn fails_when_nothing_answers() {
+    // Bind and drop to find a port nothing listens on.
+    let port = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let connection = Connection::Command {
+        argv_prefix: Vec::new(),
+        ppm_path: env!("CARGO_BIN_EXE_ppm").into(),
+    };
+    let error = forward(&connection, port).await.unwrap_err().to_string();
+    assert!(
+        error.starts_with(&format!(
+            "Couldn't forward port {port}: nothing answers on :{port}"
+        )),
+        "{error}"
+    );
+}

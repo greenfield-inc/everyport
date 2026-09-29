@@ -59,7 +59,7 @@ enum Command {
     },
     /// Stop it, then rerun its command in the folder it started from
     Restart { port: u16 },
-    /// Open http://localhost:<port>
+    /// Open the server in your browser, forwarding its port with --on
     Open { port: u16 },
     /// Stop the servers Clean up suggests
     Clean,
@@ -86,7 +86,12 @@ enum Command {
     Doctor,
     /// Pipe stdin and stdout to a port on this machine, for forwarding
     #[command(hide = true)]
-    Connect { port: u16 },
+    Connect {
+        port: u16,
+        /// Only check that something answers on the port
+        #[arg(long)]
+        check: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -144,7 +149,7 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
         Some(Command::Watch { .. }) => commands::watch(machine()?),
         Some(Command::Stop { port, force }) => commands::stop(machine()?, port, force),
         Some(Command::Restart { port }) => commands::restart(machine()?, port),
-        Some(Command::Open { port }) => commands::open(machine()?, port),
+        Some(Command::Open { port }) => commands::open(cli.on.as_deref(), install, port),
         Some(Command::Clean) => commands::clean(machine()?, cli.yes),
         Some(_) if cli.on.is_some() => Err(io::Error::other(
             "--on works with list, watch, stop, restart, open, clean and the terminal UI",
@@ -169,7 +174,7 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
             Remote::Rm { name } => remote::rm(&name),
         },
         Some(Command::Doctor) => Ok(commands::doctor(config_dir())),
-        Some(Command::Connect { port }) => connect::run(port),
+        Some(Command::Connect { port, check }) => connect::run(port, check),
     }
 }
 

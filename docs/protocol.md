@@ -275,7 +275,7 @@ If `hello.protocol` is higher than the version you support, ask the user to upda
 
 On another machine, run the same `ppm stdio` through a command prefix, such as `ssh devbox ppm stdio` or `docker exec -i box ppm stdio`. The protocol is the same.
 
-To open a server from a machine whose prefix can't forward ports, such as `docker exec -i`, run `ppm connect <port>` through the prefix. It connects to `localhost:<port>` on that machine and pipes the connection to its stdin and stdout, so a client can relay one TCP connection per `ppm connect`. It exits when the server closes the connection, and fails with status 1 when nothing answers on the port. ssh and kubectl forward ports themselves, so they don't need it.
+To open a server from a machine whose prefix can't forward ports, such as `docker exec -i`, run `ppm connect <port>` through the prefix. It connects to `localhost:<port>` on that machine and pipes the connection to its stdin and stdout, so a client can relay one TCP connection per `ppm connect`. It exits when the server closes the connection, and fails with status 1 when nothing answers on the port. `ppm connect --check <port>` only connects and exits, so a client can check the port before it listens locally. ssh and kubectl forward ports themselves, so they don't need it.
 
 ## ppm serve
 
