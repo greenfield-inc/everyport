@@ -243,14 +243,33 @@ fn failed(error: String) -> ExitCode {
     ExitCode::FAILURE
 }
 
-pub fn stop(mut machine: Machine, port: u16, force: bool) -> io::Result<ExitCode> {
+/// Stop and restart leave a protected server alone unless told otherwise.
+fn refuse_protected(server: &Server, command: &str) -> ExitCode {
+    let port = server.port;
+    failed(format!(
+        "{} :{port} is protected. Run `ppm {command} {port} --protected` to {command} it anyway.",
+        server.process_name
+    ))
+}
+
+/// `force` kills at once and implies `protected`.
+pub fn stop(mut machine: Machine, port: u16, force: bool, protected: bool) -> io::Result<ExitCode> {
+    let confirm_protected = force || protected;
     let snapshot = next_snapshot(&machine)?;
     let Some(server) = find(&snapshot, port).cloned() else {
         return Ok(failed(format!("nothing listening on :{port}")));
     };
+    if server.protected && !confirm_protected {
+        return Ok(refuse_protected(&server, "stop"));
+    }
     let root = server.root;
     let start = Instant::now();
-    let id = machine.call(Call::Stop { port, root, force });
+    let id = machine.call(Call::Stop {
+        port,
+        root,
+        force,
+        confirm_protected,
+    });
     let settled = settle(
         &mut machine,
         &[id],
@@ -278,13 +297,20 @@ pub fn stop(mut machine: Machine, port: u16, force: bool) -> io::Result<ExitCode
     Ok(ExitCode::SUCCESS)
 }
 
-pub fn restart(mut machine: Machine, port: u16) -> io::Result<ExitCode> {
+pub fn restart(mut machine: Machine, port: u16, protected: bool) -> io::Result<ExitCode> {
     let snapshot = next_snapshot(&machine)?;
     let Some(server) = find(&snapshot, port).cloned() else {
         return Ok(failed(format!("nothing listening on :{port}")));
     };
+    if server.protected && !protected {
+        return Ok(refuse_protected(&server, "restart"));
+    }
     let root = server.root;
-    let id = machine.call(Call::Restart { port, root });
+    let id = machine.call(Call::Restart {
+        port,
+        root,
+        confirm_protected: protected,
+    });
     let settled = settle(
         &mut machine,
         &[id],
@@ -364,6 +390,15 @@ pub fn clean(mut machine: Machine, yes: bool) -> io::Result<ExitCode> {
         .filter(|s| format::preselected(s))
         .cloned()
         .collect();
+    let protected: Vec<String> = snapshot
+        .servers
+        .iter()
+        .filter(|s| s.protected)
+        .map(|s| format!("{} :{}", s.process_name, s.port))
+        .collect();
+    if !protected.is_empty() {
+        println!("Skipping protected: {}", protected.join(", "));
+    }
     if picks.is_empty() {
         println!("Nothing to clean up.");
         return Ok(ExitCode::SUCCESS);
@@ -399,6 +434,7 @@ pub fn clean(mut machine: Machine, yes: bool) -> io::Result<ExitCode> {
                 port: server.port,
                 root: server.root,
                 force: false,
+                confirm_protected: false,
             });
             (id, server)
         })

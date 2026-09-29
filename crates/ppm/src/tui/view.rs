@@ -1049,20 +1049,29 @@ impl View<'_> {
         block.add(self.divider());
         if let Some(server) = app.confirming_stop.and_then(|port| app.server(port)) {
             let red = Style::new().fg(app.palette.red());
-            let question = vec![
-                span(format!("Stop {} ", server.project.name), self.s.text1),
-                span(
-                    format!(":{}", server.port),
-                    self.port_style(server.port).add_modifier(Modifier::BOLD),
-                ),
-                span(
-                    format!(
-                        " and its {}?",
-                        format::plural(server.processes.len(), "process", "processes")
+            let port = span(
+                format!(":{}", server.port),
+                self.port_style(server.port).add_modifier(Modifier::BOLD),
+            );
+            let question = if server.protected {
+                vec![
+                    span(format!("{} ", server.process_name), self.s.text1),
+                    port,
+                    span(" is protected. Stop it anyway?", self.s.text1),
+                ]
+            } else {
+                vec![
+                    span(format!("Stop {} ", server.project.name), self.s.text1),
+                    port,
+                    span(
+                        format!(
+                            " and its {}?",
+                            format::plural(server.processes.len(), "process", "processes")
+                        ),
+                        self.s.text1,
                     ),
-                    self.s.text1,
-                ),
-            ];
+                ]
+            };
             let keys = vec![
                 span("y", red.add_modifier(Modifier::BOLD)),
                 span(" Stop   ", red),

@@ -76,7 +76,7 @@ describe("keyboard", () => {
     press("o", { ctrlKey: true });
     expect(client.openUrl).toHaveBeenCalledWith("local", 3000);
     press("Backspace", { ctrlKey: true });
-    expect(client.call).toHaveBeenCalledWith("local", expect.objectContaining({ method: "stop", params: expect.objectContaining({ port: 3000 }) }));
+    expect(client.call).toHaveBeenCalledWith("local", expect.objectContaining({ method: "stop", params: expect.objectContaining({ port: 3000, confirm_protected: false }) }));
     press("Enter");
     press("r", { ctrlKey: true });
     expect(client.call).toHaveBeenCalledWith("local", expect.objectContaining({ method: "restart" }));
@@ -103,6 +103,108 @@ describe("keyboard", () => {
     press("ArrowDown");
     press(" ");
     expect(checked()).toEqual(["5173"]);
+  });
+});
+
+describe("protected servers", () => {
+  // :3000 as a protected postgres, to stop or restart only after a confirm.
+  let publish: (machines: Machine[]) => void;
+  const machinesWith = (pid: number): Machine[] => {
+    const servers = fixtureSnapshot.servers.map((server) =>
+      server.port === 3000 ? { ...server, process_name: "postgres", protected: true, root: { ...server.root, pid } } : server,
+    );
+    return [{ id: "local", label: "This Mac", host: null, state: "connected", snapshot: { ...fixtureSnapshot, servers } }];
+  };
+  beforeEach(() => {
+    const machines = machinesWith(fixtureSnapshot.servers[0].root.pid);
+    client = {
+      ...client,
+      machines: () => machines,
+      subscribe: (listener) => {
+        publish = listener;
+        return () => {};
+      },
+    };
+    act(() => root.unmount());
+    root = createRoot(host);
+    act(() => root.render(<Popover client={client} />));
+    press("ArrowDown");
+  });
+
+  const alert = () => document.querySelector("[role=alert]")?.getAttribute("aria-label");
+  const button = (label: string) => [...document.querySelectorAll("button")].find((b) => b.textContent === label || b.getAttribute("aria-label") === label);
+  const params = (method: string) => client.call.mock.calls.find(([, call]) => call.method === method)?.[1].params;
+
+  it("asks before the row's Stop, and stops on confirm", () => {
+    act(() => button("Stop, protected")?.click());
+    expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
+    expect(client.call).not.toHaveBeenCalled();
+    act(() => button("Stop")?.click());
+    expect(params("stop")).toMatchObject({ port: 3000, force: false, confirm_protected: true });
+  });
+
+  it("confirms only through the confirm's own button, never a repeated ⌘⌫", () => {
+    press("Backspace", { ctrlKey: true });
+    expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
+    press("Backspace", { ctrlKey: true });
+    press("Backspace", { ctrlKey: true, repeat: true });
+    expect(client.call).not.toHaveBeenCalled();
+    const stop = button("Stop") as HTMLButtonElement;
+    stop.focus();
+    // The panel leaves Enter on a focused button to the browser, which clicks it.
+    expect(press("Enter")).toBe(false);
+    act(() => stop.click());
+    expect(params("stop")).toMatchObject({ port: 3000, confirm_protected: true });
+    expect(client.call).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores a held ⌘R and a held ⌘⌫", () => {
+    press("r", { ctrlKey: true, repeat: true });
+    press("Backspace", { ctrlKey: true, repeat: true });
+    expect(alert()).toBeUndefined();
+    expect(client.call).not.toHaveBeenCalled();
+  });
+
+  it("cancels the confirm with Escape, on any row", () => {
+    press("Backspace", { ctrlKey: true });
+    press("ArrowDown");
+    expect(press("Escape")).toBe(true);
+    expect(alert()).toBeUndefined();
+    expect(client.call).not.toHaveBeenCalled();
+  });
+
+  it("never confirms on a double-click of the detail's Stop", () => {
+    press("Enter");
+    const stop = button("Stop, protected") as HTMLButtonElement;
+    act(() => stop.click());
+    act(() => stop.click());
+    act(() => stop.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+    expect(alert()).toBe("postgres :3000 is protected. Stop it anyway?");
+    expect(title()).toBe("port-process-manager");
+    expect(client.call).not.toHaveBeenCalled();
+  });
+
+  it("drops a confirm when another process takes the port", () => {
+    press("Backspace", { ctrlKey: true });
+    const stop = button("Stop") as HTMLButtonElement;
+    act(() => publish(machinesWith(99999)));
+    expect(alert()).toBeUndefined();
+    expect(stop.isConnected).toBe(false);
+    expect(client.call).not.toHaveBeenCalled();
+  });
+
+  it("keeps the detail open while a restart waits for its confirm", () => {
+    press("Enter");
+    press("r", { ctrlKey: true });
+    expect(alert()).toBe("postgres :3000 is protected. Restart it anyway?");
+    expect(title()).toBe("port-process-manager");
+    act(() => button("Cancel")?.click());
+    expect(alert()).toBeUndefined();
+    press("Backspace", { ctrlKey: true });
+    expect(title()).toBe("port-process-manager");
+    act(() => button("Stop")?.click());
+    expect(params("stop")).toMatchObject({ confirm_protected: true });
+    expect(client.call).toHaveBeenCalledTimes(1);
   });
 });
 

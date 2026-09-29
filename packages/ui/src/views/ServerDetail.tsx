@@ -1,8 +1,8 @@
 import type { Server } from "@ppm/protocol";
 import { type ReactNode, useState } from "react";
 import { CpuChart, MemoryChart, sampleNear } from "../charts.tsx";
-import { Colon, Header, Menu, type MenuItem } from "../components.tsx";
-import { copy, type ViewContext } from "../context.ts";
+import { Colon, Header, Menu, type MenuItem, ProtectedBadge, ProtectedConfirm } from "../components.tsx";
+import { confirmOf, copy, errorOf, type ViewContext } from "../context.ts";
 import { clock, clockSeconds, duration, memory, percent, shortPath, started } from "../format.ts";
 import { AgentIcon, Chevron, OpenIcon, RestartIcon, VercelIcon } from "../icons.tsx";
 import { agentName, commandHint, uptime, workspaceApp } from "../model.ts";
@@ -30,7 +30,8 @@ function DetailHeader({ ctx, server, onBack }: Props) {
   const up = uptime(server, ctx.now);
   const pending = ctx.pending.get(server.port);
   const restarting = pending === "restarting";
-  const error = typeof pending === "object" ? pending.error : null;
+  const error = errorOf(pending);
+  const confirm = confirmOf(pending);
   const canRestart = server.command !== null && server.cwd_exists;
   return (
     <div className="ppm:flex ppm:flex-col ppm:gap-2.5 ppm:px-4 ppm:pt-3 ppm:pb-4">
@@ -61,21 +62,26 @@ function DetailHeader({ ctx, server, onBack }: Props) {
             </button>
             <button
               type="button"
-              aria-label="Stop"
-              title={`Stop ${server.processes.length} ${server.processes.length === 1 ? "process" : "processes"}`}
+              aria-label={server.protected ? "Stop, protected" : "Stop"}
+              title={`${server.protected ? "Protected. " : ""}Stop ${server.processes.length} ${server.processes.length === 1 ? "process" : "processes"}`}
               onClick={() => {
-                ctx.stop(server);
-                onBack();
+                if (ctx.stop(server)) onBack();
               }}
-              className="ppm:flex ppm:size-[26px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:bg-danger/14 ppm:text-danger"
+              className="ppm:relative ppm:flex ppm:size-[26px] ppm:shrink-0 ppm:items-center ppm:justify-center ppm:rounded-[7px] ppm:bg-danger/14 ppm:text-danger"
             >
               <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden>
                 <rect x="2" y="2" width="8" height="8" rx="1.8" fill="currentColor" />
               </svg>
+              {server.protected && <ProtectedBadge />}
             </button>
           </div>
         </div>
       </div>
+      {confirm && (
+        <div className="ppm:flex ppm:items-center ppm:rounded-[9px] ppm:bg-warn/10 ppm:px-2.5 ppm:py-2">
+          <ProtectedConfirm ctx={ctx} server={server} action={confirm} />
+        </div>
+      )}
     </div>
   );
 }

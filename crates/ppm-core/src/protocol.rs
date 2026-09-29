@@ -117,7 +117,9 @@ pub struct Server {
     pub history: Vec<Sample>,
     #[ts(type = "number")]
     pub last_active: u64,
-    /// Matches the protected list (databases and similar). Never stopped by clean up.
+    /// A process in its tree matches the protected list (databases and
+    /// similar). Clean up never suggests it, and stop and restart need
+    /// `confirm_protected`.
     pub protected: bool,
     pub status: ServerStatus,
     /// Present when Clean up suggests stopping this server.
@@ -309,13 +311,24 @@ pub enum Call {
     /// Send a fresh snapshot now.
     Refresh,
     /// SIGTERM the server's tree (SIGKILL with `force`). Checks every ProcRef first.
+    /// Refuses a tree with a protected process unless `confirm_protected`.
     Stop {
         port: u16,
         root: ProcRef,
         force: bool,
+        #[serde(default)]
+        #[ts(as = "Option<bool>", optional)]
+        confirm_protected: bool,
     },
-    /// Stop, then run `command` again in `launch_dir`.
-    Restart { port: u16, root: ProcRef },
+    /// Stop, then run `command` again in `launch_dir`. Refuses a protected
+    /// tree unless `confirm_protected`, like `Stop`.
+    Restart {
+        port: u16,
+        root: ProcRef,
+        #[serde(default)]
+        #[ts(as = "Option<bool>", optional)]
+        confirm_protected: bool,
+    },
     /// Replace the scanner config for this connection.
     Configure(Config),
 }
@@ -338,7 +351,7 @@ pub struct Config {
     pub idle_after_secs: u64,
     #[ts(type = "number")]
     pub long_running_after_secs: u64,
-    /// Process names clean up never suggests, such as `postgres`.
+    /// Process names clean up never suggests and stop asks to confirm, such as `postgres`.
     pub protected: Vec<String>,
 }
 

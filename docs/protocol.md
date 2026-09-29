@@ -161,7 +161,7 @@ The full state. It's sent after `hello`, after every scan where something other 
 | `connections` | Open connections to the port |
 | `history` | Samples covering up to the last 10 minutes, oldest first. Don't assume a fixed spacing. |
 | `last_active` | Last time the server had connections or used CPU |
-| `protected` | Its name is on the protected list, such as `postgres`. Clean up never suggests it. |
+| `protected` | A process in its tree is on the protected list, such as `postgres`. Clean up never suggests it, and `stop` and `restart` need `confirm_protected`. |
 | `status` | `running`, `attention` (over the memory threshold or leaking) or `idle` (idle for over an hour, or its folder is gone) |
 | `clean_up` | Why Clean up suggests stopping it, or `null` |
 
@@ -224,8 +224,10 @@ Scan now and send a fresh snapshot, even if nothing changed.
 
 Stop a server's process tree, deepest processes first. `ppm` asks each process to quit, and kills whatever is left after 3 s. With `force: true`, it kills at once. On macOS and Linux, asking is SIGTERM and killing is SIGKILL. On Windows, asking sends Ctrl+C to the server's console when only the server and the shells that launched it are on that console. Otherwise it closes the process's windows, or terminates a process that has none. Killing terminates it. `port` is the server's port, and `root` must be the server's `root` from the snapshot. `ppm` checks every process's start time first, so it never signals a process whose pid was reused.
 
+A server is protected when any process in its tree is on the `protected` list, such as `postgres`. `ppm` refuses to stop it unless `confirm_protected` is `true`, and the error `result` names the protected process, such as `postgres :5432 is protected; send confirm_protected to stop it anyway`. `confirm_protected` defaults to `false`. Clients ask the user before sending `true`.
+
 ```json
-{ "id": 2, "method": "stop", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "force": false } }
+{ "id": 2, "method": "stop", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "force": false, "confirm_protected": false } }
 ```
 
 The result arrives as soon as the processes are asked to quit. The server leaves the snapshot once its tree is gone.
@@ -234,10 +236,10 @@ The result arrives as soon as the processes are asked to quit. The server leaves
 
 Stop the server, then run its `command` again in its `launch_dir`, detached from `ppm`. The result arrives as soon as the old tree is asked to quit. Once that tree is gone and `port` is free, `ppm` starts the command, and the new server shows up in a later snapshot.
 
-An error `result` covers what `ppm` can check up front: the process changed, or its command or folder can't be read. A failure after that gets no second `result`. The server just doesn't come back on `port` in the snapshots over the next 10 s or so. The new server's output is in `port-process-manager/port-<port>.log` in the system temp folder (`$TMPDIR` or `%TEMP%`), and a failure to start it is one line on `ppm`'s stderr.
+A protected server needs `confirm_protected: true`, as for `stop`. An error `result` covers what `ppm` can check up front: the server is protected, the process changed, or its command or folder can't be read. A failure after that gets no second `result`. The server just doesn't come back on `port` in the snapshots over the next 10 s or so. The new server's output is in `port-process-manager/port-<port>.log` in the system temp folder (`$TMPDIR` or `%TEMP%`), and a failure to start it is one line on `ppm`'s stderr.
 
 ```json
-{ "id": 3, "method": "restart", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 } } }
+{ "id": 3, "method": "restart", "params": { "port": 3000, "root": { "pid": 48198, "started_at": 1790183520000 }, "confirm_protected": false } }
 ```
 
 ### configure
@@ -271,7 +273,7 @@ These are the defaults.
 | `leak_growth` | Growth over the history window that counts as leaking |
 | `idle_after_secs` | Idle time after which Clean up suggests a server |
 | `long_running_after_secs` | Uptime after which Clean up suggests a server |
-| `protected` | Process names Clean up never suggests |
+| `protected` | Process names that protect a server: Clean up never suggests it, and `stop` and `restart` need `confirm_protected` |
 
 ## Versioning
 

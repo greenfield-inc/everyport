@@ -14,6 +14,6 @@ alert_memory: number,
  */
 leak_growth: number, idle_after_secs: number, long_running_after_secs: number, 
 /**
- * Process names clean up never suggests, such as `postgres`.
+ * Process names clean up never suggests and stop asks to confirm, such as `postgres`.
  */
 protected: Array<string>, };

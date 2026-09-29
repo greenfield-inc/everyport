@@ -143,8 +143,17 @@ impl Engine {
                 Ok(())
             }
             Call::Refresh => Ok(()),
-            Call::Stop { root, force, .. } => self.stop(*root, *force),
-            Call::Restart { port, root } => self.restart(*port, *root),
+            Call::Stop {
+                port,
+                root,
+                force,
+                confirm_protected,
+            } => self.stop(*port, *root, *force, *confirm_protected),
+            Call::Restart {
+                port,
+                root,
+                confirm_protected,
+            } => self.restart(*port, *root, *confirm_protected),
         }
     }
 
@@ -248,8 +257,7 @@ impl Engine {
         let launch_dir = self.details(launcher).and_then(|d| d.cwd.clone());
         let command = root_details.map(|d| command::pretty(&d.args, &root.name));
         let (workspace, agent) = self.links(table, listener, root, cwd.as_deref());
-        let name = tree::stem(&listener.name);
-        let protected = self.config.protected.iter().any(|n| tree::stem(n) == name);
+        let protected = protected(&members, &self.config).is_some();
 
         let mut server = Server {
             port,
@@ -369,6 +377,14 @@ impl Engine {
             .map(|p| self.details(p).map(|d| (*d).clone()).unwrap_or_default())
             .collect()
     }
+}
+
+/// The first process of a tree on the protected list.
+fn protected<'a>(members: &[(&'a ProcInfo, u32)], config: &Config) -> Option<&'a ProcInfo> {
+    members.iter().map(|(p, _)| *p).find(|p| {
+        let name = tree::stem(&p.name);
+        config.protected.iter().any(|n| tree::stem(n) == name)
+    })
 }
 
 /// A port as the listener table reports it.

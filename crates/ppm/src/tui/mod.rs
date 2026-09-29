@@ -394,6 +394,7 @@ impl App {
                         port: server.port,
                         root: server.root,
                         force: false,
+                        confirm_protected: false,
                     });
                 }
                 self.set_cleaning(false);
@@ -504,10 +505,12 @@ impl App {
         let Some(server) = self.server(port).cloned() else {
             return;
         };
+        // The user confirmed, and the prompt named a protected server as such.
         self.send(Call::Stop {
             port,
             root: server.root,
             force: false,
+            confirm_protected: true,
         });
         if self.page == Page::Detail(port) {
             self.page = Page::Servers;
@@ -526,9 +529,18 @@ impl App {
             );
             return;
         }
+        if server.protected {
+            let text = format!(
+                "{} :{} is protected. Run `ppm restart {} --protected` to restart it.",
+                server.process_name, server.port, server.port
+            );
+            self.show(text, true);
+            return;
+        }
         self.send(Call::Restart {
             port: server.port,
             root: server.root,
+            confirm_protected: false,
         });
         let text = match &server.agent {
             Some(agent) => format!(

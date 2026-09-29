@@ -1,8 +1,8 @@
 import type { OtherPort, Server } from "@ppm/protocol";
 import { useEffect, useRef, useState } from "react";
 import { Sparkline } from "../charts.tsx";
-import { Colon, Grow, Header, useLeaving } from "../components.tsx";
-import type { Pending, ViewContext } from "../context.ts";
+import { Colon, Grow, Header, ProtectedBadge, ProtectedConfirm, useLeaving } from "../components.tsx";
+import { confirmOf, errorOf, type Pending, type ViewContext } from "../context.ts";
 import { memory, memoryParts, percent, total, totalParts } from "../format.ts";
 import { AgentIcon, BranchIcon, BroomIcon, Chevron, DotGrid, GearIcon, OpenIcon, StopIcon, WorkspaceIcon } from "../icons.tsx";
 import { isGone, preselected, rowContext } from "../model.ts";
@@ -212,9 +212,10 @@ function Row({
 }) {
   const attention = server.status === "attention";
   const context = rowContext(server, ctx.now, ctx.alertMemory);
-  const note =
-    pending === "stopping" ? "Stopping…" : pending === "restarting" ? "Restarting…" : (pending?.error ?? null);
-  const warn = note ? typeof pending === "object" : context.warn;
+  const confirm = confirmOf(pending);
+  const error = errorOf(pending);
+  const note = pending === "stopping" ? "Stopping…" : pending === "restarting" ? "Restarting…" : error;
+  const warn = note ? error !== null : context.warn;
   const opacity = dimmed ? 0.35 : pending === "stopping" || isGone(server) ? 0.55 : 1;
   const icon = server.agent ? (
     <AgentIcon kind={server.agent.kind} />
@@ -236,55 +237,63 @@ function Row({
     >
       <Colon status={server.status} color={ctx.colorOf(server.port)} />
       <span className="ppm:w-[46px] ppm:shrink-0 ppm:font-mono ppm:text-13 ppm:font-medium ppm:text-fg">{server.port}</span>
-      <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px ppm:pr-2.5">
-        <div className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1.5 ppm:overflow-clip">
-          <span className="ppm:shrink-0 ppm:whitespace-pre ppm:text-13 ppm:font-medium ppm:text-fg">{server.project.name}</span>
-          {server.project.branch && (
-            <span className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1 ppm:text-fg2">
-              <BranchIcon />
-              <span className="ppm:clamp-1 ppm:text-13">{server.project.branch}</span>
-            </span>
-          )}
-        </div>
-        <div className={`ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-[5px] ppm:text-11 ${warn ? "ppm:text-warn" : "ppm:text-fg2"}`}>
-          {!note && !warn && icon}
-          <span className="ppm:clamp-1">{note ?? context.text}</span>
-        </div>
-      </div>
-      {active ? (
-        // Pointer shortcuts; the keyboard has ⌘O and ⌘⌫, so they stay out of the listbox's tab order.
-        <span className="ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-0.5" aria-hidden>
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label="Open in browser"
-            onClick={(event) => {
-              event.stopPropagation();
-              ctx.open(server);
-            }}
-            className="ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:bg-accent ppm:text-fg ppm:hover:bg-[color-mix(in_oklab,var(--accent),var(--foreground)_8%)]"
-          >
-            <OpenIcon />
-          </button>
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label="Stop"
-            onClick={(event) => {
-              event.stopPropagation();
-              ctx.stop(server);
-            }}
-            className="ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:text-fg/80 ppm:hover:bg-accent"
-          >
-            <StopIcon />
-          </button>
-        </span>
+      {confirm ? (
+        <ProtectedConfirm ctx={ctx} server={server} action={confirm} />
       ) : (
-        <Sparkline history={server.history} warn={attention} />
+        <>
+          <div className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px ppm:pr-2.5">
+            <div className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1.5 ppm:overflow-clip">
+              <span className="ppm:shrink-0 ppm:whitespace-pre ppm:text-13 ppm:font-medium ppm:text-fg">{server.project.name}</span>
+              {server.project.branch && (
+                <span className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1 ppm:text-fg2">
+                  <BranchIcon />
+                  <span className="ppm:clamp-1 ppm:text-13">{server.project.branch}</span>
+                </span>
+              )}
+            </div>
+            <div className={`ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-[5px] ppm:text-11 ${warn ? "ppm:text-warn" : "ppm:text-fg2"}`}>
+              {!note && !warn && icon}
+              <span className="ppm:clamp-1">{note ?? context.text}</span>
+            </div>
+          </div>
+          {active ? (
+            // Pointer shortcuts; the keyboard has ⌘O and ⌘⌫, so they stay out of the listbox's tab order.
+            <span className="ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-0.5" aria-hidden>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label="Open in browser"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  ctx.open(server);
+                }}
+                className="ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:bg-accent ppm:text-fg ppm:hover:bg-[color-mix(in_oklab,var(--accent),var(--foreground)_8%)]"
+              >
+                <OpenIcon />
+              </button>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={server.protected ? "Stop, protected" : "Stop"}
+                title={server.protected ? "Protected. Stop asks first." : undefined}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  ctx.stop(server);
+                }}
+                className="ppm:relative ppm:flex ppm:size-[22px] ppm:items-center ppm:justify-center ppm:rounded-md ppm:text-fg/80 ppm:hover:bg-accent"
+              >
+                <StopIcon />
+                {server.protected && <ProtectedBadge />}
+              </button>
+            </span>
+          ) : (
+            <Sparkline history={server.history} warn={attention} />
+          )}
+          <span className={`ppm:w-[58px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${attention ? "ppm:text-warn" : "ppm:text-fg/85"}`}>
+            {memory(server.memory)}
+          </span>
+        </>
       )}
-      <span className={`ppm:w-[58px] ppm:shrink-0 ppm:text-right ppm:font-mono ppm:text-13 ${attention ? "ppm:text-warn" : "ppm:text-fg/85"}`}>
-        {memory(server.memory)}
-      </span>
     </div>
   );
 }

@@ -1,6 +1,8 @@
-import type { ServerStatus } from "@ppm/protocol";
-import { type KeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { BackIcon } from "./icons.tsx";
+import type { Server, ServerStatus } from "@ppm/protocol";
+import { type KeyboardEvent, type MouseEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ViewContext } from "./context.ts";
+import { BackIcon, LockIcon } from "./icons.tsx";
+import { type Action, actionLabel, protectedNote } from "./model.ts";
 
 /** Centred page title with an optional back button. */
 export function Header({ title, onBack }: { title: string; onBack?: () => void }) {
@@ -152,3 +154,52 @@ export function Grow({ leaving = false, children }: { leaving?: boolean; childre
     </div>
   );
 }
+
+/**
+ * "postgres is protected. Stop it anyway?" with Cancel and the action, in
+ * place of a server's details. The port shows beside it; the alert's label
+ * includes it.
+ */
+export function ProtectedConfirm({ ctx, server, action }: { ctx: ViewContext; server: Server; action: Action }) {
+  const label = actionLabel[action];
+  const act = (event: MouseEvent<HTMLElement>, run: () => void) => {
+    event.stopPropagation();
+    // The confirm unmounts; keep the keyboard on the list or panel.
+    event.currentTarget.closest<HTMLElement>("[role=listbox], .ppm-panel")?.focus();
+    run();
+  };
+  return (
+    <>
+      <div
+        role="alert"
+        aria-label={`${protectedNote([server])}. ${label} it anyway?`}
+        className="ppm:flex ppm:min-w-0 ppm:flex-1 ppm:flex-col ppm:gap-px ppm:pr-2.5"
+      >
+        <span className="ppm:flex ppm:min-w-0 ppm:items-center ppm:gap-1.5 ppm:text-13 ppm:font-medium ppm:text-fg">
+          <LockIcon className="ppm:text-warn" />
+          <span className="ppm:clamp-1">{server.process_name} is protected.</span>
+        </span>
+        <span className="ppm:clamp-1 ppm:text-11 ppm:text-warn">{label} it anyway?</span>
+      </div>
+      <span className="ppm:flex ppm:shrink-0 ppm:items-center ppm:gap-1.5">
+        <button type="button" onClick={(event) => act(event, ctx.cancel)} className="ppm:rounded-md ppm:bg-accent ppm:px-2.5 ppm:py-1 ppm:text-11 ppm:font-medium ppm:text-fg">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={(event) => act(event, () => ctx.confirm(server))}
+          className="ppm:rounded-md ppm:bg-danger-fill ppm:px-2.5 ppm:py-1 ppm:text-11 ppm:font-medium ppm:text-on-danger"
+        >
+          {label}
+        </button>
+      </span>
+    </>
+  );
+}
+
+/** A lock on a Stop button: the server is protected, so Stop asks first. */
+export const ProtectedBadge = () => (
+  <span className="ppm:absolute ppm:-right-1 ppm:-bottom-1 ppm:flex ppm:rounded-full ppm:bg-panel ppm:p-px ppm:text-warn">
+    <LockIcon className="ppm:size-[9px]" />
+  </span>
+);
