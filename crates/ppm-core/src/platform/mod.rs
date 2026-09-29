@@ -3,6 +3,7 @@
 //! code only where they are wrong or slow (see docs/architecture.md).
 
 use crate::protocol::ProcRef;
+use std::collections::HashMap;
 use std::io;
 
 /// A TCP socket in LISTEN state.
@@ -55,6 +56,19 @@ pub trait Platform: Send + Sync {
     /// Terminate (or kill, with `force`) one process. Must return an error,
     /// without signalling, when `target.started_at` no longer matches.
     fn signal(&self, target: ProcRef, force: bool) -> io::Result<()>;
+    /// Established inbound TCP connections, counted by local port. The engine
+    /// uses them to tell an idle server from one in use.
+    fn connections(&self) -> HashMap<u16, u32> {
+        HashMap::new()
+    }
+    /// The full environment of a process, which `restart` launches with.
+    fn environment(&self, _pid: u32) -> Option<Vec<(String, String)>> {
+        None
+    }
+    /// Unix milliseconds. Only a test platform overrides it.
+    fn now_ms(&self) -> u64 {
+        crate::now_ms()
+    }
 }
 
 /// True when a Windows listener belongs to WSL, so its port shows under the
