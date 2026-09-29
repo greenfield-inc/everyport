@@ -89,6 +89,14 @@ impl Engine {
         let mut ports: BTreeMap<u16, (u32, Vec<String>)> = BTreeMap::new();
         let listeners = self.platform.listeners().unwrap_or_default();
         self.advance(&table, &listeners, now);
+        // A launcher that runs several listening processes, such as a script
+        // starting a proxy and an API, gives each server its own process.
+        // Ports outside the range count, so a server never takes one along.
+        let mut launched: HashMap<ProcRef, HashSet<ProcRef>> = HashMap::new();
+        for info in listeners.iter().filter_map(|l| table.get(l.pid)) {
+            let top = self.climb(&table, info);
+            launched.entry(top.proc).or_default().insert(info.proc);
+        }
         for l in listeners.into_iter().filter(|l| range.contains(&l.port)) {
             let (pid, addresses) = ports.entry(l.port).or_insert((l.pid, Vec::new()));
             if *pid == l.pid && !addresses.contains(&l.address) {
@@ -101,7 +109,11 @@ impl Engine {
             let Some(listener) = table.get(pid).filter(|_| pid != own_pid) else {
                 continue;
             };
-            let root = self.climb(&table, listener);
+            let top = self.climb(&table, listener);
+            let root = match launched[&top.proc].len() {
+                1 => top,
+                _ => listener,
+            };
             let connections = connections
                 .as_ref()
                 .map(|counts| counts.get(&port).copied().unwrap_or(0));
@@ -113,21 +125,6 @@ impl Engine {
                 connections,
             });
         }
-        // A launcher that runs several servers, such as a script starting a
-        // proxy and an API, has one row per port, each with its own process.
-        let shared: Vec<bool> = seen
-            .iter()
-            .map(|s| {
-                seen.iter()
-                    .any(|o| o.root.proc == s.root.proc && o.listener.proc != s.listener.proc)
-            })
-            .collect();
-        for (s, shared) in seen.iter_mut().zip(shared) {
-            if shared {
-                s.root = s.listener;
-            }
-        }
-
         let mut usage = HashMap::new();
         let mut servers = Vec::new();
         for seen in seen {

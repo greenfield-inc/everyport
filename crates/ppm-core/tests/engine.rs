@@ -316,6 +316,30 @@ fn servers_sharing_a_launcher_each_show_their_own_process() {
 }
 
 /// An ssh connection multiplexer forwarding three ports.
+/// `npm run dev` runs the app on :3000 and a proxy on :808, below the range.
+#[test]
+fn a_launcher_sharing_with_a_port_outside_the_range_still_splits() {
+    let fake = Fake::new();
+    next_dev(&fake);
+    fake.run(
+        240,
+        200,
+        "node",
+        &["node", "proxy.mjs"],
+        project_dir(),
+        HOUR,
+    );
+    fake.listen(808, 240, "127.0.0.1");
+    fake.set_usage(220, 100 * MB, 0);
+    fake.set_usage(240, 50 * MB, 0);
+
+    let (snapshot, _) = fake.engine().scan();
+    let server = only_server(&snapshot);
+
+    assert_eq!(server.root, fake.proc_ref(220));
+    assert_eq!(server.memory, 100 * MB);
+}
+
 #[test]
 fn a_process_on_several_ports_counts_its_memory_once() {
     let fake = Fake::new();
@@ -1120,6 +1144,7 @@ fn restart_reruns_the_launch_command_with_its_environment() {
 
 /// `npm run dev` runs Next.js and Redis. Restarting :3000 reruns only
 /// `sh -c "next dev"`, never Turbopack's worker or the shared `npm run dev`.
+#[cfg(unix)]
 #[test]
 fn restart_of_a_server_sharing_its_launcher_reruns_only_that_server() {
     let dir = std::env::temp_dir().join(format!("ppm-restart-shared-{}", std::process::id()));

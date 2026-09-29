@@ -69,6 +69,7 @@ impl Engine {
             .into_iter()
             .find(|l| l.port == port)
             .and_then(|l| table.get(l.pid))
+            .filter(|l| table.tree(root_info).iter().any(|(p, _)| p.proc == l.proc))
             .unwrap_or(root_info);
         let launcher = self.launcher(&table, listener, root_info);
         let details = self.details(launcher);

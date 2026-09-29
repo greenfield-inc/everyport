@@ -149,15 +149,18 @@ const SYSTEM_PREFIXES: &[&str] = &[
     "/home/linuxbrew/.linuxbrew",
 ];
 
-/// Walks up from `cwd` to the nearest git root (or the home folder or a
-/// system prefix), taking the nearest manifest on the way.
+/// Walks up from `cwd` to the nearest git root, taking the nearest manifest
+/// on the way. It stops below the home folder, a system prefix and `/`.
 fn resolve(cwd: &Path) -> (Vec<PathBuf>, Resolved) {
     let home = home();
     let in_system = SYSTEM_PREFIXES.iter().any(|p| cwd.starts_with(p));
     let mut manifest: Option<(PathBuf, Manifest)> = None;
     let mut git = None;
     for dir in cwd.ancestors() {
-        if home.as_deref() == Some(dir) || SYSTEM_PREFIXES.iter().any(|p| dir == Path::new(p)) {
+        if home.as_deref() == Some(dir)
+            || dir.parent().is_none()
+            || SYSTEM_PREFIXES.iter().any(|p| dir == Path::new(p))
+        {
             break;
         }
         if manifest.is_none() {
