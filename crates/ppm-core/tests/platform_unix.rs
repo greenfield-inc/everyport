@@ -3,31 +3,66 @@
 
 use ppm_core::platform::{native, Listener, ProcInfo};
 use ppm_core::protocol::ProcRef;
+use std::io;
 use std::net::TcpListener;
-use std::os::unix::process::ExitStatusExt;
+use std::os::unix::process::{CommandExt, ExitStatusExt};
 use std::path::PathBuf;
 use std::process::{Child, Command};
+use std::thread::sleep;
 use std::time::Duration;
 
-/// A copy of `sleep` named `name` in a fresh folder. macOS hides the
-/// environment of Apple's own binaries, so tests don't run `/bin/sleep`.
-fn sleep_copy(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("ppm-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let program = dir.canonicalize().unwrap().join(name);
-    let sleep = Command::new("sh")
-        .args(["-c", "command -v sleep"])
-        .output()
-        .unwrap();
-    let sleep = String::from_utf8(sleep.stdout).unwrap();
-    if !program.exists() {
-        std::fs::copy(sleep.trim(), &program).unwrap();
+/// A copy of `sleep` named `name` in its own folder, removed on drop. macOS
+/// hides the environment of Apple's own binaries, so tests don't run
+/// `/bin/sleep` when they read it.
+struct SleepCopy {
+    program: PathBuf,
+}
+
+impl SleepCopy {
+    fn new(name: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("ppm-test-{}-{name}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let program = dir.canonicalize().unwrap().join(name);
+        let sleep = Command::new("sh")
+            .args(["-c", "command -v sleep"])
+            .output()
+            .unwrap();
+        std::fs::copy(String::from_utf8(sleep.stdout).unwrap().trim(), &program).unwrap();
+        Self { program }
     }
-    program
+}
+
+impl Drop for SleepCopy {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(self.program.parent().unwrap());
+    }
+}
+
+/// Spawns `command` and returns once it runs its own program. On Linux, a
+/// freshly copied program can be busy while another test's fork still holds
+/// it open for writing, and a child shows this process's arguments until its
+/// exec finishes.
+fn start(command: &mut Command) -> Child {
+    let child = loop {
+        match command.spawn() {
+            Err(e) if e.kind() == io::ErrorKind::ExecutableFileBusy => {
+                sleep(Duration::from_millis(10))
+            }
+            spawned => break spawned.unwrap(),
+        }
+    };
+    let ours: Vec<String> = std::env::args().collect();
+    for _ in 0..500 {
+        match native().details(child.id(), &[]) {
+            Some(d) if !d.args.is_empty() && d.args != ours => return child,
+            _ => sleep(Duration::from_millis(10)),
+        }
+    }
+    panic!("{command:?} did not start");
 }
 
 fn sleeper() -> Child {
-    Command::new("sleep").arg("30").spawn().unwrap()
+    start(Command::new("sleep").arg("30"))
 }
 
 fn proc_info(pid: u32) -> ProcInfo {
@@ -73,9 +108,9 @@ fn listeners_include_sockets_we_bind() {
 #[test]
 fn processes_report_name_parent_and_start_time() {
     // `/proc/<pid>/stat` wraps the name in parentheses.
-    let program = sleep_copy("we) ird");
+    let copy = SleepCopy::new("we) ird");
     let spawned_at = ppm_core::now_ms();
-    let mut child = Command::new(&program).arg("30").spawn().unwrap();
+    let mut child = start(Command::new(&copy.program).arg("30"));
 
     let info = proc_info(child.id());
     child.kill().unwrap();
@@ -91,15 +126,17 @@ fn processes_report_name_parent_and_start_time() {
 
 #[test]
 fn details_report_cwd_args_and_only_requested_env() {
-    let program = sleep_copy("ppm-details");
-    let dir = program.parent().unwrap();
-    let mut child = Command::new(&program)
-        .arg("30")
-        .current_dir(dir)
-        .env("PPM_TEST_SESSION", "abc=123")
-        .env("PPM_TEST_OTHER", "x")
-        .spawn()
-        .unwrap();
+    let copy = SleepCopy::new("ppm-details");
+    let dir = copy.program.parent().unwrap();
+    // An empty argv[0] must keep its place.
+    let mut child = start(
+        Command::new(&copy.program)
+            .arg0("")
+            .arg("30")
+            .current_dir(dir)
+            .env("PPM_TEST_SESSION", "abc=123")
+            .env("PPM_TEST_OTHER", "x"),
+    );
 
     let details = native().details(child.id(), &["PPM_TEST_SESSION", "PPM_TEST_MISSING"]);
     child.kill().unwrap();
@@ -107,7 +144,7 @@ fn details_report_cwd_args_and_only_requested_env() {
 
     let details = details.expect("own process is readable");
     assert_eq!(details.cwd.as_deref(), dir.to_str());
-    assert_eq!(details.args, [program.to_str().unwrap(), "30"]);
+    assert_eq!(details.args, ["", "30"]);
     assert_eq!(
         details.env,
         [("PPM_TEST_SESSION".to_string(), "abc=123".to_string())]
@@ -153,7 +190,7 @@ fn signal_checks_the_start_time_first() {
         ..seen
     };
     assert!(platform.signal(stale, false).is_err());
-    std::thread::sleep(Duration::from_millis(100));
+    sleep(Duration::from_millis(100));
     assert!(
         child.try_wait().unwrap().is_none(),
         "stale ProcRef was signalled"
