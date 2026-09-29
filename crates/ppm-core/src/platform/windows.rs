@@ -16,6 +16,7 @@ use std::io;
 use std::mem::{offset_of, MaybeUninit};
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use windows::core::{Owned, BOOL, PCWSTR, PWSTR};
 use windows::Wdk::System::Threading::{
     NtQueryInformationProcess, ProcessBasicInformation, ProcessCommandLineInformation,
@@ -72,6 +73,19 @@ pub struct Windows {
     user: Option<Sid>,
     /// Account names by SID, since a lookup can ask a domain controller.
     names: Mutex<HashMap<Sid, Option<String>>>,
+    /// A scan asks for listeners and other listeners back to back, so one
+    /// read younger than `LISTENERS_MAX_AGE` serves both.
+    listeners: Mutex<Option<(Instant, Vec<OwnedListener>)>>,
+}
+
+const LISTENERS_MAX_AGE: Duration = Duration::from_millis(500);
+
+/// A listening socket and the user its process runs as, when we may read it.
+#[derive(Clone)]
+struct OwnedListener {
+    listener: Listener,
+    user: Option<Sid>,
+    ours: bool,
 }
 
 /// A security identifier's bytes. Equal SIDs have equal bytes.
@@ -83,28 +97,41 @@ impl Windows {
             last_cpu: Mutex::new(None),
             user: token_user(unsafe { GetCurrentProcess() }),
             names: Mutex::new(HashMap::new()),
+            listeners: Mutex::new(None),
         }
     }
 
-    /// Every listening socket, with the user its process runs as when we may
-    /// read it, and whether that user is us.
-    fn owned_listeners(&self) -> io::Result<Vec<(Listener, Option<Sid>, bool)>> {
+    /// Every listening socket, with its process's user.
+    fn owned_listeners(&self) -> io::Result<Vec<OwnedListener>> {
+        let mut cached = self.listeners.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((at, listeners)) = cached.as_ref() {
+            if at.elapsed() < LISTENERS_MAX_AGE {
+                return Ok(listeners.clone());
+            }
+        }
         let mut users = HashMap::new();
-        Ok(all_listeners()?
+        let listeners: Vec<OwnedListener> = all_listeners()?
             .into_iter()
-            .map(|l| {
+            .map(|listener| {
                 let user: Option<Sid> = users
-                    .entry(l.pid)
+                    .entry(listener.pid)
                     .or_insert_with(|| {
-                        let process = Process::open(l.pid, PROCESS_QUERY_LIMITED_INFORMATION);
+                        let process =
+                            Process::open(listener.pid, PROCESS_QUERY_LIMITED_INFORMATION);
                         process.ok().and_then(|p| token_user(*p.0))
                     })
                     .clone();
                 // Without our own SID, every port counts as ours.
                 let ours = self.user.is_none() || user == self.user;
-                (l, user, ours)
+                OwnedListener {
+                    listener,
+                    user,
+                    ours,
+                }
             })
-            .collect())
+            .collect();
+        *cached = Some((Instant::now(), listeners.clone()));
+        Ok(listeners)
     }
 
     fn account_name(&self, sid: &Sid) -> Option<String> {
@@ -121,7 +148,8 @@ impl Platform for Windows {
         Ok(self
             .owned_listeners()?
             .into_iter()
-            .filter_map(|(l, _, ours)| ours.then_some(l))
+            .filter(|l| l.ours)
+            .map(|l| l.listener)
             .collect())
     }
 
@@ -129,12 +157,12 @@ impl Platform for Windows {
         Ok(self
             .owned_listeners()?
             .into_iter()
-            .filter(|(_, _, ours)| !ours)
-            .map(|(l, user, _)| OtherListener {
-                port: l.port,
-                address: l.address,
-                owner: user.and_then(|sid| self.account_name(&sid)),
-                pid: Some(l.pid),
+            .filter(|l| !l.ours)
+            .map(|l| OtherListener {
+                port: l.listener.port,
+                owner: l.user.and_then(|sid| self.account_name(&sid)),
+                pid: Some(l.listener.pid),
+                address: l.listener.address,
             })
             .collect())
     }
