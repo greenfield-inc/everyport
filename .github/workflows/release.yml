@@ -1,0 +1,84 @@
+# A v* tag push builds, signs and publishes a release. Run it by hand on a
+# branch for a dry run: everything builds and is kept as workflow artifacts,
+# and nothing is published.
+name: Release
+on:
+  push: { tags: ["v*"] }
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with: { bundles: true }
+    secrets: inherit
+
+  github:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: release, path: release }
+      - run: gh release create "$GITHUB_REF_NAME" release/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        env: { GH_TOKEN: "${{ github.token }}" }
+
+  npm:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    permissions: { contents: read, id-token: write }
+    env: { NODE_AUTH_TOKEN: "${{ secrets.NPM_TOKEN }}" }
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, registry-url: "https://registry.npmjs.org" }
+      - uses: actions/download-artifact@v4
+        with: { name: packages, path: packages }
+      - run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::notice::Skipping npm publish: NPM_TOKEN is not set."
+            exit 0
+          fi
+          npm publish packages/port-process-manager-*.tgz --provenance --access public
+
+  pypi:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    env: { UV_PUBLISH_TOKEN: "${{ secrets.PYPI_API_TOKEN }}" }
+    steps:
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with: { name: packages, path: packages }
+      - run: |
+          if [ -z "$UV_PUBLISH_TOKEN" ]; then
+            echo "::notice::Skipping PyPI publish: PYPI_API_TOKEN is not set."
+            exit 0
+          fi
+          uv publish packages/port_process_manager-*
+
+  homebrew:
+    if: github.ref_type == 'tag'
+    needs: github
+    runs-on: ubuntu-latest
+    env: { TAP_TOKEN: "${{ secrets.HOMEBREW_TAP_TOKEN }}" }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: packages, path: packages }
+      - run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::notice::Skipping the Homebrew tap update: HOMEBREW_TAP_TOKEN is not set."
+            exit 0
+          fi
+          git clone "https://x-access-token:$TAP_TOKEN@github.com/greenfield-inc/homebrew-tap.git" tap
+          mkdir -p tap/Formula tap/Casks
+          cp packages/ppm.rb tap/Formula/
+          cp packages/port-process-manager.rb tap/Casks/
+          cd tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula Casks
+          git commit -m "ppm and port-process-manager $GITHUB_REF_NAME"
+          git push

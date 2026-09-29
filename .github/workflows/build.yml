@@ -1,0 +1,184 @@
+# Builds everything a release ships and tests the installers against it.
+# CI and Release both call this. It never publishes anything.
+name: Build
+on:
+  workflow_call:
+    inputs:
+      bundles:
+        description: Also build the desktop app bundles
+        type: boolean
+        default: false
+
+jobs:
+  binaries:
+    name: ppm ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, build: zigbuild }
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-latest, build: zigbuild }
+          - { target: aarch64-apple-darwin, os: macos-latest, build: build }
+          - { target: x86_64-apple-darwin, os: macos-latest, build: build }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, build: build, exe: .exe }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest, build: build, exe: .exe }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.target }}" }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ". -> target.noindex", key: "${{ matrix.target }}" }
+      - if: matrix.build == 'zigbuild'
+        uses: mlugg/setup-zig@v2
+        with: { version: 0.14.1 }
+      - if: matrix.build == 'zigbuild'
+        uses: taiki-e/install-action@v2
+        with: { tool: cargo-zigbuild }
+      - name: Build
+        shell: bash
+        run: |
+          cargo ${{ matrix.build }} -p port-process-manager --release --locked --target ${{ matrix.target }}
+          mkdir out
+          cp target.noindex/${{ matrix.target }}/release/ppm${{ matrix.exe }} out/ppm-${{ matrix.target }}${{ matrix.exe }}
+      - uses: actions/upload-artifact@v4
+        with: { name: "bin-${{ matrix.target }}", path: out/*, if-no-files-found: error }
+
+  bundles:
+    name: app ${{ matrix.target }}
+    if: inputs.bundles
+    needs: binaries
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, os: macos-latest, bundles: dmg }
+          - { target: x86_64-apple-darwin, os: macos-latest, bundles: dmg }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, bundles: msi, exe: .exe }
+          # The static musl ppm serves as the sidecar on glibc Linux too.
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, bundles: "deb,rpm,appimage", sidecar: x86_64-unknown-linux-musl }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { targets: "${{ matrix.target }}" }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ". -> target.noindex", key: "app-${{ matrix.target }}" }
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with: { name: "bin-${{ matrix.sidecar || matrix.target }}", path: sidecar }
+      - name: Stage the ppm sidecar
+        shell: bash
+        run: |
+          mkdir -p apps/desktop/src-tauri/binaries
+          cp sidecar/* apps/desktop/src-tauri/binaries/ppm-${{ matrix.target }}${{ matrix.exe }}
+          chmod +x apps/desktop/src-tauri/binaries/*
+
+      - name: Set up macOS signing
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          put() { { echo "$1<<__PPM_ENV__"; echo "$2"; echo "__PPM_ENV__"; } >> "$GITHUB_ENV"; }
+          if [ -n "$CSC_LINK" ] && [ -n "$CSC_KEY_PASSWORD" ]; then
+            put APPLE_CERTIFICATE "$CSC_LINK"
+            put APPLE_CERTIFICATE_PASSWORD "$CSC_KEY_PASSWORD"
+            echo "Signing with the CSC_LINK certificate."
+            if [ -n "$APPLE_ID" ] && [ -n "$APPLE_TEAM_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+              put APPLE_ID "$APPLE_ID"
+              put APPLE_TEAM_ID "$APPLE_TEAM_ID"
+              put APPLE_PASSWORD "$APPLE_APP_SPECIFIC_PASSWORD"
+              echo "Notarizing with APPLE_ID."
+            else
+              echo "::notice::Skipping notarization: APPLE_ID, APPLE_TEAM_ID or APPLE_APP_SPECIFIC_PASSWORD is not set."
+            fi
+          else
+            put APPLE_SIGNING_IDENTITY "-"
+            echo "::notice::Skipping macOS signing and notarization: CSC_LINK or CSC_KEY_PASSWORD is not set. The app is ad hoc signed."
+          fi
+      - name: Set up Windows signing
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE -or -not $env:WINDOWS_CERTIFICATE_PASSWORD) {
+            Write-Output "::notice::Skipping Windows signing: WINDOWS_CERTIFICATE or WINDOWS_CERTIFICATE_PASSWORD is not set."
+            exit 0
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'certificate.pfx'
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item $pfx
+          $config = Join-Path $env:RUNNER_TEMP 'signing.json'
+          @{ bundle = @{ windows = @{ certificateThumbprint = $cert.Thumbprint; digestAlgorithm = 'sha256'; timestampUrl = 'http://timestamp.digicert.com' } } } |
+            ConvertTo-Json -Depth 4 | Set-Content $config
+          "TAURI_SIGNING_CONFIG=$config" >> $env:GITHUB_ENV
+          Write-Output "Signing with certificate $($cert.Thumbprint)."
+
+      - name: Build the app
+        shell: bash
+        run: pnpm --filter @ppm/desktop tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }} ${TAURI_SIGNING_CONFIG:+--config "$TAURI_SIGNING_CONFIG"}
+      - name: Collect bundles
+        shell: bash
+        run: |
+          shopt -s nullglob
+          version="$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "port-process-manager") | .version')"
+          arch="${{ matrix.target }}"
+          arch="${arch%%-*}"
+          mkdir out
+          for file in target.noindex/${{ matrix.target }}/release/bundle/*/*.{dmg,msi,deb,rpm,AppImage}; do
+            cp "$file" "out/port-process-manager-$version-$arch.${file##*.}"
+          done
+          ls -l out
+      - uses: actions/upload-artifact@v4
+        with: { name: "bundle-${{ matrix.target }}", path: out/*, if-no-files-found: error }
+
+  dist:
+    needs: [binaries, bundles]
+    if: ${{ !cancelled() && needs.binaries.result == 'success' && needs.bundles.result != 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - run: scripts/dist.sh artifacts
+      - uses: actions/upload-artifact@v4
+        with: { name: release, path: dist/release, if-no-files-found: error }
+      - uses: actions/upload-artifact@v4
+        with: { name: packages, path: dist/packages, if-no-files-found: error }
+
+  install:
+    name: install on ${{ matrix.os }}
+    needs: dist
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/download-artifact@v4
+        with: { name: release, path: dist/release }
+      - uses: actions/download-artifact@v4
+        with: { name: packages, path: dist/packages }
+      - run: scripts/smoke-install.sh dist
+        shell: bash

@@ -2,6 +2,12 @@ name: CI
 on:
   push: { branches: [main] }
   pull_request:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: read
+
 jobs:
   check:
     strategy:
@@ -14,6 +20,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "clippy, rustfmt" }
       - uses: Swatinem/rust-cache@v2
+        with: { workspaces: ". -> target.noindex" }
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
       - uses: pnpm/action-setup@v4
@@ -21,3 +28,25 @@ jobs:
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'apps/**'
+              - 'packages/**'
+              - 'pnpm-lock.yaml'
+              - '.github/workflows/build.yml'
+
+  build:
+    needs: changes
+    uses: ./.github/workflows/build.yml
+    with:
+      bundles: ${{ needs.changes.outputs.app == 'true' }}
