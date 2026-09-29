@@ -277,6 +277,7 @@ If `hello.protocol` is higher than the version you support, ask the user to upda
 ppm serve                                   # listens on 127.0.0.1:7767
 ppm serve --listen 127.0.0.1:8080
 ppm serve --url https://devbox.tail1234.ts.net
+ppm serve --allow-origin https://dash.example.com
 ```
 
 `ppm serve` listens only on loopback, and refuses any other address. Put a tunnel or proxy you trust in front of it, such as `tailscale serve --bg http://127.0.0.1:7767`.
@@ -341,4 +342,12 @@ Snapshot changes the request causes arrive on `/events`.
 | `401` | The token is missing or wrong |
 | `404`, `405` | Unknown path, or the wrong method for it |
 
-Browsers can use the API too: responses allow any origin, and `OPTIONS` preflight requests are answered without a token. Every other request still needs the token. `EventSource` can't send headers, so read `/events` with `fetch` and a stream reader.
+### Browsers
+
+By default, responses carry no CORS headers, so a web page can't read them, even with a leaked connection code. To use the API from a page, allow its origin with `--allow-origin`, once per origin:
+
+```bash
+ppm serve --allow-origin https://dash.example.com --allow-origin http://localhost:5173
+```
+
+Responses to a request from an allowed origin carry `Access-Control-Allow-Origin` with that origin, and `OPTIONS` preflight requests from it are answered without a token. Every other request still needs the token. `EventSource` can't send headers, so read `/events` with `fetch` and a stream reader.

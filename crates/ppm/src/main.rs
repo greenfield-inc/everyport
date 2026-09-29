@@ -67,6 +67,9 @@ enum Command {
         /// URL clients use to reach this server, such as a Tailscale URL, for the connection code
         #[arg(long)]
         url: Option<String>,
+        /// Web origin whose pages may use the server, such as https://dash.example.com (repeatable)
+        #[arg(long = "allow-origin", value_name = "ORIGIN")]
+        allow_origin: Vec<String>,
     },
     /// Check permissions and platform support
     Doctor,
@@ -94,7 +97,11 @@ fn main() -> ExitCode {
             stdio::run(hub, io::BufReader::new(io::stdin()), io::stdout().lock())
                 .map(|()| ExitCode::SUCCESS)
         }
-        Some(Command::Serve { listen, url }) => serve(listen, url),
+        Some(Command::Serve {
+            listen,
+            url,
+            allow_origin,
+        }) => serve(listen, url, allow_origin),
         Some(Command::Doctor) => Ok(commands::doctor(config_dir())),
     };
     match result {
@@ -108,7 +115,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn serve(listen: SocketAddr, url: Option<String>) -> io::Result<ExitCode> {
+fn serve(listen: SocketAddr, url: Option<String>, origins: Vec<String>) -> io::Result<ExitCode> {
     let dir = config_dir().ok_or_else(|| io::Error::other("no config folder for this user"))?;
     let token = serve::token(&dir)?;
     let listener = serve::bind(listen)?;
@@ -116,6 +123,7 @@ fn serve(listen: SocketAddr, url: Option<String>) -> io::Result<ExitCode> {
     println!("Listening on http://{listen}");
     println!("Connection code (it holds the token, so keep it private):");
     println!("{}", serve::connection_code(&url, &token));
-    serve::run(Hub::start(commands::engine()), listener, token)?;
+    let access = serve::Access { token, origins };
+    serve::run(Hub::start(commands::engine()), listener, access)?;
     Ok(ExitCode::SUCCESS)
 }

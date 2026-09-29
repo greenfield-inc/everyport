@@ -56,14 +56,22 @@ pub fn connection_code(url: &str, token: &str) -> String {
     format!("ppm://{}", URL_SAFE_NO_PAD.encode(json.to_string()))
 }
 
+/// Who may use the server.
+pub struct Access {
+    pub token: String,
+    /// Web origins, such as `https://dash.example.com`, whose pages may read
+    /// responses. Other pages get no CORS headers, so a browser blocks them.
+    pub origins: Vec<String>,
+}
+
 /// Serves connections until the listener fails.
-pub fn run(hub: Hub, listener: TcpListener, token: String) -> io::Result<()> {
-    let token: Arc<str> = token.into();
+pub fn run(hub: Hub, listener: TcpListener, access: Access) -> io::Result<()> {
+    let access = Arc::new(access);
     for stream in listener.incoming() {
         let Ok(stream) = stream else { continue };
-        let (hub, token) = (hub.clone(), token.clone());
+        let (hub, access) = (hub.clone(), access.clone());
         thread::spawn(move || {
-            let _ = handle(stream, &hub, &token);
+            let _ = handle(stream, &hub, &access);
         });
     }
     Ok(())
@@ -73,10 +81,11 @@ struct HttpRequest {
     method: String,
     path: String,
     authorization: Option<String>,
+    origin: Option<String>,
     body: Vec<u8>,
 }
 
-fn handle(mut stream: TcpStream, hub: &Hub, token: &str) -> io::Result<()> {
+fn handle(mut stream: TcpStream, hub: &Hub, access: &Access) -> io::Result<()> {
     stream.set_read_timeout(Some(Duration::from_secs(10)))?;
     stream.set_write_timeout(Some(Duration::from_secs(30)))?;
     let request = match read_request(&stream) {
@@ -86,22 +95,25 @@ fn handle(mut stream: TcpStream, hub: &Hub, token: &str) -> io::Result<()> {
                 &mut stream,
                 "400 Bad Request",
                 &error_body(&error.to_string()),
+                "",
             )
         }
     };
+    let cors = cors_headers(request.origin.as_deref(), &access.origins);
     // CORS preflight carries no credentials. The token guards everything else.
     if request.method == "OPTIONS" {
-        return write_head(&mut stream, "204 No Content", "text/plain", Some(0));
+        return write_head(&mut stream, "204 No Content", "text/plain", Some(0), &cors);
     }
-    if !authorized(request.authorization.as_deref(), token) {
+    if !authorized(request.authorization.as_deref(), &access.token) {
         return respond(
             &mut stream,
             "401 Unauthorized",
             &error_body("missing or wrong bearer token"),
+            &cors,
         );
     }
     match (request.method.as_str(), request.path.as_str()) {
-        ("GET", "/events") => stream_events(stream, hub),
+        ("GET", "/events") => stream_events(stream, hub, &cors),
         ("POST", "/call") => {
             let (status, event) = match parse_request(&String::from_utf8_lossy(&request.body)) {
                 Ok(call) => {
@@ -112,14 +124,20 @@ fn handle(mut stream: TcpStream, hub: &Hub, token: &str) -> io::Result<()> {
                 }
                 Err(event) => ("400 Bad Request", event),
             };
-            respond(&mut stream, status, &serde_json::to_string(&event)?)
+            respond(&mut stream, status, &serde_json::to_string(&event)?, &cors)
         }
         (_, "/events" | "/call") => respond(
             &mut stream,
             "405 Method Not Allowed",
             &error_body("method not allowed"),
+            &cors,
         ),
-        _ => respond(&mut stream, "404 Not Found", &error_body("not found")),
+        _ => respond(
+            &mut stream,
+            "404 Not Found",
+            &error_body("not found"),
+            &cors,
+        ),
     }
 }
 
@@ -138,6 +156,7 @@ fn read_request(stream: &TcpStream) -> io::Result<HttpRequest> {
     let path = target.split('?').next().unwrap_or_default().to_string();
 
     let mut authorization = None;
+    let mut origin = None;
     let mut length = 0usize;
     loop {
         line.clear();
@@ -157,6 +176,8 @@ fn read_request(stream: &TcpStream) -> io::Result<HttpRequest> {
         let value = value.trim();
         if name.eq_ignore_ascii_case("authorization") {
             authorization = Some(value.to_string());
+        } else if name.eq_ignore_ascii_case("origin") {
+            origin = Some(value.to_string());
         } else if name.eq_ignore_ascii_case("content-length") {
             length = value
                 .parse()
@@ -179,6 +200,7 @@ fn read_request(stream: &TcpStream) -> io::Result<HttpRequest> {
         method,
         path,
         authorization,
+        origin,
         body,
     })
 }
@@ -194,8 +216,21 @@ fn authorized(header: Option<&str>, token: &str) -> bool {
         && a.iter().zip(b).fold(0, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-fn stream_events(mut stream: TcpStream, hub: &Hub) -> io::Result<()> {
-    write_head(&mut stream, "200 OK", "text/event-stream", None)?;
+/// CORS headers for `origin` when it's allowed, and none otherwise.
+fn cors_headers(origin: Option<&str>, allowed: &[String]) -> String {
+    match origin {
+        Some(origin) if allowed.iter().any(|a| a.trim_end_matches('/') == origin) => format!(
+            "Access-Control-Allow-Origin: {origin}\r\n\
+             Access-Control-Allow-Headers: Authorization, Content-Type\r\n\
+             Access-Control-Allow-Methods: GET, POST\r\n\
+             Vary: Origin\r\n"
+        ),
+        _ => String::new(),
+    }
+}
+
+fn stream_events(mut stream: TcpStream, hub: &Hub, cors: &str) -> io::Result<()> {
+    write_head(&mut stream, "200 OK", "text/event-stream", None, cors)?;
     let (events, rx) = mpsc::channel();
     hub.subscribe(events);
     loop {
@@ -213,8 +248,8 @@ fn error_body(message: &str) -> String {
     serde_json::json!({ "error": message }).to_string()
 }
 
-fn respond(stream: &mut TcpStream, status: &str, json: &str) -> io::Result<()> {
-    write_head(stream, status, "application/json", Some(json.len()))?;
+fn respond(stream: &mut TcpStream, status: &str, json: &str, cors: &str) -> io::Result<()> {
+    write_head(stream, status, "application/json", Some(json.len()), cors)?;
     stream.write_all(json.as_bytes())?;
     stream.flush()
 }
@@ -224,6 +259,7 @@ fn write_head(
     status: &str,
     content_type: &str,
     length: Option<usize>,
+    cors: &str,
 ) -> io::Result<()> {
     let length = length.map_or(String::new(), |n| format!("Content-Length: {n}\r\n"));
     write!(
@@ -233,9 +269,7 @@ fn write_head(
          {length}\
          Cache-Control: no-cache\r\n\
          X-Accel-Buffering: no\r\n\
-         Access-Control-Allow-Origin: *\r\n\
-         Access-Control-Allow-Headers: Authorization, Content-Type\r\n\
-         Access-Control-Allow-Methods: GET, POST\r\n\
+         {cors}\
          Connection: close\r\n\r\n"
     )
 }
@@ -248,15 +282,27 @@ mod tests {
 
     const TOKEN: &str = "s3cret";
 
+    const DASHBOARD: &str = "https://dash.example.com";
+
     fn server() -> SocketAddr {
         let listener = bind("127.0.0.1:0".parse().unwrap()).unwrap();
         let addr = listener.local_addr().unwrap();
-        thread::spawn(move || run(fixture::hub(), listener, TOKEN.into()));
+        let access = Access {
+            token: TOKEN.into(),
+            origins: vec![format!("{DASHBOARD}/")],
+        };
+        thread::spawn(move || run(fixture::hub(), listener, access));
         addr
     }
 
     /// Sends a raw request and returns the status line and body.
     fn request(addr: SocketAddr, head: &str, body: &str) -> (String, String) {
+        let (head, body) = exchange(addr, head, body);
+        (head.lines().next().unwrap().to_string(), body)
+    }
+
+    /// Sends a raw request and returns the response head and body.
+    fn exchange(addr: SocketAddr, head: &str, body: &str) -> (String, String) {
         let mut stream = TcpStream::connect(addr).unwrap();
         write!(
             stream,
@@ -267,7 +313,7 @@ mod tests {
         let mut response = String::new();
         stream.read_to_string(&mut response).unwrap();
         let (head, body) = response.split_once("\r\n\r\n").unwrap();
-        (head.lines().next().unwrap().to_string(), body.to_string())
+        (head.to_string(), body.to_string())
     }
 
     fn post_call(addr: SocketAddr, body: &str) -> (String, Event) {
@@ -339,9 +385,31 @@ mod tests {
     }
 
     #[test]
+    fn only_allowed_origins_get_cors_headers() {
+        let addr = server();
+        let call = format!("POST /call HTTP/1.1\r\nAuthorization: Bearer {TOKEN}");
+        let body = r#"{"id":1,"method":"refresh"}"#;
+        let (head, _) = exchange(
+            addr,
+            &format!("{call}\r\nOrigin: https://evil.example"),
+            body,
+        );
+        assert!(!head.contains("Access-Control"));
+        let (head, _) = exchange(addr, &format!("{call}\r\nOrigin: {DASHBOARD}"), body);
+        assert!(head.contains(&format!("Access-Control-Allow-Origin: {DASHBOARD}\r\n")));
+        let preflight = format!("OPTIONS /call HTTP/1.1\r\nOrigin: {DASHBOARD}");
+        let (head, _) = exchange(addr, &preflight, "");
+        assert!(head.starts_with("HTTP/1.1 204"));
+        assert!(head.contains("Access-Control-Allow-Headers: Authorization"));
+    }
+
+    #[test]
     fn refuses_to_listen_beyond_loopback() {
         assert!(bind("0.0.0.0:0".parse().unwrap()).is_err());
-        assert!(bind("[::1]:0".parse().unwrap()).is_ok());
+        // Some CI runners have no IPv6 loopback.
+        if TcpListener::bind("[::1]:0").is_ok() {
+            assert!(bind("[::1]:0".parse().unwrap()).is_ok());
+        }
     }
 
     #[test]
