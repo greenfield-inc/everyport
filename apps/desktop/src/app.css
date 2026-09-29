@@ -1,0 +1,51 @@
+/* App chrome: behave like a native window, not a web page. */
+:root {
+  color-scheme: light dark;
+  --ppm-shadow: none; /* the OS draws the window shadow */
+  font: 13px/1.4 system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  overscroll-behavior: none;
+}
+
+html,
+body {
+  margin: 0;
+  overflow: hidden;
+}
+
+/* The popover and alert draw their own panel over the native blur. */
+:root[data-window="popover"] body,
+:root[data-window="notification"] body {
+  background: transparent;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Native controls keep the arrow; only links get the hand. */
+a {
+  cursor: pointer;
+}
+
+.window-content {
+  width: fit-content;
+}
+
+.settings {
+  padding: 20px 24px;
+}
+.settings h1 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.settings label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
