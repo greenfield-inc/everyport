@@ -57,25 +57,25 @@ The app shows the error at the top of Settings and keeps the last settings it co
 
 ## Windows
 
-### Installing from Windows PowerShell 5.1
+### The install command fails
 
-The install command works in Windows PowerShell 5.1, the one Windows ships with, and in PowerShell 7. Paste it into PowerShell, not Command Prompt:
+Run it in PowerShell, not Command Prompt, where it fails with `'irm' is not recognized`. It works in Windows PowerShell 5.1, which ships with Windows, and in PowerShell 7:
 
 ```powershell
 irm https://everyport.dev/install.ps1 | iex
 ```
 
-To pass options, such as `-Cli` for the CLI only, use the script block form:
+Options need the script block form. `-Cli` installs only the CLI, and `-NoOpen` skips opening the app:
 
 ```powershell
 & ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
 ```
 
-If the download fails with a TLS or connection error, update to a current Windows 10 or 11 build, or install [PowerShell 7](https://aka.ms/powershell) and run the command in `pwsh`.
+If the download still fails with a TLS or connection error, install [PowerShell 7](https://aka.ms/powershell) and run the command in `pwsh`.
 
 ### SmartScreen asks before the installer runs
 
-Windows builds aren't signed yet, so when you download the `.msi` in a browser and open it, SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. The install command above doesn't trigger SmartScreen, since a download through PowerShell isn't marked as coming from the internet.
+Windows builds aren't signed yet. If you download the `.msi` in a browser and open it, SmartScreen shows **Windows protected your PC**. Click **More info**, then **Run anyway**. The PowerShell install command doesn't show this prompt, and it checks the download against the release's SHA-256 checksums.
 
 ## Linux
 
