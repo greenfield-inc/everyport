@@ -242,7 +242,7 @@ describe("styles", () => {
     press("Enter");
     click("6 more");
     click("Processes");
-    click("Dot-grid menu bar icon");
+    click("Tray count badge");
     expect(document.querySelector("[role=menu]")).not.toBeNull();
     expect(unstyled()).toEqual([]);
     press("Escape");

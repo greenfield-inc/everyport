@@ -25,7 +25,7 @@
       "agent": {
         "kind": "claude_code",
         "id": "68c8fda6-2f4e-4c1a-9a7b-1d2e3f4a5b6c",
-        "title": "Dot-grid menu bar icon",
+        "title": "Tray count badge",
         "started_at": 1790183040000,
         "transcript_path": "/Users/dev/.claude/projects/providence/68c8fda6.jsonl",
         "directory": "/Users/dev/conductor/workspaces/everyport/providence",

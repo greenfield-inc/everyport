@@ -26,7 +26,7 @@ const VIEWS = [
     steps: async (page) => {
       await page.getByRole("button", { name: /\d+ more/ }).click();
       await page.getByRole("button", { name: /Processes/ }).click();
-      await page.getByRole("button", { name: /Dot-grid menu bar icon/ }).click();
+      await page.getByRole("button", { name: /Tray count badge/ }).click();
     },
   },
   {

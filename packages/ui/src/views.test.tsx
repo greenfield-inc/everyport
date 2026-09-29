@@ -79,7 +79,7 @@ describe("server detail (Paper 02)", () => {
 
   it("shows the port, uptime and session", () => {
     expect(detail).toContain("3000 up 3h 12m");
-    expect(detail).toContain("Session Dot-grid menu bar icon 68c8fda6");
+    expect(detail).toContain("Session Tray count badge 68c8fda6");
     expect(detail).toContain("Branch menubar-port-monitor");
   });
 
