@@ -83,6 +83,9 @@ pub fn run(hub: Hub) -> io::Result<()> {
     let mut terminal = ratatui::init();
     let result = app.run(&mut terminal, &rx);
     ratatui::restore();
+    // The scanner exits once it has finished any stop or restart.
+    drop(app);
+    for _ in rx {}
     result
 }
 

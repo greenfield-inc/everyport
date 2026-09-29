@@ -15,6 +15,8 @@ pub trait Scanner: Send + 'static {
     fn interval(&self) -> Duration;
     fn scan(&mut self) -> (Snapshot, Vec<Alert>);
     fn call(&mut self, call: &Call) -> Result<(), String>;
+    /// A stop or restart is still in progress; each scan advances it.
+    fn pending(&self) -> bool;
 }
 
 impl Scanner for Engine {
@@ -29,6 +31,9 @@ impl Scanner for Engine {
     }
     fn call(&mut self, call: &Call) -> Result<(), String> {
         Engine::call(self, call)
+    }
+    fn pending(&self) -> bool {
+        Engine::pending(self)
     }
 }
 
@@ -102,7 +107,15 @@ fn run(mut scanner: impl Scanner, rx: mpsc::Receiver<Message>) {
                 continue;
             }
             Err(RecvTimeoutError::Timeout) => false,
-            Err(RecvTimeoutError::Disconnected) => return,
+            Err(RecvTimeoutError::Disconnected) => {
+                // Everyone left. Finish stops and restarts before exiting,
+                // so a restart isn't lost when the client quits.
+                while scanner.pending() {
+                    thread::sleep(Duration::from_millis(100));
+                    scanner.scan();
+                }
+                return;
+            }
         };
 
         let (snapshot, alerts) = scanner.scan();
@@ -137,18 +150,27 @@ fn same_state(a: &Snapshot, b: &Snapshot) -> bool {
 }
 
 /// A scanner that reports the shared fixture snapshot, with a leak alert on
-/// its second scan.
+/// its second scan. A restart stays pending for three scans, counted in
+/// `pending`.
 #[cfg(test)]
 pub mod fixture {
     use super::*;
     use ppm_core::protocol::{AlertKind, Os};
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
 
     pub struct Fixture {
         scans: u32,
+        pending: Arc<AtomicU32>,
     }
 
     pub fn hub() -> Hub {
-        Hub::start(Fixture { scans: 0 })
+        tracking(Arc::default())
+    }
+
+    /// A hub whose pending scans can be read from `pending`.
+    pub fn tracking(pending: Arc<AtomicU32>) -> Hub {
+        Hub::start(Fixture { scans: 0, pending })
     }
 
     pub fn snapshot() -> Snapshot {
@@ -172,6 +194,8 @@ pub mod fixture {
         }
         fn scan(&mut self) -> (Snapshot, Vec<Alert>) {
             self.scans += 1;
+            let left = self.pending.load(Ordering::SeqCst);
+            self.pending.store(left.saturating_sub(1), Ordering::SeqCst);
             let alerts = if self.scans == 2 {
                 vec![Alert {
                     port: 6006,
@@ -186,8 +210,15 @@ pub mod fixture {
         fn call(&mut self, call: &Call) -> Result<(), String> {
             match call {
                 Call::Stop { .. } => Err("pid 48198 was reused".into()),
+                Call::Restart { .. } => {
+                    self.pending.store(3, Ordering::SeqCst);
+                    Ok(())
+                }
                 _ => Ok(()),
             }
+        }
+        fn pending(&self) -> bool {
+            self.pending.load(Ordering::SeqCst) > 0
         }
     }
 }

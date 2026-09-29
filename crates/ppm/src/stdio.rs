@@ -106,6 +106,19 @@ mod tests {
     }
 
     #[test]
+    fn finishes_a_restart_before_exiting() {
+        let pending = std::sync::Arc::default();
+        let input = r#"{"id":1,"method":"restart","params":{"port":3000,"root":{"pid":48198,"started_at":1790183520000}}}"#;
+        run(
+            fixture::tracking(std::sync::Arc::clone(&pending)),
+            io::Cursor::new(input),
+            io::sink(),
+        )
+        .unwrap();
+        assert_eq!(pending.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
     fn empty_input_still_says_hello() {
         let events = transcript("");
         assert!(matches!(events[..], [Event::Hello(_), Event::Snapshot(_)]));

@@ -5,11 +5,11 @@ use crate::hub::Hub;
 use crate::palette::Palette;
 use ppm_core::engine::Engine;
 use ppm_core::platform;
-use ppm_core::protocol::{Call, Config, Event, Os, Server, ServerStatus, Snapshot};
+use ppm_core::protocol::{Call, Config, Event, Os, ProcRef, Server, ServerStatus, Snapshot};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::ExitCode;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub fn engine() -> Engine {
     Engine::new(platform::native(), Config::default())
@@ -126,78 +126,112 @@ pub fn watch() -> io::Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Scans until every stop and restart has finished, and returns the last snapshot.
-fn finish(engine: &mut Engine) -> Snapshot {
+/// How long the engine lets a server quit before it kills what's left.
+const GRACE: Duration = Duration::from_secs(3);
+/// How long a restarted server gets to listen on its port again.
+const COME_BACK: Duration = Duration::from_secs(10);
+
+/// Scans until every stop and restart has finished. Returns the last
+/// snapshot, and whether it took past the grace period, so the engine had
+/// to kill what ignored the request to quit.
+fn finish(engine: &mut Engine) -> (Snapshot, bool) {
+    let start = Instant::now();
     loop {
         let (snapshot, _) = engine.scan();
         if !engine.pending() {
-            return snapshot;
+            return (snapshot, start.elapsed() >= GRACE);
         }
         std::thread::sleep(Duration::from_millis(100));
     }
+}
+
+/// Whether any server still runs from the tree under `root`.
+fn running(snapshot: &Snapshot, root: ProcRef) -> bool {
+    snapshot.servers.iter().any(|server| server.root == root)
 }
 
 fn find(snapshot: &Snapshot, port: u16) -> Option<&Server> {
     snapshot.servers.iter().find(|server| server.port == port)
 }
 
-fn nothing_on(port: u16) -> ExitCode {
-    eprintln!("ppm: nothing listening on :{port}");
+fn failed(error: String) -> ExitCode {
+    eprintln!("ppm: {error}");
     ExitCode::FAILURE
-}
-
-fn outcome(result: Result<(), String>, done: String) -> ExitCode {
-    match result {
-        Ok(()) => {
-            println!("{done}");
-            ExitCode::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("ppm: {error}");
-            ExitCode::FAILURE
-        }
-    }
 }
 
 pub fn stop(port: u16, force: bool) -> ExitCode {
     let mut engine = engine();
     let (snapshot, _) = engine.scan();
     let Some(server) = find(&snapshot, port) else {
-        return nothing_on(port);
+        return failed(format!("nothing listening on :{port}"));
     };
     let root = server.root;
-    let result = engine
-        .call(&Call::Stop { port, root, force })
-        .and_then(|()| match find(&finish(&mut engine), port) {
-            Some(server) if server.root == root => Err(format!(":{port} is still running")),
-            _ => Ok(()),
-        });
-    outcome(result, format!("Stopped {} :{port}", server.project.name))
+    if let Err(error) = engine.call(&Call::Stop { port, root, force }) {
+        return failed(error);
+    }
+    let (after, slow) = finish(&mut engine);
+    if running(&after, root) {
+        return failed(format!(
+            ":{port} is still running, even after it was killed"
+        ));
+    }
+    let how = if force {
+        ", killed"
+    } else if slow {
+        ", killed after it ignored the request to quit for 3 s"
+    } else {
+        ""
+    };
+    println!("Stopped {} :{port}{how}", server.project.name);
+    ExitCode::SUCCESS
 }
 
 pub fn restart(port: u16) -> ExitCode {
     let mut engine = engine();
     let (snapshot, _) = engine.scan();
     let Some(server) = find(&snapshot, port) else {
-        return nothing_on(port);
+        return failed(format!("nothing listening on :{port}"));
     };
-    let result = engine.call(&Call::Restart {
-        port,
-        root: server.root,
-    });
-    if result.is_ok() {
-        finish(&mut engine);
+    let root = server.root;
+    if let Err(error) = engine.call(&Call::Restart { port, root }) {
+        return failed(error);
     }
-    let command = server.command.as_deref().unwrap_or("its command");
-    outcome(result, format!("Restarted :{port} with {command}"))
+    finish(&mut engine);
+    // The new server needs a moment to listen on its port.
+    let deadline = Instant::now() + COME_BACK;
+    loop {
+        let (after, _) = engine.scan();
+        if find(&after, port).is_some_and(|s| s.root != root) {
+            let command = server.command.as_deref().unwrap_or("its command");
+            println!("Restarted :{port} with {command}");
+            return ExitCode::SUCCESS;
+        }
+        if Instant::now() >= deadline {
+            return failed(if running(&after, root) {
+                format!("the old server on :{port} is still running")
+            } else {
+                let log =
+                    std::env::temp_dir().join(format!("port-process-manager/port-{port}.log"));
+                format!(
+                    "nothing is listening on :{port} {} s after the restart; its output is in {}",
+                    COME_BACK.as_secs(),
+                    log.display()
+                )
+            });
+        }
+        std::thread::sleep(Duration::from_millis(250));
+    }
 }
 
 pub fn open(port: u16) -> ExitCode {
     let url = format!("http://localhost:{port}");
-    outcome(
-        open::that_detached(&url).map_err(|e| e.to_string()),
-        format!("Opened {url}"),
-    )
+    match open::that_detached(&url) {
+        Ok(()) => {
+            println!("Opened {url}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => failed(error.to_string()),
+    }
 }
 
 pub fn clean(yes: bool) -> io::Result<ExitCode> {
@@ -240,24 +274,41 @@ pub fn clean(yes: bool) -> io::Result<ExitCode> {
             return Ok(ExitCode::SUCCESS);
         }
     }
-    let mut failed = false;
+    let mut ok = true;
+    let mut asked = Vec::new();
     for server in &picks {
         let call = Call::Stop {
             port: server.port,
             root: server.root,
             force: false,
         };
-        if let Err(error) = engine.call(&call) {
-            eprintln!("ppm: :{}: {error}", server.port);
-            failed = true;
+        match engine.call(&call) {
+            Ok(()) => asked.push(*server),
+            Err(error) => {
+                eprintln!("ppm: :{}: {error}", server.port);
+                ok = false;
+            }
         }
     }
-    finish(&mut engine);
-    println!("Stopped {count}, freeing {}.", format::bytes(memory));
-    Ok(if failed {
-        ExitCode::FAILURE
-    } else {
+    let (after, _) = finish(&mut engine);
+    let (stopped, left): (Vec<&Server>, Vec<&Server>) =
+        asked.into_iter().partition(|s| !running(&after, s.root));
+    for server in &left {
+        eprintln!(
+            "ppm: :{} is still running, even after it was killed",
+            server.port
+        );
+        ok = false;
+    }
+    println!(
+        "Stopped {}, freeing {}.",
+        format::plural(stopped.len(), "server", "servers"),
+        format::bytes(stopped.iter().map(|s| s.memory).sum())
+    );
+    Ok(if ok {
         ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     })
 }
 
