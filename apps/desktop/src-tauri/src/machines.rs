@@ -205,7 +205,7 @@ pub fn reload(app: &AppHandle) {
         let starts = {
             let mut all = machines(&app);
             all.read_at = read_at;
-            let mut old: Vec<Entry> = all.entries.drain(..).collect();
+            let mut old = std::mem::take(&mut all.entries);
             let mut starts = Vec::new();
             let mut entries = vec![take(&mut old, LOCAL).expect("this computer is always listed")];
             for l in listed {
