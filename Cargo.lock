@@ -3404,16 +3404,19 @@ dependencies = [
 name = "port-process-manager"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "base64 0.23.1",
  "clap",
  "dirs 7.0.0",
  "getrandom 0.4.3",
  "open",
+ "ppm-client",
  "ppm-core",
  "ratatui",
  "serde",
  "serde_json",
  "terminal-colorsaurus",
+ "tokio",
 ]
 
 [[package]]
