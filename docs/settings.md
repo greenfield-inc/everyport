@@ -7,7 +7,7 @@ Open Settings with the gear next to **Clean up** in the popover, or **Settings�
 | Setting | Default | What it does |
 |---|---|---|
 | Launch at login | Off | Starts the app when you log in |
-| Open Port Process Manager | <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>P</kbd>) | The global shortcut. Click it and press new keys, or <kbd>Esc</kbd> to cancel. On macOS it needs <kbd>⌥</kbd> with <kbd>⌘</kbd> or <kbd>⌃</kbd>, or <kbd>⌘</kbd> and <kbd>⌃</kbd> together. On Windows and Linux it needs <kbd>Alt</kbd>. **Reset** restores the default. |
+| Open Port Process Manager | <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>P</kbd>) | The global shortcut. Click it and press new keys, or <kbd>Esc</kbd> to cancel. On macOS it needs <kbd>⌥</kbd> with <kbd>⌘</kbd> or <kbd>⌃</kbd>, or <kbd>⌘</kbd> and <kbd>⌃</kbd> together. On Windows and Linux it needs <kbd>Alt</kbd>, or <kbd>Win</kbd> and <kbd>Ctrl</kbd> together. **Reset** restores the default. |
 | Scan every | 2 seconds | How often ppm checks ports and processes: 1, 2, 5 or 10 seconds |
 | Integrations → Vercel previews | Off | Links each branch to its Vercel preview. It uses the GitHub CLI (`gh`), which goes online. |
 | Appearance → Mode | System | System, Light or Dark |
@@ -57,7 +57,7 @@ When a machine has no `ppm`, **Install ppm…** asks before it copies the matchi
 
 Auto-kill acts only on a server that newly qualifies, so turning it on never stops servers that already qualified. It never stops a leaking server or a protected one. Those stay under Clean up for you to decide.
 
-Auto-kill runs only in the desktop app, for this computer. It never runs from `ppm watch`, the terminal UI or `ppm stdio`. To stop what Clean up suggests from the terminal, run `ppm clean`. It asks first, unless you pass `--yes`.
+Auto-kill runs only in the desktop app, for this computer. `ppm watch`, the terminal UI and `ppm stdio` never turn it on by themselves. To stop what Clean up suggests from the terminal, run `ppm clean`. It asks first, unless you pass `--yes`.
 
 ### Protected processes
 

@@ -49,7 +49,7 @@ The server is protected: a process in its tree is on the **Never stop** list, su
 ppm: redis-server :6379 is protected. Run `ppm stop 6379 --protected` to stop it anyway.
 ```
 
- pass `--protected` to `ppm stop` or `ppm restart`, or `--force` to `ppm stop` to kill it. See [Protected processes](settings.md#protected-processes).
+Pass `--protected` to `ppm stop` or `ppm restart` to go ahead, or `--force` to `ppm stop` to kill it. See [Protected processes](settings.md#protected-processes).
 
 ## A settings file has an error
 

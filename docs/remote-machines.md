@@ -50,7 +50,7 @@ ppm --on devbox open 5173         # forwards the port and opens it here
 
 `--on` works with `list`, `watch`, `stop`, `restart`, `open`, `clean` and the terminal UI. The machine can be a saved one or any host `ppm remote list` discovers.
 
-The first time, ppm asks before installing itself there, and asks again before updating an older copy. Pass `--yes` to skip the question, as in scripts. Without a terminal to ask in, and without `--yes`, it stops with an error.
+The first time, ppm asks before installing itself there, and asks again before updating an older copy. Pass `--yes` to skip the question, as in scripts. Without a terminal to ask in, and without `--yes`, ppm stops with an error when it's missing, and uses an older copy as it is.
 
 In the terminal UI, <kbd>Tab</kbd> or <kbd>m</kbd> switches between this computer and your saved machines.
 

@@ -96,7 +96,7 @@ Auto-kill acts on servers as they start to qualify. Pick one mode in **Settings 
 - **Ask**: a notification asks before stopping each one.
 - **Stop them**: the app stops them for you.
 
-Auto-kill runs only in the desktop app, for this computer. It never runs from `ppm watch`, the terminal UI or `ppm stdio`. It skips protected servers, and leaves leaking ones under Clean up for you to decide. See [Settings and clean up](docs/settings.md).
+Auto-kill runs only in the desktop app, for this computer. `ppm watch`, the terminal UI and `ppm stdio` never turn it on by themselves. It skips protected servers, and leaves leaking ones under Clean up for you to decide. See [Settings and clean up](docs/settings.md).
 
 ## Remote machines
 
