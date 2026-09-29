@@ -9,8 +9,8 @@ license = "MIT"
 repository = "https://github.com/greenfield-inc/port-process-manager"
 
 [workspace.dependencies]
-ppm-core = { path = "crates/ppm-core" }
-ppm-client = { path = "crates/ppm-client" }
+ppm-core = { path = "crates/ppm-core", version = "0.1.0" }
+ppm-client = { path = "crates/ppm-client", version = "0.1.0" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
