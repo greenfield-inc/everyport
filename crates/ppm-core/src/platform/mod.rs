@@ -14,6 +14,18 @@ pub struct Listener {
     pub address: String,
 }
 
+/// A TCP socket in LISTEN state held by another user or the system, whose
+/// process we may not inspect.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OtherListener {
+    pub port: u16,
+    pub address: String,
+    /// User name, such as `root`.
+    pub owner: Option<String>,
+    /// When the OS says which process holds the socket.
+    pub pid: Option<u32>,
+}
+
 /// Cheap per-process facts, read for every process on every scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcInfo {
@@ -46,7 +58,12 @@ pub struct MemoryStats {
 }
 
 pub trait Platform: Send + Sync {
+    /// Sockets of processes we may inspect: our user's, or every one as root.
     fn listeners(&self) -> io::Result<Vec<Listener>>;
+    /// The listening sockets `listeners` leaves out, where the OS shows them.
+    fn other_listeners(&self) -> io::Result<Vec<OtherListener>> {
+        Ok(Vec::new())
+    }
     fn processes(&self) -> io::Result<Vec<ProcInfo>>;
     fn details(&self, pid: u32, env_keys: &[&str]) -> Option<ProcDetails>;
     fn usage(&self, pid: u32) -> Option<ProcUsage>;

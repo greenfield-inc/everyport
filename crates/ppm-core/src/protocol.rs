@@ -62,6 +62,10 @@ pub struct Snapshot {
     pub system: SystemStats,
     /// Sorted by port.
     pub servers: Vec<Server>,
+    /// Ports held by other users' or the system's processes, which ppm can't
+    /// inspect. Sorted by port, and never a port in `servers`.
+    #[serde(default)]
+    pub other_ports: Vec<OtherPort>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -118,6 +122,20 @@ pub struct Server {
     pub status: ServerStatus,
     /// Present when Clean up suggests stopping this server.
     pub clean_up: Option<CleanUpReason>,
+}
+
+/// A listening port whose process belongs to another user or the system. It
+/// has no actions.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct OtherPort {
+    pub port: u16,
+    /// Bound addresses, such as `0.0.0.0` and `::`.
+    pub addresses: Vec<String>,
+    /// User the process runs as, such as `root`, when the OS says.
+    pub owner: Option<String>,
+    /// When the OS says which process holds the port.
+    pub process_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
