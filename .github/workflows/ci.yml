@@ -10,6 +10,8 @@ concurrency:
   cancel-in-progress: true
 permissions:
   contents: read
+  # build.yml downloads artifacts from its own run.
+  actions: read
 
 jobs:
   # PRs skip the jobs below whose paths they don't touch. Main and manual runs run everything.

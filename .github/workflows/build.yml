@@ -11,15 +11,16 @@ on:
 
 jobs:
   binaries:
-    name: everyport ${{ matrix.target }}
+    name: everyport ${{ matrix.name || matrix.target }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - { target: x86_64-unknown-linux-musl, os: ubuntu-latest, build: zigbuild }
           - { target: aarch64-unknown-linux-musl, os: ubuntu-latest, build: zigbuild }
-          - { target: aarch64-apple-darwin, os: macos-latest, build: build }
-          - { target: x86_64-apple-darwin, os: macos-latest, build: build }
+          # One runner builds both macOS targets, since macOS runners are the scarce
+          # ones. It still finishes before the macOS app jobs need their sidecar.
+          - { name: apple-darwin, target: aarch64-apple-darwin x86_64-apple-darwin, os: macos-latest, build: build }
           - { target: x86_64-pc-windows-msvc, os: windows-latest, build: build, exe: .exe }
           - { target: aarch64-pc-windows-msvc, os: windows-latest, build: build, exe: .exe }
     runs-on: ${{ matrix.os }}
@@ -29,7 +30,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with: { toolchain: stable, targets: "${{ matrix.target }}" }
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with: { workspaces: ". -> target.noindex", key: "${{ matrix.target }}", save-if: "${{ github.ref == 'refs/heads/main' }}" }
+        with: { workspaces: ". -> target.noindex", key: "${{ matrix.name || matrix.target }}", save-if: "${{ github.ref == 'refs/heads/main' }}" }
       - if: matrix.build == 'zigbuild'
         uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with: { version: 0.14.1 }
@@ -39,23 +40,27 @@ jobs:
       - name: Build
         shell: bash
         run: |
-          cargo ${{ matrix.build }} -p everyport --release --locked --target ${{ matrix.target }}
           mkdir out
-          cp target.noindex/${{ matrix.target }}/release/everyport${{ matrix.exe }} out/everyport-${{ matrix.target }}${{ matrix.exe }}
+          for target in ${{ matrix.target }}; do
+            cargo ${{ matrix.build }} -p everyport --release --locked --target "$target"
+            cp "target.noindex/$target/release/everyport${{ matrix.exe }}" "out/everyport-$target${{ matrix.exe }}"
+          done
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with: { name: "bin-${{ matrix.target }}", path: out/*, if-no-files-found: error }
+        with: { name: "bin-${{ matrix.name || matrix.target }}", path: out/*, if-no-files-found: error }
 
   bundles:
     name: app ${{ matrix.target }}
-    needs: binaries
+    # No needs: the app compiles while the binaries jobs run, then bundles its
+    # target's released everyport as the sidecar.
+    permissions: { contents: read, actions: read }
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { target: aarch64-apple-darwin, os: macos-latest, bundles: dmg }
-          - { target: x86_64-apple-darwin, os: macos-latest, bundles: dmg }
+          - { target: aarch64-apple-darwin, os: macos-latest, bundles: dmg, cli: apple-darwin }
+          - { target: x86_64-apple-darwin, os: macos-latest, bundles: dmg, cli: apple-darwin }
           # The .msi installs per machine and needs admin. install-app.ps1 uses the per-user NSIS setup.exe.
-          - { target: x86_64-pc-windows-msvc, os: windows-latest, bundles: "msi,nsis", exe: .exe }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest, bundles: "msi,nsis" }
           # The static musl everyport serves as the sidecar on glibc Linux too.
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04, bundles: "deb,rpm,appimage", sidecar: x86_64-unknown-linux-musl }
     runs-on: ${{ matrix.os }}
@@ -72,11 +77,6 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with: { name: "bin-${{ matrix.sidecar || matrix.target }}", path: sidecar }
-      # Artifacts drop the executable bit, and the sidecar script keeps the mode it copies.
-      - run: chmod +x sidecar/*
-        shell: bash
 
       # The WINDOWS_SIGNING repository variable set to skip ships an unsigned .msi from a signed release.
       - name: Skip Windows signing
@@ -111,15 +111,17 @@ jobs:
           EVERYPORT_SIGN: ${{ inputs.sign && !(runner.os == 'Windows' && vars.WINDOWS_SIGNING == 'skip') }}
           # Tauri skips the Finder step that lays out the DMG window when CI is true.
           TAURI_BUNDLER_DMG_IGNORE_CI: true
-          # apps/desktop/scripts/sidecar.mjs bundles this prebuilt everyport instead of building one.
-          EVERYPORT_SIDECAR: ${{ github.workspace }}/sidecar/everyport-${{ matrix.sidecar || matrix.target }}${{ matrix.exe }}
+          # The binaries job that builds the sidecar, and the sidecar's target.
+          CLI: bin-${{ matrix.cli || matrix.sidecar || matrix.target }}
+          SIDECAR: ${{ matrix.sidecar || matrix.target }}
+          GH_TOKEN: ${{ github.token }}
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ inputs.sign && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ inputs.sign && secrets.APPLE_ID || '' }}
           APPLE_TEAM_ID: ${{ inputs.sign && secrets.APPLE_TEAM_ID || '' }}
           APPLE_PASSWORD: ${{ inputs.sign && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
         run: |
-          args=(--target ${{ matrix.target }} --bundles ${{ matrix.bundles }})
+          args=(--target ${{ matrix.target }})
           if [ "$EVERYPORT_SIGN" = true ]; then
             if [ "$RUNNER_OS" = macOS ]; then
               for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_TEAM_ID APPLE_PASSWORD; do
@@ -140,7 +142,22 @@ jobs:
             fi
             echo "::notice::Unsigned build: signing and notarization are skipped."
           fi
-          pnpm --filter @everyport/desktop tauri build "${args[@]}"
+          # Compile against a placeholder sidecar. The bundler reads src-tauri/binaries
+          # only when bundling, so the placeholder never ships.
+          touch "$RUNNER_TEMP/placeholder"
+          # apps/desktop/scripts/sidecar.mjs copies EVERYPORT_SIDECAR instead of building one.
+          EVERYPORT_SIDECAR="$RUNNER_TEMP/placeholder" pnpm --filter @everyport/desktop tauri build --no-bundle "${args[@]}"
+
+          # Bundle this target's released everyport once its binaries job uploads it.
+          for attempt in $(seq 90); do
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$CLI" --dir sidecar && break
+            [ "$attempt" = 90 ] && { echo "::error::$CLI was not uploaded within 15 minutes."; exit 1; }
+            sleep 10
+          done
+          # Artifacts drop the executable bit, and the sidecar script keeps the mode it copies.
+          chmod +x sidecar/*
+          EVERYPORT_SIDECAR="$(ls sidecar/everyport-"$SIDECAR"*)" TAURI_ENV_TARGET_TRIPLE=${{ matrix.target }} node apps/desktop/scripts/sidecar.mjs
+          pnpm --filter @everyport/desktop tauri bundle "${args[@]}" --bundles ${{ matrix.bundles }}
       - name: Collect bundles
         shell: bash
         run: |
@@ -170,6 +187,14 @@ jobs:
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with: { path: artifacts, merge-multiple: true }
+      # The unsigned .deb shows the bundles ship the released everyport as the
+      # sidecar. Signing changes the macOS and Windows copies.
+      - name: Check the bundled sidecar
+        run: |
+          mkdir deb
+          (cd deb && ar x ../artifacts/everyport-*.deb && tar xf data.tar.*)
+          cmp deb/usr/bin/everyport-sidecar artifacts/everyport-x86_64-unknown-linux-musl
+          rm -r deb
       - run: scripts/dist.sh artifacts
       - name: Check the npm and PyPI packages
         run: |
