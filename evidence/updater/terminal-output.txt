@@ -1,0 +1,7 @@
+Downloading everyport-0.1.3-aarch64.dmg
+Downloading install.sh
+Downloading everyport-aarch64-apple-darwin from http://127.0.0.1:39100
+Installed everyport 0.1.2 to /private/tmp/claude-501/-Users-parsas-allGitHubRepos-dcouple-port-process-manager-worktrees-updater/f7d4c2dd-749d-4725-a72b-684a7df60615/scratchpad/e2e.noindex/bin/everyport
+Add /private/tmp/claude-501/-Users-parsas-allGitHubRepos-dcouple-port-process-manager-worktrees-updater/f7d4c2dd-749d-4725-a72b-684a7df60615/scratchpad/e2e.noindex/bin to your PATH, for example: export PATH="/private/tmp/claude-501/-Users-parsas-allGitHubRepos-dcouple-port-process-manager-worktrees-updater/f7d4c2dd-749d-4725-a72b-684a7df60615/scratchpad/e2e.noindex/bin:$PATH"
+Quitting Everyport
+Installed Everyport to /private/tmp/claude-501/-Users-parsas-allGitHubRepos-dcouple-port-process-manager-worktrees-updater/f7d4c2dd-749d-4725-a72b-684a7df60615/scratchpad/e2e.noindex/Apps/Everyport.app
