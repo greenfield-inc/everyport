@@ -9,9 +9,10 @@ const field = (front: string, name: string) => {
   return value?.startsWith('"') ? (JSON.parse(value) as string) : value;
 };
 
-/** Every docs page, in sidebar order, read from content/ at build time. */
+/** Every docs page, in sidebar order, read from content/ at build time. Links, such as the changelog, are left out. */
 export function docPages(): DocPage[] {
-  return Object.keys(meta).map((slug) => {
+  const slugs = Object.entries(meta).flatMap(([slug, entry]) => (typeof entry === "string" ? [slug] : []));
+  return slugs.map((slug) => {
     const file = slug === "index" ? "index.mdx" : `${slug}.md`;
     const [, front, markdown] = readFileSync(join(process.cwd(), "content", file), "utf8").match(/^---\n([\s\S]*?)\n---\n+([\s\S]*)$/)!;
     return { path: slug === "index" ? "docs" : `docs/${slug}`, title: field(front, "title")!, description: field(front, "description"), markdown };

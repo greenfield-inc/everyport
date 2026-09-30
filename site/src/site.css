@@ -175,12 +175,12 @@ code {
   margin-left: auto;
 }
 
-.docs-link {
+.header-link {
   color: var(--muted);
   font-size: 13.5px;
 }
 
-.docs-link:hover {
+.header-link:hover {
   color: var(--fg);
   text-decoration: none;
 }
@@ -369,7 +369,7 @@ code {
 }
 
 .header nav a,
-.docs-link,
+.header-link,
 .github,
 .tabs button,
 .segmented button,

@@ -21,8 +21,9 @@ pnpm --filter @everyport/site og       # renders /og to public/og.png
 ## Routes
 
 - `/install.sh` and `/install.ps1`: the one-command installers, `scripts/install-app.sh` and `scripts/install-app.ps1`, as they were at build time.
+- `/changelog`: the repository's `CHANGELOG.md`, each version anchored at its number (`/changelog#0.1.2`). `/changelog.txt` is the same as plain text, and `/feed.xml` an RSS item per release.
 - `/llms.txt`: the repository's `llms.txt`. `/llms-full.txt`: its summary and every docs page.
-- `/robots.txt` and `/sitemap.xml`, with every docs page.
+- `/robots.txt` and `/sitemap.xml`, with every docs page and the changelog.
 
 ## Deploy
 

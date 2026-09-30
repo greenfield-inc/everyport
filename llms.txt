@@ -24,6 +24,7 @@ For agents and scripts:
 - [Troubleshooting](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/troubleshooting.md): `everyport doctor`, missing servers, Windows installs and SmartScreen, the Linux tray and blank windows
 - [The Everyport protocol](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/protocol.md): events and requests over `everyport stdio` and `everyport serve`
 - [FAQ](https://raw.githubusercontent.com/greenfield-inc/everyport/main/docs/faq.md): price, privacy, permissions, updates and protected servers
+- [Changelog](https://everyport.dev/changelog.txt): what changed in each release, newest first, also as an [RSS feed](https://everyport.dev/feed.xml)
 
 ## Optional
 
