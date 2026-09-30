@@ -46,5 +46,5 @@ for (const [slug, , file] of PAGES) {
 
 writeFileSync(
   new URL("_meta.ts", content),
-  `// Written by scripts/docs.mjs.\nexport default ${JSON.stringify({ index: "Overview", ...Object.fromEntries(PAGES.map(([slug, title]) => [slug, title])) }, null, 2)};\n`,
+  `// Written by scripts/docs.mjs.\nexport default ${JSON.stringify({ index: "Overview", ...Object.fromEntries(PAGES.map(([slug, title]) => [slug, title])), changelog: { title: "Changelog", href: "/changelog" } }, null, 2)};\n`,
 );

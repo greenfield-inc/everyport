@@ -179,6 +179,7 @@ export function App() {
         <nav aria-label="Footer">
           <a href={REPO}>GitHub</a>
           <a href="/docs">Docs</a>
+          <a href="/changelog">Changelog</a>
           <a href={`${REPO}/releases`}>Releases</a>
           <a href={`${REPO}/blob/main/LICENSE`}>License</a>
         </nav>
@@ -210,8 +211,11 @@ function Header({ active, onNavigate }: { active?: number; onNavigate?: (id: Sec
         </nav>
       )}
       <div className="header-links">
-        <a className="docs-link" href="/docs">
+        <a className="header-link" href="/docs">
           Docs
+        </a>
+        <a className="header-link" href="/changelog">
+          Changelog
         </a>
         <a className="github" href={REPO}>
           GitHub
