@@ -38,7 +38,7 @@ The first release of Everyport: a menu bar and tray app for macOS, Windows and L
 - Every dev server listening on a port, with its project, git branch or worktree, framework and uptime.
 - Memory and CPU for each server's whole process tree, with a 10-minute history chart.
 - Alerts when a server's memory crosses your limit or keeps climbing.
-- Clean up for servers whose worktree was deleted, or that are idle, long-running or leaking memory, and auto-kill for them. Protected processes, such as databases, are skipped, and Stop and Restart ask before touching them.
+- Clean up for servers whose worktree was deleted, or that are idle, long-running or leaking memory. Auto-kill can stop them as they qualify, except leaking ones, which stay for you to decide. Protected processes, such as databases, are skipped, and Stop and Restart ask before touching them.
 - The Claude Code or Codex session that started a server, ready to resume in your terminal.
 - The Conductor workspace, Pane worktree or git worktree each server runs in, and its Vercel preview.
 - Remote machines over SSH, Docker, Kubernetes, WSL or any command, found in `~/.ssh/config`, Pane and WSL, or added by hand. Everyport offers to install itself the first time you connect, and forwards a remote server's port when you open it.

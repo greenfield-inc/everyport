@@ -15,7 +15,7 @@ notes="$(awk -v version="$version" '
   in_section
 ' CHANGELOG.md | sed -e '/./,$!d')"
 
-if [ -z "$notes" ]; then
+if ! grep -q '[^[:space:]]' <<< "$notes"; then
   echo "CHANGELOG.md has no notes for $version. Add them under \"## $version\" (scripts/bump-version.sh adds the heading)." >&2
   exit 1
 fi
