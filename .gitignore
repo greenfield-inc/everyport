@@ -12,3 +12,4 @@ worktrees/
 apps/desktop/src-tauri/binaries/
 qa-visual.noindex/
 *.tsbuildinfo
+apps/desktop/src-tauri/installer/

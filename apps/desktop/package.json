@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "tauri": "tauri",
     "test": "vitest run",
-    "bench": "node perf/bench.mjs"
+    "bench": "node perf/bench.mjs",
+    "installer-art": "installer-art --name Everyport --tagline \"Every dev server. Every OS.\" --mark ../../brand/socket.svg --icon ../../brand/socket-app.svg --out src-tauri/installer"
   },
   "dependencies": {
     "@everyport/protocol": "workspace:*",
@@ -27,6 +28,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "installer-art": "workspace:*",
     "playwright-core": "^1.63.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Everyport's words on the MSI's first and last dialogs. Tauri adds its own strings to this file. -->
+<WixLocalization Culture="en-us" xmlns="http://schemas.microsoft.com/wix/2006/localization">
+  <String Id="WelcomeDlgTitle">{\WixUI_Font_Bigger}Install Everyport</String>
+  <String Id="WelcomeDlgDescription">Everyport shows every dev server on this PC and on the machines you connect to, from the tray. This installer sets it up for everyone on this PC.</String>
+  <String Id="ExitDialogTitle">{\WixUI_Font_Bigger}Everyport is ready</String>
+  <String Id="ExitDialogDescription">Everyport lives in the tray, next to the clock. If you don't see the Socket icon, open the ^ menu there.</String>
+</WixLocalization>
