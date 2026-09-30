@@ -12,15 +12,19 @@ import { cleanUpCandidates } from "./CleanUp.tsx";
 const VISIBLE_ROWS = 7;
 const ROW_HEIGHT = 49;
 
+/** A newer release the host offers, shown as a pill in the footer. */
+export type UpdateOffer = { version: string; onUpdate: () => void };
+
 type Props = {
   ctx: ViewContext;
   /** The keyboard selection. */
   selected: number | null;
   onOpen: (server: Server) => void;
   onCleanUp: () => void;
+  update?: UpdateOffer;
 };
 
-export function ServerList({ ctx, selected, onOpen, onCleanUp }: Props) {
+export function ServerList({ ctx, selected, onOpen, onCleanUp, update }: Props) {
   const { snapshot, client } = ctx;
   const { servers } = snapshot;
   const [hoveredRow, setHoveredRow] = useState<number | null>(null);
@@ -55,16 +59,27 @@ export function ServerList({ ctx, selected, onOpen, onCleanUp }: Props) {
           <span className="everyport:text-13 everyport:font-medium everyport:text-fg">Clean up</span>
           {suggested > 0 && <span className="everyport:font-mono everyport:text-11 everyport:font-medium everyport:text-fg2">{suggested}</span>}
         </button>
-        {client.openSettings && (
-          <button
-            type="button"
-            aria-label="Settings"
-            onClick={() => client.openSettings?.()}
-            className="everyport:-m-[5px] everyport:flex everyport:size-[26px] everyport:items-center everyport:justify-center everyport:rounded-[7px] everyport:text-fg2 everyport:hover:bg-accent"
-          >
-            <GearIcon />
-          </button>
-        )}
+        <div className="everyport:flex everyport:items-center everyport:gap-3">
+          {update && (
+            <button
+              type="button"
+              onClick={update.onUpdate}
+              className="everyport:rounded-full everyport:bg-primary everyport:px-2 everyport:py-[3px] everyport:text-11 everyport:font-medium everyport:text-on-primary"
+            >
+              Update to {update.version}
+            </button>
+          )}
+          {client.openSettings && (
+            <button
+              type="button"
+              aria-label="Settings"
+              onClick={() => client.openSettings?.()}
+              className="everyport:-m-[5px] everyport:flex everyport:size-[26px] everyport:items-center everyport:justify-center everyport:rounded-[7px] everyport:text-fg2 everyport:hover:bg-accent"
+            >
+              <GearIcon />
+            </button>
+          )}
+        </div>
       </div>
     </>
   );

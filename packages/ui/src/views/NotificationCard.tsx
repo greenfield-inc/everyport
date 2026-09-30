@@ -1,4 +1,5 @@
 import type { Alert, Server } from "@everyport/protocol";
+import type { ReactNode } from "react";
 import { total } from "../format.ts";
 import { Socket } from "../icons.tsx";
 import { DEFAULT_ALERT_MEMORY, growth, historySpan, reasonText } from "../model.ts";
@@ -42,7 +43,28 @@ export function alertText(server: Server, alert: Alert, alertMemory = DEFAULT_AL
  */
 export function NotificationCard({ server, alert, alertMemory, onDetails, onStop, onSnooze, theme, appearance }: Props) {
   const { title, body } = alertText(server, alert, alertMemory);
-  const action = "everyport:flex everyport:flex-1 everyport:justify-center everyport:rounded-lg everyport:bg-accent everyport:py-[5px] everyport:text-13 everyport:font-medium";
+  return (
+    <Card theme={theme} appearance={appearance} title={title} body={body} state="running">
+      <CardAction onClick={onDetails}>Details</CardAction>
+      <CardAction onClick={onStop} danger>
+        Stop
+      </CardAction>
+      <CardAction onClick={onSnooze}>Snooze 1h</CardAction>
+    </Card>
+  );
+}
+
+/** A newer release of the host app, with Update and Skip This Version. Renders its own themed root. */
+export function UpdateCard({ version, onUpdate, onSkip, theme, appearance }: ThemeProps & { version: string; onUpdate: () => void; onSkip: () => void }) {
+  return (
+    <Card theme={theme} appearance={appearance} title={`Everyport ${version} is available`} body="Update opens a terminal that installs it, then reopens Everyport." state="idle">
+      <CardAction onClick={onUpdate}>Update</CardAction>
+      <CardAction onClick={onSkip}>Skip This Version</CardAction>
+    </Card>
+  );
+}
+
+function Card({ title, body, state, children, theme, appearance }: ThemeProps & { title: string; body: string; state: "running" | "idle"; children: ReactNode }) {
   return (
     <Themed theme={theme} appearance={appearance}>
       <div
@@ -55,7 +77,7 @@ export function NotificationCard({ server, alert, alertMemory, onDetails, onStop
       >
         <div className="everyport:flex everyport:items-start everyport:gap-2.5">
           <span className="everyport:flex everyport:size-[34px] everyport:shrink-0 everyport:items-center everyport:justify-center everyport:rounded-[9px] everyport:bg-[#15171D] everyport:text-white everyport:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.18)]">
-            <Socket size={24} state="running" />
+            <Socket size={24} state={state} />
           </span>
           <div className="everyport:flex everyport:min-w-0 everyport:flex-1 everyport:flex-col everyport:gap-px">
             <div className="everyport:flex everyport:items-baseline everyport:justify-between everyport:gap-2">
@@ -65,18 +87,20 @@ export function NotificationCard({ server, alert, alertMemory, onDetails, onStop
             <p className="everyport:text-13 everyport:leading-[18px] everyport:text-fg2">{body}</p>
           </div>
         </div>
-        <div className="everyport:flex everyport:gap-1.5 everyport:pl-11">
-          <button type="button" onClick={onDetails} className={`${action} everyport:text-fg`}>
-            Details
-          </button>
-          <button type="button" onClick={onStop} className={`${action} everyport:text-danger`}>
-            Stop
-          </button>
-          <button type="button" onClick={onSnooze} className={`${action} everyport:text-fg`}>
-            Snooze 1h
-          </button>
-        </div>
+        <div className="everyport:flex everyport:gap-1.5 everyport:pl-11">{children}</div>
       </div>
     </Themed>
+  );
+}
+
+function CardAction({ onClick, danger, children }: { onClick: () => void; danger?: boolean; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`everyport:flex everyport:flex-1 everyport:justify-center everyport:rounded-lg everyport:bg-accent everyport:py-[5px] everyport:text-13 everyport:font-medium ${danger ? "everyport:text-danger" : "everyport:text-fg"}`}
+    >
+      {children}
+    </button>
   );
 }

@@ -14,7 +14,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, Tray
 use tauri::{AppHandle, Manager, Theme, Wry};
 use tauri_plugin_autostart::ManagerExt as _;
 
-use crate::{popover, settings};
+use crate::{popover, settings, updater};
 
 const ID: &str = "tray";
 /// Paper's amber, until the page sends the theme's.
@@ -36,17 +36,20 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
         app.autolaunch().is_enabled().unwrap_or(false),
         None::<&str>,
     )?;
+    let update = MenuItem::with_id(app, "update", CHECK_FOR_UPDATES, true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[
             &MenuItem::with_id(app, "open", "Open Everyport", true, None::<&str>)?,
             &MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?,
             &launch_at_login,
+            &update,
             &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "quit", "Quit Everyport", true, Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     app.manage(LoginItem(launch_at_login));
+    app.manage(UpdateItem(update));
     let look = Look {
         state: State::Idle,
         generation: 0,
@@ -73,6 +76,7 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
                     eprintln!("launch at login: {error}");
                 }
             }
+            "update" => updater::from_menu(app),
             "quit" => app.exit(0),
             _ => {}
         })
@@ -91,6 +95,19 @@ pub fn create(app: &AppHandle) -> tauri::Result<()> {
 }
 
 struct LoginItem(CheckMenuItem<Wry>);
+
+const CHECK_FOR_UPDATES: &str = "Check for Updates…";
+
+/// The menu item that checks for updates, or installs the version it offers.
+struct UpdateItem(MenuItem<Wry>);
+
+/// Offers `version` in the menu, or goes back to checking.
+pub fn set_update(app: &AppHandle, version: Option<&str>) {
+    let text = version.map_or(CHECK_FOR_UPDATES.into(), |v| {
+        format!("Update to Everyport {v}…")
+    });
+    let _ = app.state::<UpdateItem>().0.set_text(text);
+}
 
 /// Shows the current launch-at-login state in the menu.
 pub fn sync_launch_at_login(app: &AppHandle) {

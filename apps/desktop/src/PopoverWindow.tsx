@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { TauriEveryportClient } from "./client";
 import { useFitWindow } from "./fit";
 import { useSettings } from "./settings/useSettings";
+import { installUpdate, useUpdater } from "./updater";
 
 /** Hidden this long, the popover reopens on the list instead of where it was. */
 const RESET_AFTER_MS = 60_000;
@@ -16,6 +17,7 @@ export function PopoverWindow({ client }: { client: TauriEveryportClient }) {
   const [view, setView] = useState<{ key: number; initialServer?: ServerRef }>({ key: 0 });
   const ref = useFitWindow<HTMLDivElement>();
   const settings = useSettings();
+  const offer = useUpdater()?.offer;
 
   useEffect(() => {
     let reset: number | undefined;
@@ -55,6 +57,7 @@ export function PopoverWindow({ client }: { client: TauriEveryportClient }) {
         theme={settings?.app.theme ?? undefined}
         appearance={settings?.app.appearance}
         alertMemory={settings?.config.alert_memory}
+        update={offer ? { version: offer, onUpdate: installUpdate } : undefined}
       />
     </div>
   );

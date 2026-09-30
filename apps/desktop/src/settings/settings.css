@@ -169,6 +169,11 @@
   color: var(--primary);
 }
 
+.settings-command {
+  font-family: var(--everyport-mono);
+  user-select: text;
+}
+
 .settings-footer {
   padding: 2px 0 6px;
 }
