@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - packaging/installer-art
   - site
 allowBuilds:
   # next/image optimization, which the site does not use.

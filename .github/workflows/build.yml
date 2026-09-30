@@ -109,6 +109,8 @@ jobs:
         env:
           # Not SIGN: the AppImage plugin gpg-signs whenever SIGN is set.
           EVERYPORT_SIGN: ${{ inputs.sign && !(runner.os == 'Windows' && vars.WINDOWS_SIGNING == 'skip') }}
+          # Tauri skips the Finder step that lays out the DMG window when CI is true.
+          TAURI_BUNDLER_DMG_IGNORE_CI: true
           # apps/desktop/scripts/sidecar.mjs bundles this prebuilt everyport instead of building one.
           EVERYPORT_SIDECAR: ${{ github.workspace }}/sidecar/everyport-${{ matrix.sidecar || matrix.target }}${{ matrix.exe }}
           APPLE_CERTIFICATE: ${{ inputs.sign && secrets.CSC_LINK || '' }}
