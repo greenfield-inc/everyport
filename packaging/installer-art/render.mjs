@@ -59,7 +59,7 @@ function dmgBackground({ name, accent, tagline, mark, theme: t }) {
   // The arrow runs between the two 128 pt icons.
   const [x1, x2, y] = [app.x + 84, apps.x - 84, app.y];
   return svg(w, h, `
-    ${defs(t, accent)}
+    ${defs(accent)}
     <rect width="${w}" height="${h}" fill="${t.bg}"/>
     ${socketShape(t, 500, -190, 300)}
     ${socketShape(t, -120, 236, 250)}
@@ -76,7 +76,7 @@ function nsisHeader({ name, accent, mark, theme: t }) {
   const [w, h] = [150, 57];
   const size = fitText(name, 15, "600", w - 58);
   return svg(w, h, `
-    ${defs(t, accent)}
+    ${defs(accent)}
     <rect width="${w}" height="${h}" fill="${t.header}"/>
     ${glow(28, h / 2, 90, 60, accent, t.glow)}
     ${place(mark, 16, (h - 24) / 2, 24, t.ink)}
@@ -84,7 +84,7 @@ function nsisHeader({ name, accent, mark, theme: t }) {
 }
 
 function nsisSidebar(art) {
-  return svg(164, 314, `${defs(art.theme, art.accent)}${sidebar(art, 164, 314)}`);
+  return svg(164, 314, `${defs(art.accent)}${sidebar(art, 164, 314)}`);
 }
 
 /** The panel that NSIS shows on its welcome and finish pages, and WiX on its first and last dialogs. */
@@ -105,7 +105,7 @@ function wixBanner({ accent, icon, theme: t }) {
   // WiX draws the dialog title and description in black over the left 406 px.
   const [w, h] = [493, 58];
   return svg(w, h, `
-    ${defs(t, accent)}
+    ${defs(accent)}
     <rect width="${w}" height="${h}" fill="${t.paper}"/>
     ${place(icon, w - 58, 5, 48)}
     ${grain(t, 0, 0, w, h, THEMES.light.grain)}`);
@@ -116,7 +116,7 @@ function wixDialog(art) {
   const [w, h, panel] = [493, 312, 164];
   const t = art.theme;
   return svg(w, h, `
-    ${defs(t, art.accent)}
+    ${defs(art.accent)}
     <rect width="${w}" height="${h}" fill="${t.paper}"/>
     ${grain(t, panel, 0, w - panel, h, THEMES.light.grain)}
     <svg width="${panel}" height="${h}">${sidebar(art, panel, h)}</svg>`);
@@ -136,7 +136,7 @@ function svg(w, h, body) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`;
 }
 
-function defs(t, accent) {
+function defs(accent) {
   return `<defs>
     <linearGradient id="arrow" x1="0" x2="1"><stop offset="0" stop-color="${accent}" stop-opacity=".2"/><stop offset="1" stop-color="${accent}"/></linearGradient>
     <filter id="grain" x="0" y="0" width="1" height="1"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
