@@ -46,9 +46,10 @@ A tag build fails when a signing or notarization secret is missing, unless it wa
 
 ## Cut a release
 
-1. Run `scripts/bump-version.sh 0.2.0`. It sets the version in `Cargo.toml` and `Cargo.lock`.
-2. Merge the version bump to main, pull, then tag that commit: `git tag v0.2.0 && git push origin v0.2.0`. `scripts/dist.sh` fails when the tag doesn't match the version.
-3. Submit the winget manifests from the `packages` artifact of the tag's Release run to [winget-pkgs](https://github.com/microsoft/winget-pkgs), for example with `wingetcreate submit`. Submissions are by hand for now, including the first one, which winget reviews manually.
+1. Run `scripts/bump-version.sh 0.2.0`. It sets the version in `Cargo.toml` and `Cargo.lock`, and adds a `## 0.2.0` heading to `CHANGELOG.md`.
+2. Write the release notes under that heading, grouped as New, Improved and Fixed. They become the GitHub release body, the `/changelog` page and the RSS feed. The Release run fails before building when they're missing. `scripts/release-notes.sh` prints them.
+3. Merge the version bump to main, pull, then tag that commit: `git tag v0.2.0 && git push origin v0.2.0`. `scripts/dist.sh` fails when the tag doesn't match the version.
+4. Submit the winget manifests from the `packages` artifact of the tag's Release run to [winget-pkgs](https://github.com/microsoft/winget-pkgs), for example with `wingetcreate submit`. Submissions are by hand for now, including the first one, which winget reviews manually.
 
 ## Try it locally
 
