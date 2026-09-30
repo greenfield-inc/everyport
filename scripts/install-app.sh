@@ -121,11 +121,28 @@ install_macos() {
   if $open_app; then open "$target"; fi
 }
 
+# Quits the user's running Everyport, so the one that opens next is the new
+# version. SIGTERM is how Linux asks an app to quit.
+quit_linux() {
+  pattern='^[^ ]*/everyport-desktop( |$)'
+  pids="$(pgrep -u "$(id -u)" -f "$pattern" || true)"
+  [ -n "$pids" ] || return 0
+  echo "Quitting $app_name"
+  kill $pids 2>/dev/null || true
+  i=0
+  while pgrep -u "$(id -u)" -f "$pattern" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -le 50 ] || fail "$app_name is still running. Quit it and run this again."
+    sleep 0.2
+  done
+}
+
 install_deb() {
   # apt reads the file as its own user, so let it into the folder.
   chmod 755 "$tmp"
   echo "Installing $bundle with apt"
   sudo apt install -y "$tmp/$bundle" || fail "apt could not install $bundle"
+  quit_linux
   if $open_app && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
     nohup /usr/bin/everyport-desktop >/dev/null 2>&1 &
   fi
@@ -144,6 +161,7 @@ install_appimage() {
     cp "$tmp/squashfs-root/$app_name.png" "$app_dir/icon.png"
   fi
 
+  quit_linux
   mv "$tmp/$bundle" "$appimage"
   cat >"$data/applications/everyport.desktop" <<EOF
 [Desktop Entry]

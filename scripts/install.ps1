@@ -62,7 +62,13 @@ try {
 
   New-Item -ItemType Directory -Force -Path $installDir | Out-Null
   $target = Join-Path $installDir 'everyport.exe'
-  Move-Item -Force $binary $target
+  # Windows can rename a running program but not replace it, as when `everyport update` runs this.
+  $old = "$target.old"
+  Remove-Item -Force $old -ErrorAction SilentlyContinue
+  if (Test-Path $target) { Move-Item -Force $target $old }
+  try { Move-Item $binary $target }
+  catch { if (Test-Path $old) { Move-Item $old $target }; throw }
+  Remove-Item -Force $old -ErrorAction SilentlyContinue
   Write-Host "Installed $(& $target --version) to $target"
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

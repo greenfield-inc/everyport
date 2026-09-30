@@ -6,7 +6,8 @@
 # Serves dist/release over HTTP, then runs install.sh through curl | sh (or
 # install.ps1 through irm | iex on Windows, under both pwsh and Windows
 # PowerShell 5.1), the npm package and the PyPI package through uvx. Each must
-# install an everyport that prints the release version. When the release has this OS's desktop app, install-app.sh (or
+# install an everyport that prints the release version, and `everyport update`
+# must reinstall itself. When the release has this OS's desktop app, install-app.sh (or
 # install-app.ps1) must install it and everyport too. Then it serves a copy whose
 # binaries and bundles are altered, and each one must refuse to install. Last,
 # against real GitHub, both install scripts must explain a release that doesn't
@@ -133,6 +134,13 @@ for i in "${!runners[@]}"; do
   expect_version "install script ($runner)" "$work/home-script$i-18765/bin/$installed" --version
   expect_mismatch "install script ($runner)" install_with "script$i" "$bad" run_script "$runner" "$bad/install.$ext"
 done
+# `everyport update` reinstalls itself while it runs, which Windows allows only by renaming it first.
+# The update check reads the version from the URL's last segment, so a folder named v99.0.0 stands in for a newer release.
+mkdir -p "$work/tags/v99.0.0"
+touch "$work/tags/SHA256SUMS"
+serve "$work/tags" 18767
+expect_version "everyport update" install_with script0 "$good" \
+  with_env EVERYPORT_UPDATE_URL=http://127.0.0.1:18767/v99.0.0 "$work/home-script0-18765/bin/$installed" update
 expect_version "npm everyport" install_with npm "$good" "$npm_bin/everyport$cmd" --version
 expect_version "npm everyport" install_with npm2 "$good" "$npm_bin/everyport$cmd" --version
 expect_version "uvx everyport" install_with uvx "$good" uvx --from "$wheel" everyport --version
