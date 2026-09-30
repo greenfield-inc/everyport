@@ -20,6 +20,7 @@ Commands:
   serve    Speak the Everyport protocol over HTTP on loopback
   remote   Manage remote machines
   doctor   Check permissions and platform support, and the way to each machine
+  update   Update everyport to the newest release
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -215,4 +216,21 @@ Options:
       --on <MACHINE>  Check only the way to this machine
   -y, --yes           Don't ask: install everyport on the machine, or stop what clean suggests
   -h, --help          Print help
+```
+
+## `everyport update`
+
+```text
+Update everyport to the newest release
+
+Runs the CLI's install command, which replaces this everyport. A copy from Homebrew, cargo, npm or PyPI prints that package manager's command instead. `everyport --version` in a terminal also says when a newer release is out, checking at most once a day. Set EVERYPORT_NO_UPDATE_CHECK=1 to turn that off.
+
+Usage: everyport update [OPTIONS]
+
+Options:
+  -y, --yes
+          Don't ask: install everyport on the machine, or stop what clean suggests
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```

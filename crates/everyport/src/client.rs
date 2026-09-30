@@ -10,7 +10,7 @@ pub mod check;
 mod connection;
 pub mod discover;
 pub mod forward;
-mod http;
+pub(crate) mod http;
 pub mod install;
 pub mod machines;
 mod remote;

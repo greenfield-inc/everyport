@@ -1241,6 +1241,7 @@ dependencies = [
  "ratatui",
  "reqwest",
  "rustls",
+ "semver",
  "serde",
  "serde_json",
  "sha2",
@@ -1257,6 +1258,7 @@ version = "0.1.2"
 dependencies = [
  "everyport",
  "notify",
+ "semver",
  "serde",
  "serde_json",
  "shell-words",

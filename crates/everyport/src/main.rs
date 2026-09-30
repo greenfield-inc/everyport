@@ -7,6 +7,7 @@ mod hub;
 mod machine;
 mod palette;
 mod remote;
+mod self_update;
 mod serve;
 mod stdio;
 mod tui;
@@ -95,6 +96,13 @@ enum Command {
         #[arg(long, value_name = "MACHINE")]
         on: Option<String>,
     },
+    /// Update everyport to the newest release
+    ///
+    /// Runs the CLI's install command, which replaces this everyport. A copy from
+    /// Homebrew, cargo, npm or PyPI prints that package manager's command instead.
+    /// `everyport --version` in a terminal also says when a newer release is out,
+    /// checking at most once a day. Set EVERYPORT_NO_UPDATE_CHECK=1 to turn that off.
+    Update,
     /// Pipe stdin and stdout to a port on this machine, for forwarding
     #[command(hide = true)]
     Connect {
@@ -126,7 +134,15 @@ enum Remote {
 
 fn main() -> ExitCode {
     everyport::platform::run_helper();
-    let cli = Cli::parse();
+    let cli = match Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(error) if error.kind() == clap::error::ErrorKind::DisplayVersion => {
+            let _ = error.print();
+            self_update::note_after_version();
+            return ExitCode::SUCCESS;
+        }
+        Err(error) => error.exit(),
+    };
     let result = run(cli);
     match result {
         Ok(code) => code,
@@ -199,6 +215,7 @@ fn run(cli: Cli) -> io::Result<ExitCode> {
             Remote::List => remote::list(),
             Remote::Rm { name } => remote::rm(&name),
         },
+        Some(Command::Update) => self_update::run(),
         Some(Command::Connect { port, check }) => connect::run(port, check),
     }
 }
