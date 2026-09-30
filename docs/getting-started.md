@@ -79,13 +79,21 @@ See the [CLI reference](cli.md) for every command.
 
 ## Updating
 
-The desktop app checks GitHub for a newer release when it starts and every 12 hours. When there is one, the popover shows **Update to** and the version at the bottom, the tray menu gets an **Update to Everyport** item, and a notification says so once.
+The desktop app checks GitHub for a newer release when it starts and every 12 hours, or when you pick **Check for Updates…** in the tray menu. The check sends one request to GitHub and nothing else. When there is a newer release:
 
-Click any of them. A terminal opens and runs the install command, which downloads the new version, checks it, quits Everyport, replaces it and opens the new one. If no terminal opens, **Settings → General** shows the command, already copied, to paste in a terminal. If you installed the app with Homebrew, the terminal runs `brew upgrade --cask everyport` instead. If you installed a `.deb`, `.rpm` or `.msi`, install the new one from the release page.
+- the popover shows an **Update to 0.1.3** button at the bottom
+- the tray menu shows **Update to Everyport 0.1.3…**
+- a notification appears, once for each new version
 
-**Skip This Version**, in the notification or in **Settings → General**, hides that version until a newer one comes out. **Check for Updates…** in the tray menu checks now. To stop checking, turn off **Check for updates automatically** in **Settings → General**.
+Click any of these to update. A terminal opens and runs the install command. It downloads and verifies the new version, quits Everyport, replaces it and opens the new one. In some cases it works differently:
 
-For the CLI, run `everyport update`. `everyport --version` also says when a newer release is out. It checks at most once a day. Set `EVERYPORT_NO_UPDATE_CHECK=1` to turn that off.
+- **No terminal opens:** **Settings → General** shows the command to paste in a terminal, with a **Copy** button.
+- **Installed with Homebrew:** the terminal runs `brew upgrade --cask everyport`.
+- **Installed from a `.deb`, `.rpm` or `.msi`:** Update opens the release page. Download and install the new package from there.
+
+**Skip This Version**, in the notification or in **Settings → General**, hides that version until a newer one comes out. To stop checking, turn off **Check for updates automatically** in **Settings → General**.
+
+For the CLI, run `everyport update`. If you installed the CLI with Homebrew, cargo, npm or PyPI, it prints the command to update it that way. When run in a terminal, `everyport --version` also tells you if a newer release is out. It checks at most once a day. Set `EVERYPORT_NO_UPDATE_CHECK=1` to turn it off.
 
 ## Next
 
