@@ -77,6 +77,16 @@ everyport clean --yes           # stop what Clean up suggests, without asking
 
 See the [CLI reference](cli.md) for every command.
 
+## Updating
+
+The desktop app checks GitHub for a newer release when it starts and every 12 hours. When there is one, the popover shows **Update to** and the version at the bottom, the tray menu gets an **Update to Everyport** item, and a notification says so once.
+
+Click any of them. A terminal opens and runs the install command, which downloads the new version, checks it, quits Everyport, replaces it and opens the new one. If no terminal opens, **Settings → General** shows the command, already copied, to paste in a terminal. If you installed the app with Homebrew, the terminal runs `brew upgrade --cask everyport` instead. If you installed a `.deb`, `.rpm` or `.msi`, install the new one from the release page.
+
+**Skip This Version**, in the notification or in **Settings → General**, hides that version until a newer one comes out. **Check for Updates…** in the tray menu checks now. To stop checking, turn off **Check for updates automatically** in **Settings → General**.
+
+For the CLI, run `everyport update`. `everyport --version` also says when a newer release is out. It checks at most once a day. Set `EVERYPORT_NO_UPDATE_CHECK=1` to turn that off.
+
 ## Next
 
 - [Watch other machines](remote-machines.md) over SSH, Docker, Kubernetes or WSL.

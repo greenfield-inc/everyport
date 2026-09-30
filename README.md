@@ -243,6 +243,7 @@ everyport serve                  Speak the Everyport protocol over HTTP on loopb
 everyport remote add|list|rm     Manage remote machines
 everyport --on <machine> ...     Run the command on another machine
 everyport doctor [--on <machine>] Check permissions and platform support, and the way to each machine
+everyport update                 Update everyport to the newest release
 ```
 
 Every command and option is in the [CLI reference](docs/cli.md).
@@ -255,7 +256,7 @@ Every command and option is in the [CLI reference](docs/cli.md).
 - **Windows:** the port, its owner and the process name. Without admin rights, the owner can be missing.
 - **macOS:** the port, its owner and the process name. A new one can take up to 10 seconds to appear.
 
-Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on, and to download `everyport` from GitHub Releases when you install it on another machine. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `everyport`).
+Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on, to download `everyport` from GitHub Releases when you install it on another machine, and to check GitHub for a newer release, which you can turn off in Settings. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `everyport`).
 
 ## Build on Everyport
 

@@ -9,6 +9,8 @@ Open Settings with the gear next to **Clean up** in the popover, or **Settings�
 | Launch at login | Off | Starts the app when you log in |
 | Open Everyport | <kbd>⌥</kbd> <kbd>⌘</kbd> <kbd>P</kbd> (<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>P</kbd>) | The global shortcut. Click it and press new keys, or <kbd>Esc</kbd> to cancel. On macOS it needs <kbd>⌥</kbd> with <kbd>⌘</kbd> or <kbd>⌃</kbd>, or <kbd>⌘</kbd> and <kbd>⌃</kbd> together. On Windows and Linux it needs <kbd>Alt</kbd>, or <kbd>Win</kbd> and <kbd>Ctrl</kbd> together. **Reset** restores the default. |
 | Scan every | 2 seconds | How often Everyport checks ports and processes: 1, 2, 5 or 10 seconds |
+| Updates → Check for updates automatically | On | Checks GitHub for a newer release when the app starts and every 12 hours. See [Updating](getting-started.md#updating). |
+| Updates → Everyport and its version | | What the last check found. **Check Now** checks, **Update** updates, and **Skip This Version** hides a release until a newer one comes out. |
 | Integrations → Vercel previews | Off | Links each branch to its Vercel preview. It uses the GitHub CLI (`gh`), which goes online. |
 | Appearance → Mode | System | System, Light or Dark |
 | Appearance → Theme | Doozy Default | The color theme. There are 40. |
@@ -80,7 +82,7 @@ Settings live in one folder:
 | File | Holds | Used by |
 |---|---|---|
 | `config.toml` | Scanning, alerts, clean up, protected processes, auto-kill, Vercel previews | The app and the CLI |
-| `app.toml` | Theme, mode and shortcut | The app |
+| `app.toml` | Theme, mode, shortcut and update checks | The app |
 | `machines.toml` | Machines you've added | The app and `everyport remote` |
 | `serve-token` | The `everyport serve` token | `everyport serve` |
 
