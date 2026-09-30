@@ -107,7 +107,7 @@ function wixBanner({ accent, icon, theme: t }) {
   return svg(w, h, `
     ${defs(accent)}
     <rect width="${w}" height="${h}" fill="${t.paper}"/>
-    ${place(icon, w - 58, 5, 48)}
+    ${place(icon, w - 44, 11, 36)}
     ${grain(t, 0, 0, w, h, THEMES.light.grain)}`);
 }
 
