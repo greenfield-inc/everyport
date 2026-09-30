@@ -200,7 +200,7 @@ main() {
   case "$(uname -s)" in
     Darwin) os=macos ;;
     Linux) os=linux ;;
-    MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: irm https://everyport.dev/install.ps1 | iex" ;;
+    MINGW* | MSYS* | CYGWIN*) fail "on Windows, run in PowerShell: [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex" ;;
     *) fail "unsupported OS: $(uname -s)" ;;
   esac
 

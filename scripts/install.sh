@@ -54,7 +54,7 @@ main() {
   case "$(uname -s)" in
     Darwin) os=apple-darwin ;;
     Linux) os=unknown-linux-musl ;;
-    MINGW* | MSYS* | CYGWIN*) fail "on Windows, run: irm $repo/releases/latest/download/install.ps1 | iex" ;;
+    MINGW* | MSYS* | CYGWIN*) fail "on Windows, run: [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm $repo/releases/latest/download/install.ps1 | iex" ;;
     *) fail "unsupported OS: $(uname -s)" ;;
   esac
 

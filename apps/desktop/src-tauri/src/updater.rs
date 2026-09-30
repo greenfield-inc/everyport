@@ -106,7 +106,10 @@ pub fn setup(app: &AppHandle) {
 async fn check(app: &AppHandle, manual: bool) {
     set(app, |status| status.checking = true);
     let found = update::latest().await;
-    state(app).checked_at = Some(SystemTime::now());
+    // A failed check, such as at login before Wi-Fi is up, tries again on the next tick.
+    if found.is_ok() {
+        state(app).checked_at = Some(SystemTime::now());
+    }
     let prefs = settings::app_settings(app);
     let skipped = prefs
         .skip_version
@@ -263,8 +266,9 @@ fn how(exe: &Path) -> How {
                 quit: true,
             };
         }
-        let folder = bundle.and_then(Path::parent);
-        script(folder.filter(|f| *f != Path::new("/Applications")))
+        // Always the app's own folder: the installer's default falls back to
+        // ~/Applications when /Applications isn't writable.
+        script(bundle.and_then(Path::parent))
     } else if cfg!(windows) {
         // The setup.exe leaves its uninstall.exe next to the app; the .msi doesn't.
         let folder = exe.parent().filter(|f| f.join("uninstall.exe").exists());

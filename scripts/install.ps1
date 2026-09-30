@@ -1,6 +1,6 @@
 # Installs the everyport CLI from GitHub Releases into ~\.local\bin and adds it to your PATH.
 #
-#   irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
+#   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
 #
 # Environment:
 #   EVERYPORT_VERSION       release to install, such as 0.2.0 (default: latest)

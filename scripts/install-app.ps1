@@ -1,7 +1,7 @@
 # Installs the Everyport desktop app and the everyport CLI from GitHub Releases, for the current user.
 #
-#   irm https://everyport.dev/install.ps1 | iex
-#   & ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -NoOpen
+#   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex
+#   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -NoOpen
 #
 # The app installs quietly into %LOCALAPPDATA%\Everyport with no admin
 # prompt, and everyport goes into ~\.local\bin, which is added to your PATH. A download

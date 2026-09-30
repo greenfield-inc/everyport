@@ -30,7 +30,7 @@
 <pre><code>curl -fsSL https://everyport.dev/install.sh | sh</code></pre>
 
 <sub>Desktop app and CLI: Windows (PowerShell)</sub><br />
-<pre><code>irm https://everyport.dev/install.ps1 | iex</code></pre>
+<pre><code>[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex</code></pre>
 
 <sub>Other ways</sub><br />
 <a href="https://github.com/greenfield-inc/everyport/releases/latest">Download from Releases</a> · <code>brew install --cask greenfield-inc/tap/everyport</code>
@@ -109,7 +109,7 @@ curl -fsSL https://everyport.dev/install.sh | sh
 On Windows, in PowerShell:
 
 ```powershell
-irm https://everyport.dev/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex
 ```
 
 On macOS the app goes into `/Applications`, or `~/Applications` if that isn't writable. On Linux it's an AppImage in `~/.local/share/everyport` with a menu entry. On Windows it installs for your user, with no admin prompt. Linux on arm64 gets the CLI only, since there is no arm64 desktop build yet.
@@ -123,7 +123,7 @@ curl -fsSL https://everyport.dev/install.sh | sh -s -- --cli
 On Windows the options are `-Cli` and `-NoOpen`:
 
 ```powershell
-& ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
 ```
 
 Or install it another way:
@@ -153,7 +153,7 @@ npx everyport          # or: npm i -g everyport; npm has 0.1.0 for now
 On Windows, use PowerShell instead of the install script:
 
 ```powershell
-irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
 ```
 
 The install scripts and the npm package download the release binary for your platform and check its SHA-256 checksum. The PyPI (`uvx`, `pipx`) and crates.io (`cargo install`) packages are placeholders until a release publishes there.

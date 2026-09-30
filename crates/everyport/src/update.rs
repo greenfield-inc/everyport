@@ -109,14 +109,15 @@ impl Install {
         format!("curl -fsSL {} | {env}sh", sh_quote(&self.url))
     }
 
-    /// The command for PowerShell, Windows PowerShell 5.1 included.
+    /// The command for PowerShell. It turns on TLS 1.2 first, which Windows
+    /// PowerShell 5.1 can leave off, so its first `irm` reaches GitHub.
     pub fn powershell(&self) -> String {
         let env: String = self
             .env
             .iter()
             .map(|(key, value)| format!("$env:{key}={}; ", ps_quote(value)))
             .collect();
-        format!("{env}irm {} | iex", ps_quote(&self.url))
+        format!("{TLS12}{env}irm {} | iex", ps_quote(&self.url))
     }
 
     /// The command for this OS's shell: PowerShell on Windows, `sh` elsewhere.
@@ -128,6 +129,9 @@ impl Install {
         }
     }
 }
+
+/// Adds TLS 1.2 (3072) to what Windows PowerShell 5.1 allows.
+const TLS12: &str = "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; ";
 
 /// Whether `value` reads the same unquoted in `sh` and PowerShell.
 fn plain(value: &str) -> bool {
@@ -206,7 +210,7 @@ mod tests {
         };
         assert_eq!(
             app.powershell(),
-            "irm https://everyport.dev/install.ps1 | iex"
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex"
         );
     }
 
@@ -222,7 +226,7 @@ mod tests {
         );
         assert_eq!(
             mirror.powershell(),
-            "irm 'https://mirror.example/a;b $(x)/install-app.sh' | iex"
+            "[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm 'https://mirror.example/a;b $(x)/install-app.sh' | iex"
         );
     }
 
@@ -245,7 +249,7 @@ mod tests {
         .with("EVERYPORT_APP_DIR", r"C:\Users\Bob's PC\Everyport");
         assert_eq!(
             windows.powershell(),
-            r"$env:EVERYPORT_APP_DIR='C:\Users\Bob''s PC\Everyport'; irm https://everyport.dev/install.ps1 | iex"
+            r"[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; $env:EVERYPORT_APP_DIR='C:\Users\Bob''s PC\Everyport'; irm https://everyport.dev/install.ps1 | iex"
         );
     }
 }

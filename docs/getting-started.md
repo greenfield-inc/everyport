@@ -8,7 +8,7 @@ To install both with one command:
 
 ```bash
 curl -fsSL https://everyport.dev/install.sh | sh          # macOS and Linux
-irm https://everyport.dev/install.ps1 | iex               # Windows (PowerShell)
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex               # Windows (PowerShell)
 ```
 
 Or install each one separately:
@@ -16,7 +16,7 @@ Or install each one separately:
 | | Desktop app | CLI |
 |---|---|---|
 | macOS | `brew install --cask greenfield-inc/tap/everyport` | `brew install greenfield-inc/tap/everyport` |
-| Windows | `.msi` or `-setup.exe` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
+| Windows | `.msi` or `-setup.exe` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
 | Linux | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh \| sh` |
 
 See [CLI only](../README.md#cli-only) for npm.
