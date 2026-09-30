@@ -9,6 +9,7 @@ Files that package and publish `everyport` and the desktop app.
 | `homebrew/Formula/everyport.rb` | Formula for `greenfield-inc/homebrew-tap` |
 | `homebrew/Casks/everyport.rb` | Cask for the same tap, laid out as the tap lays it out |
 | `winget/` | winget manifests for `Dcouple.Everyport` |
+| `installer-art/` | Renders the DMG window and Windows installer art. The desktop build runs it before bundling. |
 | `../scripts/install.sh`, `../scripts/install.ps1` | CLI install scripts, attached to each release |
 | `../scripts/install-app.sh`, `../scripts/install-app.ps1` | Desktop app and CLI install scripts, attached to each release and served by the site as `/install.sh` and `/install.ps1` |
 
