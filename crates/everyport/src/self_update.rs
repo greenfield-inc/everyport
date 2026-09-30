@@ -39,22 +39,14 @@ pub fn run() -> io::Result<ExitCode> {
         .block_on(update::fetch(&install.url))
         .map_err(|e| io::Error::other(format!("{e:#}")))?;
     // Run from memory, with no file anyone else could swap: on stdin for sh,
-    // and encoded as PowerShell expects for -EncodedCommand.
+    // and from a variable for PowerShell, whose -EncodedCommand would print
+    // the installer's messages as CLIXML.
     let mut command = if cfg!(windows) {
-        use base64::Engine;
-        let utf16: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
         let mut command = Command::new("powershell.exe");
         command
-            .args([
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                // Plain text even when the output is captured, not CLIXML.
-                "-OutputFormat",
-                "Text",
-                "-EncodedCommand",
-            ])
-            .arg(base64::engine::general_purpose::STANDARD.encode(utf16));
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
+            .arg("& ([scriptblock]::Create($env:EVERYPORT_INSTALL_SCRIPT))")
+            .env("EVERYPORT_INSTALL_SCRIPT", &script);
         command
     } else {
         let mut command = Command::new("sh");
