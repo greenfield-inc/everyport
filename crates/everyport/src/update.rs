@@ -34,6 +34,19 @@ pub async fn latest() -> anyhow::Result<Version> {
     tag_version(found.path()).with_context(|| format!("{found} names no release"))
 }
 
+/// The installer script at `url`.
+pub async fn fetch(url: &str) -> anyhow::Result<String> {
+    let response = crate::client::http::builder()
+        .timeout(Duration::from_secs(30))
+        .build()?
+        .get(url)
+        .send()
+        .await
+        .and_then(|response| response.error_for_status())
+        .with_context(|| format!("couldn't download {url}"))?;
+    Ok(response.text().await?)
+}
+
 /// The version in a tag URL's last segment, with or without its `v`.
 fn tag_version(path: &str) -> Option<Version> {
     let tag = path.trim_end_matches('/').rsplit('/').next()?;
@@ -93,7 +106,7 @@ impl Install {
             .iter()
             .map(|(key, value)| format!("{key}={} ", sh_quote(value)))
             .collect();
-        format!("curl -fsSL {} | {env}sh", self.url)
+        format!("curl -fsSL {} | {env}sh", sh_quote(&self.url))
     }
 
     /// The command for PowerShell, Windows PowerShell 5.1 included.
@@ -101,9 +114,9 @@ impl Install {
         let env: String = self
             .env
             .iter()
-            .map(|(key, value)| format!("$env:{key}='{}'; ", value.replace('\'', "''")))
+            .map(|(key, value)| format!("$env:{key}={}; ", ps_quote(value)))
             .collect();
-        format!("{env}irm {} | iex", self.url)
+        format!("{env}irm {} | iex", ps_quote(&self.url))
     }
 
     /// The command for this OS's shell: PowerShell on Windows, `sh` elsewhere.
@@ -116,13 +129,27 @@ impl Install {
     }
 }
 
+/// Whether `value` reads the same unquoted in `sh` and PowerShell.
+fn plain(value: &str) -> bool {
+    let safe = |c: char| c.is_ascii_alphanumeric() || "/._:-=+,%".contains(c);
+    !value.is_empty() && value.chars().all(safe)
+}
+
 /// `value` as one `sh` word.
 fn sh_quote(value: &str) -> String {
-    let plain = |c: char| c.is_ascii_alphanumeric() || "/._:-=@+,%".contains(c);
-    if !value.is_empty() && value.chars().all(plain) {
+    if plain(value) {
         value.into()
     } else {
         format!("'{}'", value.replace('\'', r"'\''"))
+    }
+}
+
+/// `value` as one PowerShell string.
+fn ps_quote(value: &str) -> String {
+    if plain(value) {
+        value.into()
+    } else {
+        format!("'{}'", value.replace('\'', "''"))
     }
 }
 
@@ -180,6 +207,22 @@ mod tests {
         assert_eq!(
             app.powershell(),
             "irm https://everyport.dev/install.ps1 | iex"
+        );
+    }
+
+    #[test]
+    fn a_mirror_url_stays_one_word() {
+        let mirror = Install {
+            url: "https://mirror.example/a;b $(x)/install-app.sh".into(),
+            env: vec![],
+        };
+        assert_eq!(
+            mirror.sh(),
+            "curl -fsSL 'https://mirror.example/a;b $(x)/install-app.sh' | sh"
+        );
+        assert_eq!(
+            mirror.powershell(),
+            "irm 'https://mirror.example/a;b $(x)/install-app.sh' | iex"
         );
     }
 

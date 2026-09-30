@@ -32,15 +32,29 @@ pub fn run() -> io::Result<ExitCode> {
     println!("Updating everyport {current} to {latest}");
     let dir = exe.parent().expect("an executable is in a folder");
     let install = Install::cli().with("EVERYPORT_INSTALL_DIR", dir.to_string_lossy());
-    let status = if cfg!(windows) {
-        Command::new("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"])
-            .arg(install.powershell())
-            .status()?
+    // Downloaded first, so a failed download fails the update.
+    let script = RUNTIME
+        .block_on(update::fetch(&install.url))
+        .map_err(|e| io::Error::other(format!("{e:#}")))?;
+    let extension = if cfg!(windows) { "ps1" } else { "sh" };
+    let path = std::env::temp_dir().join(format!(
+        "everyport-install-{}.{extension}",
+        std::process::id()
+    ));
+    std::fs::write(&path, script)?;
+    let mut command = if cfg!(windows) {
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]);
+        command
     } else {
-        Command::new("sh").arg("-c").arg(install.sh()).status()?
+        Command::new("sh")
     };
-    Ok(if status.success() {
+    let status = command
+        .arg(&path)
+        .envs(install.env.iter().cloned())
+        .status();
+    let _ = std::fs::remove_file(&path);
+    Ok(if status?.success() {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE

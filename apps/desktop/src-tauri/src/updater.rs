@@ -51,6 +51,8 @@ pub enum Manual {
 struct State {
     status: Status,
     checked_at: Option<SystemTime>,
+    /// A terminal just started the installer, which quits this app.
+    installing: bool,
 }
 
 fn state(app: &AppHandle) -> std::sync::MutexGuard<'_, State> {
@@ -83,6 +85,7 @@ pub fn setup(app: &AppHandle) {
             manual: None,
         },
         checked_at: None,
+        installing: false,
     }));
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -176,36 +179,48 @@ pub async fn updater_install(app: AppHandle) {
     install(&app);
 }
 
-/// Updates the way this copy was installed.
+/// Updates the way this copy was installed, once. Off the calling thread,
+/// since opening a terminal waits to see it start.
 pub fn install(app: &AppHandle) {
     let Some(version) = state(app).status.available.clone() else {
         return;
     };
-    let exe = std::env::current_exe().unwrap_or_default();
-    match how(&exe) {
-        How::Package => {
-            let url = format!("{}/tag/v{version}", update::RELEASES);
-            let _ = launch::open_external(app.clone(), url.clone());
-            set(app, |status| status.manual = Some(Manual::Package { url }));
-            settings::open(app, Some("General".into()));
-        }
-        How::Terminal { line, quit } => match open_terminal(&line) {
-            Ok(()) => {
-                set(app, |status| status.manual = None);
-                if quit {
-                    app.exit(0);
-                }
-            }
-            Err(error) => {
-                eprintln!("updater: no terminal opened: {error}");
-                copy(&line);
-                set(app, |status| {
-                    status.manual = Some(Manual::Paste { command: line })
-                });
-                settings::open(app, Some("General".into()));
-            }
-        },
+    if std::mem::replace(&mut state(app).installing, true) {
+        return;
     }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let exe = std::env::current_exe().unwrap_or_default();
+        match how(&exe) {
+            How::Package => {
+                state(&app).installing = false;
+                let url = format!("{}/tag/v{version}", update::RELEASES);
+                let _ = launch::open_external(app.clone(), url.clone());
+                set(&app, |status| status.manual = Some(Manual::Package { url }));
+                settings::open(&app, Some("General".into()));
+            }
+            How::Terminal { line, quit } => match open_terminal(&line) {
+                Ok(()) => {
+                    set(&app, |status| status.manual = None);
+                    if quit {
+                        app.exit(0);
+                    }
+                    // Allows another try if the installer failed.
+                    std::thread::sleep(Duration::from_secs(60));
+                    state(&app).installing = false;
+                }
+                Err(error) => {
+                    eprintln!("updater: no terminal opened: {error}");
+                    state(&app).installing = false;
+                    copy(&line);
+                    set(&app, |status| {
+                        status.manual = Some(Manual::Paste { command: line })
+                    });
+                    settings::open(&app, Some("General".into()));
+                }
+            },
+        }
+    });
 }
 
 #[derive(Debug, PartialEq)]
@@ -235,9 +250,11 @@ fn how(exe: &Path) -> How {
             .ancestors()
             .nth(3)
             .filter(|b| b.extension().is_some_and(|e| e == "app"));
-        let cask = ["/opt/homebrew", "/usr/local"]
-            .iter()
-            .any(|prefix| Path::new(prefix).join("Caskroom/everyport").exists());
+        // The cask installs /Applications/Everyport.app.
+        let cask = bundle == Some(Path::new("/Applications/Everyport.app"))
+            && ["/opt/homebrew", "/usr/local"]
+                .iter()
+                .any(|prefix| Path::new(prefix).join("Caskroom/everyport").exists());
         if cask {
             // Homebrew replaces the app but leaves it running, so this quits
             // and the command opens the new one.
@@ -249,12 +266,13 @@ fn how(exe: &Path) -> How {
         let folder = bundle.and_then(Path::parent);
         script(folder.filter(|f| *f != Path::new("/Applications")))
     } else if cfg!(windows) {
-        // The setup.exe installs per user under %LOCALAPPDATA%; the .msi, per machine.
-        let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
-        match (exe.parent(), local) {
-            (Some(folder), Some(local)) if folder == local.join("Everyport") => script(None),
-            (Some(folder), Some(local)) if folder.starts_with(&local) => script(Some(folder)),
-            _ => How::Package,
+        // The setup.exe leaves its uninstall.exe next to the app; the .msi doesn't.
+        let folder = exe.parent().filter(|f| f.join("uninstall.exe").exists());
+        let default = std::env::var_os("LOCALAPPDATA").map(|d| PathBuf::from(d).join("Everyport"));
+        match folder {
+            Some(folder) if Some(folder) == default.as_deref() => script(None),
+            Some(folder) => script(Some(folder)),
+            None => How::Package,
         }
     } else if let Some(appimage) = std::env::var_os("APPIMAGE").map(PathBuf::from) {
         let data = std::env::var_os("XDG_DATA_HOME")
@@ -306,13 +324,26 @@ fn open_terminal(line: &str) -> std::io::Result<()> {
             const CREATE_NEW_CONSOLE: u32 = 0x10;
             command.creation_flags(CREATE_NEW_CONSOLE);
         }
-        match command.spawn() {
-            Ok(mut child) => {
-                // Reaps the launcher, which some terminals exit right away.
+        let mut child = match command.spawn() {
+            Ok(child) => child,
+            Err(error) => {
+                last = error;
+                continue;
+            }
+        };
+        // A terminal that can't reach the desktop fails within a moment.
+        // Some launchers hand off to a server and exit 0 instead.
+        std::thread::sleep(std::time::Duration::from_millis(700));
+        match child.try_wait() {
+            Ok(Some(status)) if !status.success() => {
+                last = std::io::Error::other(format!("{} exited with {status}", argv[0]));
+            }
+            Ok(Some(_)) => return Ok(()),
+            _ => {
+                // Still running: reap it when it closes.
                 std::thread::spawn(move || child.wait());
                 return Ok(());
             }
-            Err(error) => last = error,
         }
     }
     Err(last)

@@ -259,17 +259,17 @@ pub fn app_settings(app: &AppHandle) -> App {
 
 /// Changes and saves the app's settings, unless `app.toml` can't be read.
 pub fn edit_app(app: &AppHandle, change: impl FnOnce(&mut App)) -> Result<(), String> {
-    let prefs = {
-        let settings = state(app);
+    {
+        // Held while saving, so a change made meanwhile isn't lost.
+        let mut settings = state(app);
         if let Some(error) = &settings.app_error {
             return Err(format!("Fix app.toml first. {error}"));
         }
         let mut prefs = settings.app.clone();
         change(&mut prefs);
-        prefs
-    };
-    save_app(&app_file()?, &prefs)?;
-    state(app).app = prefs;
+        save_app(&app_file()?, &prefs)?;
+        settings.app = prefs;
+    }
     publish(app);
     Ok(())
 }
