@@ -2,6 +2,21 @@
 
 What changed in each Everyport release, newest first. Also on [everyport.dev/changelog](https://everyport.dev/changelog), with an [RSS feed](https://everyport.dev/feed.xml).
 
+## 0.1.3 - 2026-09-29
+
+### New
+
+- Everyport tells you when a new version is out, in the popover, the tray menu and one notification per version. Click Update and a terminal runs the one-command installer, which replaces the app and reopens it. Homebrew installs run `brew upgrade --cask everyport` instead. Turn automatic checks off in Settings.
+- `everyport update` updates the CLI in place, and `everyport --version` mentions a newer release (at most once a day, off with `EVERYPORT_NO_UPDATE_CHECK=1`).
+- New installer art on macOS and Windows: a light, minimal DMG window and setup wizard.
+- [everyport.dev/changelog](https://everyport.dev/changelog), with an RSS feed.
+
+### Fixed
+
+- On Linux, reinstalling now quits the running app before replacing it.
+- On Windows, `everyport update` can replace a running `everyport.exe`.
+- The Windows one-line install turns on TLS 1.2 first, so it works in older Windows PowerShell setups.
+
 ## 0.1.2 - 2026-09-29
 
 ### New

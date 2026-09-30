@@ -1227,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "everyport"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
@@ -1254,7 +1254,7 @@ dependencies = [
 
 [[package]]
 name = "everyport-desktop"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "everyport",
  "notify",
