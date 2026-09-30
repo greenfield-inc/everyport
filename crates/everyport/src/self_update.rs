@@ -49,6 +49,9 @@ pub fn run() -> io::Result<ExitCode> {
                 "-NoProfile",
                 "-ExecutionPolicy",
                 "Bypass",
+                // Plain text even when the output is captured, not CLIXML.
+                "-OutputFormat",
+                "Text",
                 "-EncodedCommand",
             ])
             .arg(base64::engine::general_purpose::STANDARD.encode(utf16));
