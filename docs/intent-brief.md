@@ -27,7 +27,7 @@ Developers who run several dev servers at once, often started by coding agents i
 | Windows + WSL | First-class. On Windows the app finds every installed WSL distro and adds each one as a machine over `wsl.exe -d <distro> --exec`, with `everyport` installed inside the distro. Ports that Windows sees as `wslrelay.exe` belong to the distro's server, not a separate Windows row. Path, quoting and launch rules follow Pane's (`main/src/utils/wslUtils.ts` in [greenfield-inc/Pane](https://github.com/greenfield-inc/Pane)). |
 | Remote install | The app offers to install `everyport` on first connect. It pipes the binary through the connection, checks SHA-256, and puts it in `~/.local/bin`. |
 | v1 scope | Core monitor, agent and Vercel links, terminal CLI and TUI, remote machines. Localization and auto-update come after v1. |
-| Privacy | No telemetry. The app is online only for Vercel lookups through `gh`, opt-in. |
+| Privacy | No telemetry. The app is online only for Vercel lookups through `gh`, opt-in, and the update check, which asks GitHub where the latest release is and can be turned off. |
 | Names | Product "Everyport", binary `everyport`, repo `greenfield-inc/everyport`, packages `everyport` on npm, crates.io and PyPI. |
 
 ## Budgets

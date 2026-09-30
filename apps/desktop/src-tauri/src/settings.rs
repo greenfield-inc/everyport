@@ -35,6 +35,12 @@ pub struct App {
     /// Onboarding has opened, and launch at login was turned on with it. Set
     /// once, so neither happens again, even after the user turns it off.
     pub onboarded: bool,
+    /// Check GitHub for a newer release on launch and every 12 hours.
+    pub check_updates: bool,
+    /// The release the user chose to skip. Newer ones are offered again.
+    pub skip_version: Option<String>,
+    /// The last release a notification announced, so each gets one.
+    pub notified_version: Option<String>,
 }
 
 impl Default for App {
@@ -44,6 +50,9 @@ impl Default for App {
             appearance: "system".into(),
             shortcut: "CommandOrControl+Alt+P".into(),
             onboarded: false,
+            check_updates: true,
+            skip_version: None,
+            notified_version: None,
         }
     }
 }
@@ -241,6 +250,28 @@ fn save_app(path: &Path, prefs: &App) -> Result<(), String> {
 fn publish(app: &AppHandle) {
     let settings = state(app).clone();
     let _ = app.emit("settings", settings);
+}
+
+/// The app's settings in use.
+pub fn app_settings(app: &AppHandle) -> App {
+    state(app).app.clone()
+}
+
+/// Changes and saves the app's settings, unless `app.toml` can't be read.
+pub fn edit_app(app: &AppHandle, change: impl FnOnce(&mut App)) -> Result<(), String> {
+    {
+        // Held while saving, so a change made meanwhile isn't lost.
+        let mut settings = state(app);
+        if let Some(error) = &settings.app_error {
+            return Err(format!("Fix app.toml first. {error}"));
+        }
+        let mut prefs = settings.app.clone();
+        change(&mut prefs);
+        save_app(&app_file()?, &prefs)?;
+        settings.app = prefs;
+    }
+    publish(app);
+    Ok(())
 }
 
 #[tauri::command]
@@ -657,6 +688,9 @@ mod tests {
             appearance: "dark".into(),
             shortcut: "Alt+Space".into(),
             onboarded: true,
+            check_updates: false,
+            skip_version: Some("0.1.3".into()),
+            notified_version: Some("0.1.3".into()),
         };
         save_app(&path, &prefs).unwrap();
         assert_eq!(load_app(&path), Ok(prefs));

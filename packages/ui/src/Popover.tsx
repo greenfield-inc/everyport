@@ -8,7 +8,7 @@ import { type ThemeProps, Themed } from "./theme.tsx";
 import { CleanUp, cleanUpCandidates } from "./views/CleanUp.tsx";
 import { MachineStatus, MachineSwitcher } from "./views/MachineSwitcher.tsx";
 import { ServerDetail } from "./views/ServerDetail.tsx";
-import { ServerList } from "./views/ServerList.tsx";
+import { ServerList, type UpdateOffer } from "./views/ServerList.tsx";
 
 type Route = { view: "list" } | { view: "detail"; port: number } | { view: "cleanUp" };
 
@@ -22,10 +22,12 @@ export type PopoverProps = ThemeProps & {
   onReady?: () => void;
   /** Move keyboard focus into the popover as it opens. Defaults to true; a page that embeds it passes false. */
   autoFocus?: boolean;
+  /** A newer release of the host app, offered in the list's footer. */
+  update?: UpdateOffer;
 };
 
 /** The whole popover: server list, detail and Clean up, for every machine the client knows. */
-export function Popover({ client, alertMemory, initialServer, onReady, autoFocus = true, theme, appearance }: PopoverProps) {
+export function Popover({ client, alertMemory, initialServer, onReady, autoFocus = true, update, theme, appearance }: PopoverProps) {
   const [machines, setMachines] = useState(() => client.machines());
   useEffect(() => client.subscribe(setMachines), [client]);
   const [machineId, setMachineId] = useState(initialServer?.machineId);
@@ -59,6 +61,7 @@ export function Popover({ client, alertMemory, initialServer, onReady, autoFocus
             client={client}
             machine={machine as Machine & { snapshot: Snapshot }}
             alertMemory={alertMemory}
+            update={update}
             initialPort={initialServer?.machineId === machine.id ? initialServer.port : undefined}
             autoFocus={autoFocus}
             keys={keys}
@@ -82,6 +85,7 @@ function MachineView({
   client,
   machine,
   alertMemory,
+  update,
   initialPort,
   autoFocus,
   keys,
@@ -89,6 +93,7 @@ function MachineView({
   client: EveryportClient;
   machine: Machine & { snapshot: Snapshot };
   alertMemory?: number;
+  update?: UpdateOffer;
   initialPort?: number;
   autoFocus: boolean;
   keys: RefObject<((event: KeyboardEvent) => void) | null>;
@@ -149,7 +154,7 @@ function MachineView({
       ) : shown.view === "cleanUp" ? (
         <CleanUp ctx={ctx} checked={checked} selected={selected} onToggle={toggle} onBack={back} />
       ) : (
-        <ServerList ctx={ctx} selected={selected} onOpen={openDetail} onCleanUp={() => go({ view: "cleanUp" }, 1)} />
+        <ServerList ctx={ctx} selected={selected} onOpen={openDetail} onCleanUp={() => go({ view: "cleanUp" }, 1)} update={update} />
       )}
     </div>
   );

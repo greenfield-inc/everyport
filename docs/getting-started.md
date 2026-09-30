@@ -8,7 +8,7 @@ To install both with one command:
 
 ```bash
 curl -fsSL https://everyport.dev/install.sh | sh          # macOS and Linux
-irm https://everyport.dev/install.ps1 | iex               # Windows (PowerShell)
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex               # Windows (PowerShell)
 ```
 
 Or install each one separately:
@@ -16,7 +16,7 @@ Or install each one separately:
 | | Desktop app | CLI |
 |---|---|---|
 | macOS | `brew install --cask greenfield-inc/tap/everyport` | `brew install greenfield-inc/tap/everyport` |
-| Windows | `.msi` or `-setup.exe` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
+| Windows | `.msi` or `-setup.exe` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 \| iex` |
 | Linux | `.deb`, `.rpm` or `.AppImage` from [Releases](https://github.com/greenfield-inc/everyport/releases/latest) | `curl -fsSL https://github.com/greenfield-inc/everyport/releases/latest/download/install.sh \| sh` |
 
 See [CLI only](../README.md#cli-only) for npm.
@@ -76,6 +76,24 @@ everyport clean --yes           # stop what Clean up suggests, without asking
 ```
 
 See the [CLI reference](cli.md) for every command.
+
+## Updating
+
+The desktop app checks GitHub for a newer release when it starts and every 12 hours, or when you pick **Check for Updates…** in the tray menu. The check sends one request to GitHub and nothing else. When there is a newer release:
+
+- the popover shows an **Update to 0.1.3** button at the bottom
+- the tray menu shows **Update to Everyport 0.1.3…**
+- a notification appears, once for each new version
+
+Click any of these to update. A terminal opens and runs the install command. It downloads and verifies the new version, quits Everyport, replaces it and opens the new one. In some cases it works differently:
+
+- **No terminal opens:** **Settings → General** shows the command to paste in a terminal, with a **Copy** button.
+- **Installed with Homebrew:** the terminal runs `brew upgrade --cask everyport`.
+- **Installed from a `.deb`, `.rpm` or `.msi`:** Update opens the release page. Download and install the new package from there.
+
+**Skip This Version**, in the notification or in **Settings → General**, hides that version until a newer one comes out. To stop checking, turn off **Check for updates automatically** in **Settings → General**.
+
+For the CLI, run `everyport update`. If you installed the CLI with Homebrew, cargo, npm or PyPI, it prints the command to update it that way. When run in a terminal, `everyport --version` also tells you if a newer release is out. It checks at most once a day. Set `EVERYPORT_NO_UPDATE_CHECK=1` to turn it off.
 
 ## Next
 

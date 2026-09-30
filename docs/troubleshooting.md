@@ -62,13 +62,13 @@ The app shows the error at the top of Settings and keeps the last settings it co
 Run it in PowerShell, not Command Prompt, where it fails with `'irm' is not recognized`. It works in Windows PowerShell 5.1, which ships with Windows, and in PowerShell 7:
 
 ```powershell
-irm https://everyport.dev/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex
 ```
 
 Options need the script block form. `-Cli` installs only the CLI, and `-NoOpen` skips opening the app:
 
 ```powershell
-& ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
 ```
 
 If the download still fails with a TLS or connection error, install [PowerShell 7](https://aka.ms/powershell) and run the command in `pwsh`.

@@ -9,6 +9,7 @@ mod placement;
 mod popover;
 mod settings;
 mod tray;
+mod updater;
 mod updates;
 #[cfg(windows)]
 mod windows;
@@ -38,6 +39,7 @@ pub fn run() {
             tray::create(handle)?;
             popover::setup(handle)?;
             settings::setup(handle);
+            updater::setup(handle);
             machines::start(handle);
             Ok(())
         })
@@ -80,6 +82,10 @@ pub fn run() {
             settings::settings_machines,
             settings::machine_add,
             settings::machine_remove,
+            updater::updater_status,
+            updater::updater_check,
+            updater::updater_skip,
+            updater::updater_install,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Everyport");

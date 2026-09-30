@@ -9,6 +9,7 @@ Yes. It's open source under the [MIT license](../LICENSE), with no account and n
 No telemetry and no account. The app goes online only to:
 
 - look up Vercel previews through the GitHub CLI (`gh`), if you turn previews on
+- check GitHub for a newer release, unless you turn that off in Settings. It asks GitHub where the latest release is and sends nothing else.
 - download `everyport` from GitHub Releases when you install it on another machine
 
 ## Which servers does it show?
@@ -33,7 +34,7 @@ No. The `everyport` CLI has the same list in a terminal UI, and `everyport list 
 
 ## How do I update?
 
-Run the install command again. It installs the latest release over the old one. If you installed with Homebrew, run `brew upgrade` instead.
+The app tells you when there's a new version. Click **Update to** at the bottom of the popover. For the CLI, run `everyport update`. See [Updating](getting-started.md#updating).
 
 ## How does it relate to WhatThePort?
 

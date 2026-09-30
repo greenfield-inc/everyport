@@ -1,6 +1,6 @@
 # Installs the everyport CLI from GitHub Releases into ~\.local\bin and adds it to your PATH.
 #
-#   irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
+#   [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
 #
 # Environment:
 #   EVERYPORT_VERSION       release to install, such as 0.2.0 (default: latest)
@@ -62,7 +62,13 @@ try {
 
   New-Item -ItemType Directory -Force -Path $installDir | Out-Null
   $target = Join-Path $installDir 'everyport.exe'
-  Move-Item -Force $binary $target
+  # Windows can rename a running program but not replace it, as when `everyport update` runs this.
+  $old = "$target.old"
+  Remove-Item -Force $old -ErrorAction SilentlyContinue
+  if (Test-Path $target) { Move-Item -Force $target $old }
+  try { Move-Item $binary $target }
+  catch { if (Test-Path $old) { Move-Item $old $target }; throw }
+  Remove-Item -Force $old -ErrorAction SilentlyContinue
   Write-Host "Installed $(& $target --version) to $target"
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

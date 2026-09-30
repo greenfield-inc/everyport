@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useState } from "react";
 import { Row, Section, Segmented, Select, Toggle, count } from "./controls";
 import { DEFAULT_SHORTCUT, displayShortcut, fromKeyEvent } from "./shortcut";
+import { installUpdate, useUpdater } from "../updater";
 import { type Settings, saveApp, saveConfig, useOnFocus } from "./useSettings";
 
 const APPEARANCES = [
@@ -39,6 +40,12 @@ export function GeneralPane({ settings }: { settings: Settings }) {
           <Select label="Scan every" value={config.interval_ms} options={INTERVALS} onChange={(interval_ms) => void saveConfig({ interval_ms })} />
         </Row>
       </Section>
+      <Section title="Updates">
+        <Row label="Check for updates automatically" caption="Asks GitHub for the newest version on launch and every 12 hours.">
+          <Toggle label="Check for updates automatically" checked={app.check_updates} onChange={(check_updates) => void saveApp({ check_updates })} />
+        </Row>
+        <UpdateRow />
+      </Section>
       <Section title="Integrations">
         <Row label="Vercel previews" caption="Links each branch to its preview. Uses the GitHub CLI (gh), which goes online.">
           <Toggle
@@ -63,6 +70,56 @@ export function GeneralPane({ settings }: { settings: Settings }) {
           Documentation
         </button>
       </footer>
+    </>
+  );
+}
+
+/** This version, what the last check found, and the way to update. */
+function UpdateRow() {
+  const status = useUpdater();
+  if (!status) return null;
+  const { current, latest, available, offer, checking, error, manual } = status;
+  const caption = checking
+    ? "Checking…"
+    : error
+      ? `Couldn't check. ${error}`
+      : available
+        ? `Everyport ${available} is available.${offer ? "" : " You skipped it."}`
+        : latest
+          ? "Up to date."
+          : null;
+  return (
+    <>
+      <Row label={`Everyport ${current}`} caption={caption}>
+        {available && offer && (
+          <button type="button" className="settings-button" onClick={() => void invoke("updater_skip")}>
+            Skip This Version
+          </button>
+        )}
+        {available ? (
+          <button type="button" className="settings-button settings-primary" onClick={installUpdate}>
+            Update
+          </button>
+        ) : (
+          <button type="button" className="settings-button" disabled={checking} onClick={() => void invoke("updater_check")}>
+            Check Now
+          </button>
+        )}
+      </Row>
+      {manual?.kind === "paste" && (
+        <Row label="Paste this in a terminal" caption={<code className="settings-command">{manual.command}</code>}>
+          <button type="button" className="settings-button" onClick={() => void navigator.clipboard.writeText(manual.command)}>
+            Copy
+          </button>
+        </Row>
+      )}
+      {manual?.kind === "package" && (
+        <Row label="Install the new package" caption="Everyport came from a system package. Download the new one from the release page and install it.">
+          <button type="button" className="settings-button" onClick={() => void invoke("open_external", { url: manual.url })}>
+            Open Release Page
+          </button>
+        </Row>
+      )}
     </>
   );
 }

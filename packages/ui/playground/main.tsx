@@ -1,14 +1,15 @@
 // Renders every view from the fixture. URL parameters pick the state, so the
 // screenshot script can load each one directly:
 //   scenario  paper | protected | machines | empty
-//   view      popover | notification | onboarding
+//   view      popover | notification | update | onboarding
 //   port      open this server's detail
+//   update    a newer version, offered in the footer
 //   theme     a theme name;  mode  light | dark | system
 //   live      advance snapshots every 2 s;  shot  hide the toolbar
 import { fixtureSnapshot } from "@everyport/protocol";
 import { StrictMode, useMemo } from "react";
 import { createRoot } from "react-dom/client";
-import { type Appearance, DEFAULT_THEME, NotificationCard, Onboarding, type OnboardingHost, Popover, themeList } from "../src/index.ts";
+import { type Appearance, DEFAULT_THEME, NotificationCard, Onboarding, type OnboardingHost, Popover, themeList, UpdateCard } from "../src/index.ts";
 import "../src/styles.css";
 import { fixtureClient, scenarios } from "./scenarios.ts";
 
@@ -28,6 +29,7 @@ function Playground() {
   const theme = get("theme", DEFAULT_THEME);
   const mode = get("mode", "dark") as Appearance;
   const port = params.get("port");
+  const update = params.get("update");
   const shot = params.has("shot");
   const client = useMemo(() => fixtureClient((scenarios[scenario] ?? scenarios.paper)(), params.has("live") ? 2000 : null), [scenario]);
   (window as unknown as { everyport: typeof client }).everyport = client;
@@ -61,6 +63,7 @@ function Playground() {
           <select value={view} onChange={(event) => navigate("view", event.target.value)}>
             <option>popover</option>
             <option>notification</option>
+            <option>update</option>
             <option>onboarding</option>
           </select>
           <select value={theme} onChange={(event) => navigate("theme", event.target.value)}>
@@ -95,11 +98,20 @@ function Playground() {
           onStop={() => console.info("[everyport] stop")}
           onSnooze={() => console.info("[everyport] snooze")}
         />
+      ) : view === "update" ? (
+        <UpdateCard
+          theme={theme}
+          appearance={mode}
+          version={update ?? "0.1.3"}
+          onUpdate={() => console.info("[everyport] update")}
+          onSkip={() => console.info("[everyport] skip")}
+        />
       ) : (
         <Popover
           client={client}
           theme={theme}
           appearance={mode}
+          update={update ? { version: update, onUpdate: () => console.info("[everyport] update") } : undefined}
           initialServer={port ? { machineId: "local", port: Number(port) } : undefined}
           onReady={() => document.documentElement.setAttribute("data-ready", "")}
         />

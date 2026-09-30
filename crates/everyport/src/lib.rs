@@ -11,6 +11,7 @@ pub mod host;
 pub mod links;
 pub mod platform;
 pub mod protocol;
+pub mod update;
 
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()

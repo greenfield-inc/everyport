@@ -1,7 +1,8 @@
-//! Memory alerts, shown as our own borderless card at the top right for 8 s
-//! with Details, Stop and Snooze 1h. The system notification APIs Tauri
+//! Memory alerts and new releases, shown as our own borderless card at the
+//! top right for 8 s: Details, Stop and Snooze 1h for an alert, Update and
+//! Skip This Version for a release. The system notification APIs Tauri
 //! exposes on desktop can't carry action buttons. The window is created on
-//! the first alert and kept hidden between alerts.
+//! the first card and kept hidden between cards.
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -13,9 +14,9 @@ use tauri::{
     WebviewWindowBuilder,
 };
 
-use crate::machines;
 use crate::placement::Rect;
 use crate::popover::{self, ServerRef};
+use crate::{machines, updater};
 
 pub const LABEL: &str = "notification";
 const SHOW_FOR: Duration = Duration::from_secs(8);
@@ -23,11 +24,20 @@ const SHOW_FOR: Duration = Duration::from_secs(8);
 const MARGIN: f64 = 12.0;
 
 #[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Notice {
-    machine_id: String,
-    server: Server,
-    alert: Alert,
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum Notice {
+    Alert {
+        machine_id: String,
+        server: Box<Server>,
+        alert: Alert,
+    },
+    Update {
+        version: String,
+    },
 }
 
 #[derive(Default)]
@@ -47,11 +57,22 @@ fn state(app: &AppHandle) -> std::sync::MutexGuard<'_, State> {
 }
 
 pub fn show(app: &AppHandle, machine_id: &str, server: Server, alert: Alert) {
-    let notice = Notice {
-        machine_id: machine_id.to_string(),
-        server,
-        alert,
-    };
+    present_notice(
+        app,
+        Notice::Alert {
+            machine_id: machine_id.to_string(),
+            server: Box::new(server),
+            alert,
+        },
+    );
+}
+
+/// Announces a new release.
+pub fn show_update(app: &AppHandle, version: String) {
+    present_notice(app, Notice::Update { version });
+}
+
+fn present_notice(app: &AppHandle, notice: Notice) {
     let shown = {
         let mut state = state(app);
         state.current = Some(notice.clone());
@@ -169,6 +190,8 @@ pub enum Action {
     Details,
     Stop,
     Snooze,
+    Update,
+    Skip,
 }
 
 #[tauri::command]
@@ -177,19 +200,34 @@ pub async fn notification_action(app: AppHandle, action: Action) -> Result<(), S
         return Ok(());
     };
     hide(&app);
-    let (machine_id, port) = (notice.machine_id, notice.server.port);
+    let (machine_id, server) = match (notice, &action) {
+        (
+            Notice::Alert {
+                machine_id, server, ..
+            },
+            _,
+        ) => (machine_id, server),
+        (Notice::Update { .. }, Action::Skip) => return updater::updater_skip(app),
+        (Notice::Update { .. }, Action::Update) => {
+            updater::install(&app);
+            return Ok(());
+        }
+        (Notice::Update { .. }, _) => return Ok(()),
+    };
+    let port = server.port;
     match action {
         Action::Details => popover::show_server(&app, Some(ServerRef { machine_id, port })),
         Action::Snooze => machines::snooze(&app, &machine_id, port),
         Action::Stop => {
             let call = Call::Stop {
                 port,
-                root: notice.server.root,
+                root: server.root,
                 force: false,
                 confirm_protected: false,
             };
             machines::call(&app, &machine_id, call).await?;
         }
+        Action::Update | Action::Skip => {}
     }
     Ok(())
 }

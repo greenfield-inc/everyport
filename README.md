@@ -30,7 +30,7 @@
 <pre><code>curl -fsSL https://everyport.dev/install.sh | sh</code></pre>
 
 <sub>Desktop app and CLI: Windows (PowerShell)</sub><br />
-<pre><code>irm https://everyport.dev/install.ps1 | iex</code></pre>
+<pre><code>[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex</code></pre>
 
 <sub>Other ways</sub><br />
 <a href="https://github.com/greenfield-inc/everyport/releases/latest">Download from Releases</a> · <code>brew install --cask greenfield-inc/tap/everyport</code>
@@ -109,7 +109,7 @@ curl -fsSL https://everyport.dev/install.sh | sh
 On Windows, in PowerShell:
 
 ```powershell
-irm https://everyport.dev/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://everyport.dev/install.ps1 | iex
 ```
 
 On macOS the app goes into `/Applications`, or `~/Applications` if that isn't writable. On Linux it's an AppImage in `~/.local/share/everyport` with a menu entry. On Windows it installs for your user, with no admin prompt. Linux on arm64 gets the CLI only, since there is no arm64 desktop build yet.
@@ -123,7 +123,7 @@ curl -fsSL https://everyport.dev/install.sh | sh -s -- --cli
 On Windows the options are `-Cli` and `-NoOpen`:
 
 ```powershell
-& ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; & ([scriptblock]::Create((irm https://everyport.dev/install.ps1))) -Cli
 ```
 
 Or install it another way:
@@ -153,7 +153,7 @@ npx everyport          # or: npm i -g everyport; npm has 0.1.0 for now
 On Windows, use PowerShell instead of the install script:
 
 ```powershell
-irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://github.com/greenfield-inc/everyport/releases/latest/download/install.ps1 | iex
 ```
 
 The install scripts and the npm package download the release binary for your platform and check its SHA-256 checksum. The PyPI (`uvx`, `pipx`) and crates.io (`cargo install`) packages are placeholders until a release publishes there.
@@ -243,6 +243,7 @@ everyport serve                  Speak the Everyport protocol over HTTP on loopb
 everyport remote add|list|rm     Manage remote machines
 everyport --on <machine> ...     Run the command on another machine
 everyport doctor [--on <machine>] Check permissions and platform support, and the way to each machine
+everyport update                 Update everyport to the newest release
 ```
 
 Every command and option is in the [CLI reference](docs/cli.md).
@@ -255,7 +256,7 @@ Every command and option is in the [CLI reference](docs/cli.md).
 - **Windows:** the port, its owner and the process name. Without admin rights, the owner can be missing.
 - **macOS:** the port, its owner and the process name. A new one can take up to 10 seconds to appear.
 
-Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on, and to download `everyport` from GitHub Releases when you install it on another machine. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `everyport`).
+Everything stays on your machine. The app goes online only to look up Vercel previews, through the GitHub CLI (`gh`) and only if you turn previews on, to download `everyport` from GitHub Releases when you install it on another machine, and to check GitHub for a newer release, which you can turn off in Settings. Settings live in your OS config folder (`~/Library/Application Support`, `%APPDATA%` or `~/.config`, under `everyport`).
 
 ## Build on Everyport
 

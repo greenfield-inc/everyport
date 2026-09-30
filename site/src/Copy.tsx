@@ -9,14 +9,14 @@ const RAW = `${RELEASES}/download`;
 /** The one-line app install, served from the site root. */
 const APP_COMMAND: Record<Os, string> = {
   macos: `curl -fsSL ${SITE_URL}install.sh | sh`,
-  windows: `irm ${SITE_URL}install.ps1 | iex`,
+  windows: `[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm ${SITE_URL}install.ps1 | iex`,
   linux: `curl -fsSL ${SITE_URL}install.sh | sh`,
 };
 
 /** CLI-only installs from the README. */
 const CLI_COMMANDS: Record<Os, string[]> = {
   macos: [`curl -fsSL ${RAW}/install.sh | sh`, "brew install greenfield-inc/tap/everyport"],
-  windows: [`irm ${RAW}/install.ps1 | iex`],
+  windows: [`[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm ${RAW}/install.ps1 | iex`],
   linux: [`curl -fsSL ${RAW}/install.sh | sh`],
 };
 
